@@ -15,6 +15,7 @@ local TeleportService = game:GetService("TeleportService")
 local MarketplaceSvc  = game:GetService("MarketplaceService")
 local RS              = game:GetService("ReplicatedStorage")
 local SSS             = game:GetService("ServerScriptService")
+local TextService     = game:GetService("TextService")
 
 local RankConfig = require(SSS:WaitForChild("RankConfig", 15))
 if not RankConfig then
@@ -466,6 +467,17 @@ H.nametag = function(p, args)
 	local ex = head:FindFirstChild("DT_Nametag"); if ex then ex:Destroy() end
 	local txt = table.concat(args, " "):sub(1, 40)
 	if txt == "" then return end
+	-- [FIX 2026-09-26] teks nametag terlihat semua pemain → wajib filter Roblox (fail-closed)
+	local okF, filtered = pcall(function()
+		return TextService:FilterStringAsync(txt, p.UserId, Enum.TextFilterContext.PublicChat)
+			:GetNonChatStringForBroadcastAsync()
+	end)
+	if not okF or type(filtered) ~= "string" or filtered == "" then
+		warn("[CommandServer] nametag: filter gagal, tag tidak dipasang")
+		return
+	end
+	txt = filtered
+	if not char.Parent or not head.Parent then return end
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name        = "DT_Nametag"
