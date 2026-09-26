@@ -52,9 +52,6 @@
       "AnnouncementHandler": {
         "$path": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau"
       },
-      "AssetPermissionGran": {
-        "$path": "src/legacy/ServerScriptService/AssetPermissionGran.server.luau"
-      },
       "CarrySystemHandler": {
         "$path": "src/legacy/ServerScriptService/CarrySystemHandler.server.luau"
       },
