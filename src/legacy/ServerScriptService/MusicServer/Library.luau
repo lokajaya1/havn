@@ -307,6 +307,7 @@ function Library.myLoad(p)
 		end
 	end
 	s.list = out
+	s.failed = not ok -- [FIX 2c2] load gagal → myWrite menggabungkan, bukan menimpa
 	return s.list
 end
 
@@ -316,9 +317,26 @@ local function myWrite(uid)
 	s.dirty = false
 	local snap = {}
 	for _, song in ipairs(s.list) do table.insert(snap, clean(song)) end
+	local merge = s.failed
 	for i = 1, 3 do
 		local ok = pcall(function()
-			FavDS:UpdateAsync("MyLib_" .. uid, function() return snap end)
+			FavDS:UpdateAsync("MyLib_" .. uid, function(old)
+				if not merge then return snap end
+				-- [FIX 2c2] library lama belum pernah termuat → gabung (lama + baru), jangan timpa
+				local out, seen = {}, {}
+				if type(old) == "table" then
+					for _, song in ipairs(old) do
+						if type(song) == "table" and song.Id and not seen[tostring(song.Id)] then
+							seen[tostring(song.Id)] = true
+							table.insert(out, clean(song))
+						end
+					end
+				end
+				for _, song in ipairs(snap) do
+					if not seen[song.Id] then seen[song.Id] = true; table.insert(out, song) end
+				end
+				return out
+			end)
 		end)
 		if ok then return end
 		task.wait(1)
