@@ -6,3 +6,4 @@ sourcemap.json
 tools/extract/out/
 patches/
 tools/checks/out/
+tools/assets/out/
