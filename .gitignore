@@ -7,3 +7,4 @@ tools/extract/out/
 patches/
 tools/checks/out/
 tools/assets/out/
+tools/*/out/
