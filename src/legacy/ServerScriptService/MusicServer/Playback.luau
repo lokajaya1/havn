@@ -118,7 +118,8 @@ local function clientDuration()
 	for _, len in pairs(repLen) do table.insert(vals, len) end
 	if #vals == 0 then return 0 end
 	table.sort(vals)
-	return vals[math.ceil(#vals / 2)]
+	-- [FIX 2c2] median ATAS: dengan 2 pelapor, satu laporan pendek palsu tidak bisa memaksa skip
+	return vals[math.floor(#vals / 2) + 1]
 end
 
 local function recomputeDuration()
@@ -347,7 +348,9 @@ function P.report(player, data)
 	local uid = (typeof(player) == "Instance" and player.UserId) or 0
 	local el  = os.clock() - startClock
 
-	if type(data.len) == "number" and data.len > 1 and data.len < MAX_DUR then
+	-- [FIX 2c2] abaikan durasi yang jauh lebih pendek dari durasi yang diketahui server
+	if type(data.len) == "number" and data.len > 1 and data.len < MAX_DUR
+		and not (serverDur > 1 and data.len < serverDur - 2) then
 		repLen[uid] = data.len
 		if not okMarked then okMarked = true; pcall(Library.markOk, nowPlaying) end
 		recomputeDuration()

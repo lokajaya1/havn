@@ -486,11 +486,26 @@ end
 
 local function loadFavorites(player)
 	local s = getState(player)
+	-- [FIX 2c2] sudah termuat → pakai memori; spam "load" dibatasi 1x/2 dtk (dulu GetAsync tiap panggilan)
+	if s.favLoading then
+		-- load lain (mis. saat join) sedang berjalan → tunggu hasilnya, jangan jawab kosong
+		local t0 = os.clock()
+		repeat task.wait(0.1) until not s.favLoading or os.clock() - t0 > 10
+	end
+	if s.favLoaded then return s.favorites end
+	local now = os.clock()
+	if s.lastFavLoad and now - s.lastFavLoad < 2 then return s.favorites end
+	s.lastFavLoad = now
 	if favoritesStore then
+		s.favLoading = true
 		local ok, data = pcall(function()
 			return favoritesStore:GetAsync(favoritesKey(s.userId))
 		end)
-		if ok then s.favorites = sanitizeFavorites(data) end
+		s.favLoading = false
+		if ok then
+			s.favorites = sanitizeFavorites(data)
+			s.favLoaded = true
+		end
 	end
 	return s.favorites
 end
@@ -502,10 +517,23 @@ local function flushFavorites(userId, immediate)
 
 	s.dirty = false
 	local snapshot = table.clone(s.favorites)
+	local loaded = s.favLoaded
 
 	local function write()
 		local ok = pcall(function()
-			favoritesStore:SetAsync(favoritesKey(userId), snapshot)
+			if loaded then
+				favoritesStore:SetAsync(favoritesKey(userId), snapshot)
+				return
+			end
+			-- [FIX 2c2] favorit lama belum pernah termuat → gabungkan, jangan timpa dengan daftar kosong
+			favoritesStore:UpdateAsync(favoritesKey(userId), function(old)
+				local merged = sanitizeFavorites(old)
+				for _, name in ipairs(snapshot) do
+					if #merged >= CONFIG.FAVORITES_LIMIT then break end
+					if not table.find(merged, name) then table.insert(merged, name) end
+				end
+				return merged
+			end)
 		end)
 		if not ok then
 			local current = states[userId]

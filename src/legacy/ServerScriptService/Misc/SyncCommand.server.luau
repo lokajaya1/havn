@@ -246,6 +246,10 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 	if oldTrack and oldTrack.IsPlaying then
 		oldTrack:Stop(fOut)
 	end
+	if oldTrack then
+		-- [FIX 2c2] bebaskan track lama (dulu menumpuk sampai batas 256 track per Animator)
+		task.delay(fOut + 0.1, function() pcall(oldTrack.Destroy, oldTrack) end)
+	end
 
 	local snapTarget = targetTrack
 	if snapTarget.IsPlaying then
@@ -451,7 +455,16 @@ task.spawn(function()
 	end
 end)
 
+local lastSyncAction = {} -- [FIX 2c2] player → os.clock()
+Players.PlayerRemoving:Connect(function(p) lastSyncAction[p] = nil end)
+
 SyncRemote.OnServerEvent:Connect(function(player, action, targetName)
+	if type(action) ~= "string" then return end
+	if action == "start" or action == "stop" then
+		local now = os.clock()
+		if lastSyncAction[player] and now - lastSyncAction[player] < 0.5 then return end
+		lastSyncAction[player] = now
+	end
 	if action == "getSyncStatus" then
 		local data = syncData[player.UserId]
 		if data and data.targetPlayer and data.targetPlayer.Parent then
@@ -462,7 +475,7 @@ SyncRemote.OnServerEvent:Connect(function(player, action, targetName)
 		end
 
 	elseif action == "start" then
-		if not targetName then return end
+		if type(targetName) ~= "string" then return end
 		local targetChar   = workspace:FindFirstChild(targetName)
 		if not targetChar then return end
 		local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
