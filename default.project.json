@@ -1,0 +1,9 @@
+{
+  "name": "HAVN",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "RojoTest": { "$path": "src/server" }
+    }
+  }
+}
