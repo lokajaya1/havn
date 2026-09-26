@@ -5,3 +5,4 @@ sourcemap.json
 .DS_Store
 tools/extract/out/
 patches/
+tools/checks/out/

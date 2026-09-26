@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+jobs:
+  check:
+    name: Sintaks + rojo build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pasang Rokit 1.2.0 lalu `rokit install` dari rokit.toml
+      # → versi rojo/lune/stylua/selene sama persis dengan di komputer developer.
+      - uses: CompeyDev/setup-rokit@v0.2.1
+        with:
+          version: v1.2.0
+
+      - name: Versi alat
+        run: |
+          rojo --version
+          lune --version
+
+      - name: Sintaks Luau + JSON
+        run: lune run tools/checks/syntax
+
+      - name: rojo build
+        run: rojo build default.project.json -o ci-build.rbxl
