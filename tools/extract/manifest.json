@@ -1,0 +1,677 @@
+{
+  "scripts": [
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/AnimationCache/AnimationCacheManager.luau",
+      "md5": "06ae983add189b196e5f2d846cf04595",
+      "path": "ReplicatedStorage/AnimationCache/AnimationCacheManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CarryReplic/CarryRemotes/CarryWeld.luau",
+      "md5": "1ce5570d51877628b64e6057a51f87a3",
+      "path": "ReplicatedStorage/CarryReplic/CarryRemotes/CarryWeld"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/Config/DanceConfig.luau",
+      "md5": "85c1307b69438bd76891792b69ed42f5",
+      "path": "ReplicatedStorage/Config/DanceConfig"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/Config/DanceConfigHelper.luau",
+      "md5": "9fccc3740f74928072f52e1fb4f3de3a",
+      "path": "ReplicatedStorage/Config/DanceConfigHelper"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomTween/TweenLibrary.luau",
+      "md5": "fdf8c16f0faea7f1a8670125f6d67463",
+      "path": "ReplicatedStorage/CustomTween/TweenLibrary"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomTween/TweenManager.luau",
+      "md5": "d73b9ca11cdc00ac15ebb4bed5042230",
+      "path": "ReplicatedStorage/CustomTween/TweenManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/AddFriendManager.luau",
+      "md5": "94a8a2962a4fffb8a6808bdfcbf9a91c",
+      "path": "ReplicatedStorage/CustomUIModules/AddFriendManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/CarryManager.luau",
+      "md5": "1e7066cb7e9ee8fe5fd82b3ca2573758",
+      "path": "ReplicatedStorage/CustomUIModules/CarryManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/CarryStateDetector.luau",
+      "md5": "2ffdbaea42f5af142abcaa1db811a831",
+      "path": "ReplicatedStorage/CustomUIModules/CarryStateDetector"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/CarryUI.luau",
+      "md5": "f076a8195c017b66627f66ed4341a629",
+      "path": "ReplicatedStorage/CustomUIModules/CarryUI"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/Communityinfo.luau",
+      "md5": "ac4c25d79d9979414d1894b62218e80a",
+      "path": "ReplicatedStorage/CustomUIModules/Communityinfo"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/HideAvatarManager.luau",
+      "md5": "475a1a1397a65c674789559f6d452605",
+      "path": "ReplicatedStorage/CustomUIModules/HideAvatarManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/MenuBinder.luau",
+      "md5": "7e2e1958b655b379d08f53e6b6841fea",
+      "path": "ReplicatedStorage/CustomUIModules/MenuBinder"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/PrivateChatManager.luau",
+      "md5": "c7818874d91fed95a7d3dfdb4ae4b423",
+      "path": "ReplicatedStorage/CustomUIModules/PrivateChatManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/Responsive.luau",
+      "md5": "8c9405e062f13b618896e8852613e62a",
+      "path": "ReplicatedStorage/CustomUIModules/Responsive"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/ShowAvatarModule.luau",
+      "md5": "7578824811277fd0dceb05fa5d794a4e",
+      "path": "ReplicatedStorage/CustomUIModules/ShowAvatarModule"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/StateManager.luau",
+      "md5": "3165e277cef55c3327905b5445a48484",
+      "path": "ReplicatedStorage/CustomUIModules/StateManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/SyncManager.luau",
+      "md5": "5e10acaa9b9af04a3adf044af176d3e4",
+      "path": "ReplicatedStorage/CustomUIModules/SyncManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/UI/ButtonManager.luau",
+      "md5": "3303a79c3fde4ae46a8163c970f62ff5",
+      "path": "ReplicatedStorage/CustomUIModules/UI/ButtonManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/UI/MenuController.luau",
+      "md5": "de13c778e76119bcc04021968ab250db",
+      "path": "ReplicatedStorage/CustomUIModules/UI/MenuController"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/UI/MenuCreator.luau",
+      "md5": "ec2de9ebca081e061dfa931d3914897d",
+      "path": "ReplicatedStorage/CustomUIModules/UI/MenuCreator"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/UI/UIAnimator.luau",
+      "md5": "b22324885b013b7563f590b78476808e",
+      "path": "ReplicatedStorage/CustomUIModules/UI/UIAnimator"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/UI/UIConstants.luau",
+      "md5": "22942557348e46b49c1c653a1dd50fcd",
+      "path": "ReplicatedStorage/CustomUIModules/UI/UIConstants"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/UIManager.luau",
+      "md5": "cdd6d95f7b99e18042fb6768b2c25fdf",
+      "path": "ReplicatedStorage/CustomUIModules/UIManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/CustomUIModules/ViewProfileManager.luau",
+      "md5": "38c2ef330bf4c83c3824c7b9d6fbffa0",
+      "path": "ReplicatedStorage/CustomUIModules/ViewProfileManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/GameSettings.luau",
+      "md5": "d71aac61f09eaf3f8c481365e9ada4a9",
+      "path": "ReplicatedStorage/GameSettings"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/Modules/AnimationWarmup.luau",
+      "md5": "2331f3289c8095696007982901b06762",
+      "path": "ReplicatedStorage/Modules/AnimationWarmup"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/Modules/SmoothDanceHelper.luau",
+      "md5": "e689e8a920709f2c4e1b1e356f3f78ed",
+      "path": "ReplicatedStorage/Modules/SmoothDanceHelper"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/Modules/SmoothDanceManager.luau",
+      "md5": "3d1e18144300ff6f9e4c6e4720a39cb0",
+      "path": "ReplicatedStorage/Modules/SmoothDanceManager"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/MusicShared.luau",
+      "md5": "cd9e6e73c0214860b6903c95bd84f823",
+      "path": "ReplicatedStorage/MusicShared"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/ProfileService.luau",
+      "md5": "d0cf423a505feea57e81d8c7a55e920c",
+      "path": "ReplicatedStorage/ProfileService"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/ShopConfig.luau",
+      "md5": "75fbeb2b44ca51c79541cf30a3bb3b1e",
+      "path": "ReplicatedStorage/ShopConfig"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ReplicatedStorage/TitleStyle.luau",
+      "md5": "b7da0dfbf1216a2896e4f460377ca70f",
+      "path": "ReplicatedStorage/TitleStyle"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/AG-MusicGlobal.server.luau",
+      "md5": "3ecccb518f39d09c58be2b005fb6c0c4",
+      "path": "ServerScriptService/AG-MusicGlobal"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/AnimationHandler.server.luau",
+      "md5": "91da0afe779acb280510c7d874636be5",
+      "path": "ServerScriptService/AnimationHandler"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau",
+      "md5": "3fc5c56e2228c84063f315a90bea38e1",
+      "path": "ServerScriptService/AnnouncementHandler"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/AssetPermissionGran.server.luau",
+      "md5": "a18a0c245fbb6eba482b0137abe02095",
+      "path": "ServerScriptService/AssetPermissionGran"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/CarrySystemHandler.server.luau",
+      "md5": "03b4b0946a2ecc261fc4a72b9c994830",
+      "path": "ServerScriptService/CarrySystemHandler"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/CommandServer.server.luau",
+      "md5": "64b690e4d894b6fce27dae271cb141e6",
+      "path": "ServerScriptService/CommandServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/Communityinfoservice.server.luau",
+      "md5": "8fc9602cd307098fc83241e191f444b0",
+      "path": "ServerScriptService/Communityinfoservice"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/DonationMessageHandler.server.luau",
+      "md5": "8413df2c37a266838c4a3694b722286f",
+      "path": "ServerScriptService/DonationMessageHandler"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/DonationServer.server.luau",
+      "md5": "62ffdd74e9e9039406d72fcabc668135",
+      "path": "ServerScriptService/DonationServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/FavoritePrompt.server.luau",
+      "md5": "d2d96c3945ebfacab708d0ad756f8f19",
+      "path": "ServerScriptService/FavoritePrompt"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/FlyingbroomServer.server.luau",
+      "md5": "30e0e34c5ebbfeaa2bc8b67c11bd18de",
+      "path": "ServerScriptService/FlyingbroomServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/GlowStickServer.server.luau",
+      "md5": "1ae123caf04ba25897ee7d394e466ebe",
+      "path": "ServerScriptService/GlowStickServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/HammerServer.server.luau",
+      "md5": "472df6df6c0b0537a40d303b79005f74",
+      "path": "ServerScriptService/HammerServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/Likesystem.server.luau",
+      "md5": "ac3b218c1bb5d568ba8418a8e454b2d4",
+      "path": "ServerScriptService/Likesystem"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/LiveScreenServer.server.luau",
+      "md5": "8bb08dc7484f23b37cde083059d0bec4",
+      "path": "ServerScriptService/LiveScreenServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/Misc/DanceHandler.server.luau",
+      "md5": "b4a936439f58ea630ddec61e97820884",
+      "path": "ServerScriptService/Misc/DanceHandler"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/Misc/SyncCommand.server.luau",
+      "md5": "cb73aa18f1f32f62e9a19ae49bf5cecc",
+      "path": "ServerScriptService/Misc/SyncCommand"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/MusicServer/init.server.luau",
+      "md5": "870a8aa655dd507615145979401710a9",
+      "path": "ServerScriptService/MusicServer"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ServerScriptService/MusicServer/Library.luau",
+      "md5": "40fbcd4d59d45a68eef504905c79cd23",
+      "path": "ServerScriptService/MusicServer/Library"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ServerScriptService/MusicServer/Playback.luau",
+      "md5": "b38383e4d6e78725b884e2617d7a7bdc",
+      "path": "ServerScriptService/MusicServer/Playback"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/Namailang.server.luau",
+      "md5": "c6eae11e80747963099d67fc33cf6527",
+      "path": "ServerScriptService/Namailang"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/OverheadTag.server.luau",
+      "md5": "13630fa243ff7c1984cf54497abaab74",
+      "path": "ServerScriptService/OverheadTag"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/PlayerCollisionManager.server.luau",
+      "md5": "21008c14d450ab73ce5d8942b45a1c86",
+      "path": "ServerScriptService/PlayerCollisionManager"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/RagDollTag.server.luau",
+      "md5": "cdaaa716b5f552c6da221849f5416625",
+      "path": "ServerScriptService/RagDollTag"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ServerScriptService/RankConfig.luau",
+      "md5": "5e8d5fa954a5c27340f0aafaad57f933",
+      "path": "ServerScriptService/RankConfig"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/ServerScriptService/ReceiptHandler.luau",
+      "md5": "fd5808d0bd62e159911f9e85d0a4d7bf",
+      "path": "ServerScriptService/ReceiptHandler"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/RefreshCharacter.server.luau",
+      "md5": "e930645fb7b20468a70d1d661fcc96ab",
+      "path": "ServerScriptService/RefreshCharacter"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/RoleManagerServer.server.luau",
+      "md5": "c2fc00041a2d085ec74fd12fb0668555",
+      "path": "ServerScriptService/RoleManagerServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/ScriptEmitter.server.luau",
+      "md5": "a8679edf28822071b6f09aa6054be6d6",
+      "path": "ServerScriptService/ScriptEmitter"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/ShopServer.server.luau",
+      "md5": "a172ec90ba0ee98d4dcd8e4a554a68bd",
+      "path": "ServerScriptService/ShopServer"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/SyncGIFClones.server.luau",
+      "md5": "119e0cadcf90f5ea675c10ec676ead37",
+      "path": "ServerScriptService/SyncGIFClones"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/TeamSystem.server.luau",
+      "md5": "bdab12c229ffd33fbb7561204c156817",
+      "path": "ServerScriptService/TeamSystem"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/ToolGiver.server.luau",
+      "md5": "e2c2d4c444b40d05c39d6f56b07fa41e",
+      "path": "ServerScriptService/ToolGiver"
+    },
+    {
+      "class": "Script",
+      "disabled": true,
+      "file": "src/legacy/ServerScriptService/Transferdonationdata.server.luau",
+      "md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "path": "ServerScriptService/Transferdonationdata"
+    },
+    {
+      "class": "Script",
+      "file": "src/legacy/ServerScriptService/UnifiedRankManager.server.luau",
+      "md5": "9c3ff21dc19484159bf371964206f1c9",
+      "path": "ServerScriptService/UnifiedRankManager"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/CommandPanel.client.luau",
+      "md5": "44c9c2c4fa47d9471a41694b50f0e1ce",
+      "path": "StarterGui/CommandPanel"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterGui/DonationMessageClient.client.luau",
+      "md5": "f90005b26ad64f93f80586196b474086",
+      "path": "StarterGui/DonationMessageClient"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterGui/DonationMessageNotification.client.luau",
+      "md5": "4bb8d9f0ea973db7dbac3e7d770ca463",
+      "path": "StarterGui/DonationMessageNotification"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/Flyingbroomui.client.luau",
+      "md5": "d4d1be8c8650524507ebd0c43a4550e1",
+      "path": "StarterGui/Flyingbroomui"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/FreeCam.client.luau",
+      "md5": "a7f8b0ac6e02e401d59920e5b7171817",
+      "path": "StarterGui/FreeCam"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/GlowStickUI.client.luau",
+      "md5": "591db23a85ef2bcbd845af8d2017d61b",
+      "path": "StarterGui/GlowStickUI"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/GraphicsClient.client.luau",
+      "md5": "1bad8707573177e5434486de10a21221",
+      "path": "StarterGui/GraphicsClient"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/InfoTopBar.client.luau",
+      "md5": "b2def08e73b14ee8036ae7a47737772b",
+      "path": "StarterGui/InfoTopBar"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/MoneyGunUI.client.luau",
+      "md5": "a8b8b60fa8a8459d3ffb9b1b6ee829d5",
+      "path": "StarterGui/MoneyGunUI"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/PlayersClient.client.luau",
+      "md5": "58e0483b868121957a64a1749525f24d",
+      "path": "StarterGui/PlayersClient"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/RoleManagerClient.client.luau",
+      "md5": "1d43f75a77bbb1aca5097086107f5029",
+      "path": "StarterGui/RoleManagerClient"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/SettingsClient.client.luau",
+      "md5": "3684fe83ebebf337123ca6a308d6dc0f",
+      "path": "StarterGui/SettingsClient"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/ShopClient.client.luau",
+      "md5": "6f59ad157413b4826e9ba6a6f48996d1",
+      "path": "StarterGui/ShopClient"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterGui/WaterGunUI.client.luau",
+      "md5": "7c92d99d9b7141085ef614be42a3eb76",
+      "path": "StarterGui/WaterGunUI"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau",
+      "md5": "5b29da04c8240500a6f9b63a2fe11121",
+      "path": "StarterPlayer/StarterPlayerScripts/360"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/AnnouncementClient.client.luau",
+      "md5": "f07699e5f362ba91b923ecd56a705e0e",
+      "path": "StarterPlayer/StarterPlayerScripts/AnnouncementClient"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/AvatarContextMenu.client.luau",
+      "md5": "8a9f730fec2e848c37900dd7d3ae8735",
+      "path": "StarterPlayer/StarterPlayerScripts/AvatarContextMenu"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/ChatTags.client.luau",
+      "md5": "ad2371576a31251a85b4d90f07046ec5",
+      "path": "StarterPlayer/StarterPlayerScripts/ChatTags"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/ClientPreloader.client.luau",
+      "md5": "1e99a5b8713186f971596e7a8d91767b",
+      "path": "StarterPlayer/StarterPlayerScripts/ClientPreloader"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/CommunNFav.client.luau",
+      "md5": "b749092f00eb954f4f659da760d6cc3a",
+      "path": "StarterPlayer/StarterPlayerScripts/CommunNFav"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/CustomBackpackUI.client.luau",
+      "md5": "d2271fdc3a37ef7af607e322db59bcea",
+      "path": "StarterPlayer/StarterPlayerScripts/CustomBackpackUI"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceClient.client.luau",
+      "md5": "97da146a646f458ac5ee637dec6a58cd",
+      "path": "StarterPlayer/StarterPlayerScripts/DanceClient"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceController.client.luau",
+      "md5": "7244aa6face4d52d03cb5cd6491a5b52",
+      "path": "StarterPlayer/StarterPlayerScripts/DanceController"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/DonationVFX.client.luau",
+      "md5": "712796145c48cfce575456ca45aa78fc",
+      "path": "StarterPlayer/StarterPlayerScripts/DonationVFX"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/EqualizerFrame_Dekstop.luau",
+      "md5": "28680b65fdfa6b7ce88d0509944df5a3",
+      "path": "StarterPlayer/StarterPlayerScripts/EqualizerFrame_Dekstop"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/EqualizerFrame_Mobile.luau",
+      "md5": "71a8c4ad95bb90bca543f2075b7d3bc8",
+      "path": "StarterPlayer/StarterPlayerScripts/EqualizerFrame_Mobile"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/InteractPlayer/InteractionLoad.client.luau",
+      "md5": "fe0cc16d37822dce0cff5aa51418f871",
+      "path": "StarterPlayer/StarterPlayerScripts/InteractPlayer/InteractionLoad"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/LeaderboardClient.client.luau",
+      "md5": "0d28ba72b0aa4f781695d1318c65e26e",
+      "path": "StarterPlayer/StarterPlayerScripts/LeaderboardClient"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/Likeeffects.client.luau",
+      "md5": "d31ab6bc607de300d5eeb8a5357c0cd9",
+      "path": "StarterPlayer/StarterPlayerScripts/Likeeffects"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/ListQueue_Dekstop.luau",
+      "md5": "4f56627e61a7b981062f9ca6b23fc136",
+      "path": "StarterPlayer/StarterPlayerScripts/ListQueue_Dekstop"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/ListQueue_Mobile.luau",
+      "md5": "8f47befc25633e36b36f6235e6095381",
+      "path": "StarterPlayer/StarterPlayerScripts/ListQueue_Mobile"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau",
+      "md5": "5f88d44a422decca7df1a01bf5eff2c2",
+      "path": "StarterPlayer/StarterPlayerScripts/MenuSystemInit"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/Mirrorscript.client.luau",
+      "md5": "9d9a116e78d3724c38cdd37a5661e612",
+      "path": "StarterPlayer/StarterPlayerScripts/Mirrorscript"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/MultiScreenController.client.luau",
+      "md5": "3aaff7625275f7d1ea3bd550a99e1871",
+      "path": "StarterPlayer/StarterPlayerScripts/MultiScreenController"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient/init.client.luau",
+      "md5": "ea8e8d437a086a9dd20947803000d49c",
+      "path": "StarterPlayer/StarterPlayerScripts/MusicClient"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient/Audio.luau",
+      "md5": "e7cd54764cb44c805962b7ec1f7217b8",
+      "path": "StarterPlayer/StarterPlayerScripts/MusicClient/Audio"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient/Lists.luau",
+      "md5": "1be100c77d895936330cb5ee1fb773b6",
+      "path": "StarterPlayer/StarterPlayerScripts/MusicClient/Lists"
+    },
+    {
+      "class": "ModuleScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient/UI.luau",
+      "md5": "a9d49f0b49eae6bdca7d1da624990226",
+      "path": "StarterPlayer/StarterPlayerScripts/MusicClient/UI"
+    },
+    {
+      "class": "LocalScript",
+      "disabled": true,
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/Musicprogressreporter.client.luau",
+      "md5": "e20e6ce59276480dbe820fb597cc53b7",
+      "path": "StarterPlayer/StarterPlayerScripts/Musicprogressreporter"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/TitlePlate.client.luau",
+      "md5": "3a29428b68eb8b2d4b3637ecdfc8df62",
+      "path": "StarterPlayer/StarterPlayerScripts/TitlePlate"
+    },
+    {
+      "class": "LocalScript",
+      "file": "src/legacy/StarterPlayer/StarterPlayerScripts/sprintSystem.client.luau",
+      "md5": "d6cf912c3302bf4466e654d4f298a089",
+      "path": "StarterPlayer/StarterPlayerScripts/sprintSystem"
+    }
+  ],
+  "source": "/Users/lokajayaandala/Downloads/HAVN_backup_2026-09-26.rbxl",
+  "sourceMd5": "72be4e316260a5eaff4e4a49686c842b"
+}

@@ -2,8 +2,269 @@
   "name": "HAVN",
   "tree": {
     "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "AnimationCache": {
+        "$path": "src/legacy/ReplicatedStorage/AnimationCache"
+      },
+      "CarryReplic": {
+        "$className": "Folder",
+        "CarryRemotes": {
+          "$className": "Folder",
+          "CarryWeld": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryRemotes/CarryWeld.luau"
+          }
+        }
+      },
+      "Config": {
+        "$path": "src/legacy/ReplicatedStorage/Config"
+      },
+      "CustomTween": {
+        "$path": "src/legacy/ReplicatedStorage/CustomTween"
+      },
+      "CustomUIModules": {
+        "$path": "src/legacy/ReplicatedStorage/CustomUIModules"
+      },
+      "GameSettings": {
+        "$path": "src/legacy/ReplicatedStorage/GameSettings.luau"
+      },
+      "Modules": {
+        "$path": "src/legacy/ReplicatedStorage/Modules"
+      },
+      "MusicShared": {
+        "$path": "src/legacy/ReplicatedStorage/MusicShared.luau"
+      },
+      "ProfileService": {
+        "$path": "src/legacy/ReplicatedStorage/ProfileService.luau"
+      },
+      "ShopConfig": {
+        "$path": "src/legacy/ReplicatedStorage/ShopConfig.luau"
+      },
+      "TitleStyle": {
+        "$path": "src/legacy/ReplicatedStorage/TitleStyle.luau"
+      }
+    },
     "ServerScriptService": {
-      "RojoTest": { "$path": "src/server" }
+      "$className": "ServerScriptService",
+      "AG-MusicGlobal": {
+        "$path": "src/legacy/ServerScriptService/AG-MusicGlobal.server.luau"
+      },
+      "AnimationHandler": {
+        "$path": "src/legacy/ServerScriptService/AnimationHandler.server.luau"
+      },
+      "AnnouncementHandler": {
+        "$path": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau"
+      },
+      "AssetPermissionGran": {
+        "$path": "src/legacy/ServerScriptService/AssetPermissionGran.server.luau"
+      },
+      "CarrySystemHandler": {
+        "$path": "src/legacy/ServerScriptService/CarrySystemHandler.server.luau"
+      },
+      "CommandServer": {
+        "$path": "src/legacy/ServerScriptService/CommandServer.server.luau"
+      },
+      "Communityinfoservice": {
+        "$path": "src/legacy/ServerScriptService/Communityinfoservice.server.luau"
+      },
+      "DonationMessageHandler": {
+        "$path": "src/legacy/ServerScriptService/DonationMessageHandler.server.luau"
+      },
+      "DonationServer": {
+        "$path": "src/legacy/ServerScriptService/DonationServer.server.luau"
+      },
+      "FavoritePrompt": {
+        "$path": "src/legacy/ServerScriptService/FavoritePrompt.server.luau"
+      },
+      "FlyingbroomServer": {
+        "$path": "src/legacy/ServerScriptService/FlyingbroomServer.server.luau"
+      },
+      "GlowStickServer": {
+        "$path": "src/legacy/ServerScriptService/GlowStickServer.server.luau"
+      },
+      "HammerServer": {
+        "$path": "src/legacy/ServerScriptService/HammerServer.server.luau"
+      },
+      "Likesystem": {
+        "$path": "src/legacy/ServerScriptService/Likesystem.server.luau"
+      },
+      "LiveScreenServer": {
+        "$path": "src/legacy/ServerScriptService/LiveScreenServer.server.luau"
+      },
+      "Misc": {
+        "$path": "src/legacy/ServerScriptService/Misc"
+      },
+      "MusicServer": {
+        "$path": "src/legacy/ServerScriptService/MusicServer"
+      },
+      "Namailang": {
+        "$path": "src/legacy/ServerScriptService/Namailang.server.luau"
+      },
+      "OverheadTag": {
+        "$path": "src/legacy/ServerScriptService/OverheadTag.server.luau"
+      },
+      "PlayerCollisionManager": {
+        "$path": "src/legacy/ServerScriptService/PlayerCollisionManager.server.luau"
+      },
+      "RagDollTag": {
+        "$path": "src/legacy/ServerScriptService/RagDollTag.server.luau"
+      },
+      "RankConfig": {
+        "$path": "src/legacy/ServerScriptService/RankConfig.luau"
+      },
+      "ReceiptHandler": {
+        "$path": "src/legacy/ServerScriptService/ReceiptHandler.luau"
+      },
+      "RefreshCharacter": {
+        "$path": "src/legacy/ServerScriptService/RefreshCharacter.server.luau"
+      },
+      "RoleManagerServer": {
+        "$path": "src/legacy/ServerScriptService/RoleManagerServer.server.luau"
+      },
+      "ScriptEmitter": {
+        "$path": "src/legacy/ServerScriptService/ScriptEmitter.server.luau"
+      },
+      "ShopServer": {
+        "$path": "src/legacy/ServerScriptService/ShopServer.server.luau"
+      },
+      "SyncGIFClones": {
+        "$path": "src/legacy/ServerScriptService/SyncGIFClones.server.luau"
+      },
+      "TeamSystem": {
+        "$path": "src/legacy/ServerScriptService/TeamSystem.server.luau"
+      },
+      "ToolGiver": {
+        "$path": "src/legacy/ServerScriptService/ToolGiver.server.luau"
+      },
+      "Transferdonationdata": {
+        "$path": "src/legacy/ServerScriptService/Transferdonationdata.server.luau"
+      },
+      "UnifiedRankManager": {
+        "$path": "src/legacy/ServerScriptService/UnifiedRankManager.server.luau"
+      }
+    },
+    "StarterGui": {
+      "$className": "StarterGui",
+      "CommandPanel": {
+        "$path": "src/legacy/StarterGui/CommandPanel.client.luau"
+      },
+      "DonationMessageClient": {
+        "$path": "src/legacy/StarterGui/DonationMessageClient.client.luau"
+      },
+      "DonationMessageNotification": {
+        "$path": "src/legacy/StarterGui/DonationMessageNotification.client.luau"
+      },
+      "Flyingbroomui": {
+        "$path": "src/legacy/StarterGui/Flyingbroomui.client.luau"
+      },
+      "FreeCam": {
+        "$path": "src/legacy/StarterGui/FreeCam.client.luau"
+      },
+      "GlowStickUI": {
+        "$path": "src/legacy/StarterGui/GlowStickUI.client.luau"
+      },
+      "GraphicsClient": {
+        "$path": "src/legacy/StarterGui/GraphicsClient.client.luau"
+      },
+      "InfoTopBar": {
+        "$path": "src/legacy/StarterGui/InfoTopBar.client.luau"
+      },
+      "MoneyGunUI": {
+        "$path": "src/legacy/StarterGui/MoneyGunUI.client.luau"
+      },
+      "PlayersClient": {
+        "$path": "src/legacy/StarterGui/PlayersClient.client.luau"
+      },
+      "RoleManagerClient": {
+        "$path": "src/legacy/StarterGui/RoleManagerClient.client.luau"
+      },
+      "SettingsClient": {
+        "$path": "src/legacy/StarterGui/SettingsClient.client.luau"
+      },
+      "ShopClient": {
+        "$path": "src/legacy/StarterGui/ShopClient.client.luau"
+      },
+      "WaterGunUI": {
+        "$path": "src/legacy/StarterGui/WaterGunUI.client.luau"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "360": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
+        },
+        "AnnouncementClient": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/AnnouncementClient.client.luau"
+        },
+        "AvatarContextMenu": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/AvatarContextMenu.client.luau"
+        },
+        "ChatTags": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ChatTags.client.luau"
+        },
+        "ClientPreloader": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ClientPreloader.client.luau"
+        },
+        "CommunNFav": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/CommunNFav.client.luau"
+        },
+        "CustomBackpackUI": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/CustomBackpackUI.client.luau"
+        },
+        "DanceClient": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceClient.client.luau"
+        },
+        "DanceController": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceController.client.luau"
+        },
+        "DonationVFX": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DonationVFX.client.luau"
+        },
+        "EqualizerFrame_Dekstop": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/EqualizerFrame_Dekstop.luau"
+        },
+        "EqualizerFrame_Mobile": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/EqualizerFrame_Mobile.luau"
+        },
+        "InteractPlayer": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/InteractPlayer"
+        },
+        "LeaderboardClient": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/LeaderboardClient.client.luau"
+        },
+        "Likeeffects": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Likeeffects.client.luau"
+        },
+        "ListQueue_Dekstop": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ListQueue_Dekstop.luau"
+        },
+        "ListQueue_Mobile": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ListQueue_Mobile.luau"
+        },
+        "MenuSystemInit": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau"
+        },
+        "Mirrorscript": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Mirrorscript.client.luau"
+        },
+        "MultiScreenController": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MultiScreenController.client.luau"
+        },
+        "MusicClient": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient"
+        },
+        "Musicprogressreporter": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Musicprogressreporter.client.luau"
+        },
+        "TitlePlate": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/TitlePlate.client.luau"
+        },
+        "sprintSystem": {
+          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/sprintSystem.client.luau"
+        }
+      }
     }
   }
 }

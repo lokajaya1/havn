@@ -1,0 +1,683 @@
+-- DanceHandler — ServerScriptService
+-- Satu state per pemain (rig + track cache + favorit + watchdog) supaya tidak
+-- ada tabel paralel yang harus dibersihkan di banyak tempat.
+--
+-- Penyebab dance pertama terasa lambat: AnimationTrack yang baru di-load punya
+-- Length 0 sampai data keyframe turun, dan Play pada track Length 0 tidak
+-- menampilkan apa pun. Karena itu:
+--   • AnimationWarmup memanaskan cache asset satu kali per server.
+--   • ensureTrack menunggu Length > 0 sebelum dance benar-benar diputar.
+--   • Fade dibuat pendek supaya respons terasa instan.
+--
+-- Catatan:
+--   • Animator punya batas 256 AnimationTrack dan track tidak dibersihkan
+--     otomatis, jadi cache dibatasi dan track lama di-Destroy.
+--   • WalkSpeed selama & sesudah carry tetap milik CarrySystemHandler;
+--     di sini hanya menjaga dance solo tetap hidup.
+
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService  = game:GetService("DataStoreService")
+
+local SmoothDanceHelper = require(ReplicatedStorage.Modules.SmoothDanceHelper)
+local DanceAssets       = require(ReplicatedStorage.Assets.Animations.Dances.DanceAssets)
+
+-- Warm-up bersifat opsional: kalau modulnya belum dipasang, dance tetap jalan
+-- (hanya kehilangan pemanasan asset), bukan mematikan seluruh handler.
+local AnimationWarmup = { addByName = function() end }
+do
+	local modules = ReplicatedStorage:FindFirstChild("Modules")
+	local module  = modules and modules:FindFirstChild("AnimationWarmup")
+	if module then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" then
+			AnimationWarmup = result
+		else
+			warn("[DanceHandler] AnimationWarmup gagal di-require:", result)
+		end
+	else
+		warn("[DanceHandler] AnimationWarmup belum ada di ReplicatedStorage.Modules")
+	end
+end
+
+local DANCES = DanceAssets.dances
+
+local CONFIG = {
+	DANCE_WALKSPEED   = 6,
+	DEFAULT_WALKSPEED = 16,
+
+	FADE_IN          = 0.12,
+	FADE_OUT         = 0.18,
+	STOP_FADE        = 0.22,
+	REASSERT_FADE    = 0.1,
+	SPEED_TRANSITION = 0.12,
+
+	LOAD_TIMEOUT = 0.6,  -- batas tunggu asset dingin sebelum tetap diputar
+
+	MIN_SPEED = 0.5,
+	MAX_SPEED = 2.0,
+
+	MAX_TRACKS       = 48,   -- jauh di bawah batas 256 track per Animator
+	REQUEST_COOLDOWN = 0.05, -- anti spam FireServer
+
+	WARMUP_DELAY        = 0.4,
+	SERVER_WARMUP_DELAY = 2,
+	-- Nama harus sama persis dengan key di DanceAssets.dances (case-sensitive).
+	-- Nama yang salah akan di-warn saat warm-up, tidak diam-diam dilewati.
+	POPULAR_DANCES = {
+		"Fresh", "Floss", "Gangnam Style", "Electro Shuffle",
+		"Get Griddy", "Sturdy", "Breakdance", "Macarena",
+		"Salsa", "Party", "Hip Hop Dancing", "Boogie Down",
+	},
+
+	-- Watchdog: jaga dance tetap hidup selama di-carry, lalu verifikasi
+	-- sebentar setelah drop (Stop dari cleanup bisa pakai fade & telat).
+	CARRY_INTERVAL = 0.15,
+	DROP_INTERVAL  = 0.1,
+	DROP_STEPS     = 10,
+
+	FAVORITES_LIMIT   = 250,
+	AUTOSAVE_INTERVAL = 60,
+	DATASTORE_NAME    = "DanceFavorites",
+}
+
+-- ═══════════════════════════════════════════════════════════
+-- STATE
+-- ═══════════════════════════════════════════════════════════
+
+local states = {}
+
+local function getState(player)
+	local userId = player.UserId
+	local s = states[userId]
+	if not s then
+		s = {
+			userId     = userId,
+			rig        = nil,   -- { humanoid, animator, character }
+			tracks     = {},    -- danceName -> { track, used }
+			trackCount = 0,
+			clock      = 0,
+			dance      = nil,
+			speed      = 1.0,
+			walkSpeed  = CONFIG.DEFAULT_WALKSPEED,
+			favorites  = {},
+			dirty      = false,
+			watchToken = 0,
+			lastRequest = 0,
+			initialized = false,
+		}
+		states[userId] = s
+	end
+	return s
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- RIG & TRACK CACHE
+-- ═══════════════════════════════════════════════════════════
+
+local function getRig(player)
+	local s   = getState(player)
+	local rig = s.rig
+	if rig and rig.character.Parent and rig.humanoid.Parent and rig.animator.Parent then
+		return rig.humanoid, rig.animator
+	end
+
+	local character = player.Character
+	local humanoid  = character and character:FindFirstChildOfClass("Humanoid")
+	local animator  = humanoid and humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		s.rig = nil
+		return nil, nil
+	end
+
+	s.rig = { character = character, humanoid = humanoid, animator = animator }
+	return humanoid, animator
+end
+
+local function releaseTrack(entry)
+	pcall(function()
+		entry.track:Stop(0)
+		entry.track:Destroy()
+	end)
+end
+
+local function clearTracks(s)
+	for _, entry in pairs(s.tracks) do
+		releaseTrack(entry)
+	end
+	s.tracks     = {}
+	s.trackCount = 0
+	s.clock      = 0
+end
+
+-- Cache LRU: track dipakai ulang, yang paling lama menganggur dibuang.
+local function getTrack(player, danceName)
+	local animationId = DANCES[danceName]
+	if not animationId then return nil end
+
+	local s = getState(player)
+	s.clock += 1
+
+	local entry = s.tracks[danceName]
+	if entry and entry.track.Animation then
+		entry.used = s.clock
+		return entry.track
+	end
+
+	local _, animator = getRig(player)
+	if not animator then return nil end
+
+	if s.trackCount >= CONFIG.MAX_TRACKS then
+		local oldestName, oldestUsed = nil, math.huge
+		for name, e in pairs(s.tracks) do
+			if e.used < oldestUsed then
+				oldestName, oldestUsed = name, e.used
+			end
+		end
+		if oldestName then
+			releaseTrack(s.tracks[oldestName])
+			s.tracks[oldestName] = nil
+			s.trackCount -= 1
+		end
+	end
+
+	local animation       = Instance.new("Animation")
+	animation.Name        = danceName
+	animation.AnimationId = "rbxassetid://" .. animationId
+
+	local ok, track = pcall(function() return animator:LoadAnimation(animation) end)
+	animation:Destroy()
+	if not ok or not track then return nil end
+
+	track.Priority = Enum.AnimationPriority.Action4
+	track.Looped   = true
+
+	s.tracks[danceName] = { track = track, used = s.clock }
+	s.trackCount += 1
+	return track
+end
+
+-- Play pada track dengan Length 0 tidak menampilkan apa pun; ini penyebab
+-- "diam" saat dance pertama. Menunggu hanya sekali per dance per karakter.
+-- Animasi yang asset-nya rusak dicatat supaya tidak ditunggu berulang kali.
+local brokenDances = {}
+
+local function ensureTrack(player, danceName)
+	local track = getTrack(player, danceName)
+	if not track then return nil end
+	if track.Length > 0 or brokenDances[danceName] then return track end
+
+	local deadline = os.clock() + CONFIG.LOAD_TIMEOUT
+	while track.Length == 0 and os.clock() < deadline do
+		task.wait()
+	end
+
+	if track.Length == 0 then
+		brokenDances[danceName] = true
+		warn(string.format(
+			"[DanceHandler] animasi '%s' (id %s) gagal dimuat — cek kepemilikan asset",
+			danceName, tostring(DANCES[danceName])
+			))
+	end
+	return track
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- TRACK YANG SEDANG BERMAIN
+-- ═══════════════════════════════════════════════════════════
+
+local function findTrack(humanoid, danceName)
+	for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+		local animation = track.Animation
+		if animation and animation.Name == danceName then return track end
+	end
+	return nil
+end
+
+local function stopDanceTracks(humanoid, except, fade)
+	for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+		local animation = track.Animation
+		if track ~= except and animation and DANCES[animation.Name] then
+			pcall(function() track:Stop(fade) end)
+		end
+	end
+end
+
+local function isDanceAlive(humanoid, danceName)
+	if not danceName then return false end
+	local track = findTrack(humanoid, danceName)
+	return track ~= nil and track.IsPlaying and track.WeightTarget >= 0.5
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- WALKSPEED
+-- ═══════════════════════════════════════════════════════════
+
+local function setDanceWalkSpeed(player)
+	local humanoid = getRig(player)
+	if humanoid then humanoid.WalkSpeed = CONFIG.DANCE_WALKSPEED end
+end
+
+local function restoreWalkSpeed(player)
+	local humanoid = getRig(player)
+	if not humanoid then return end
+
+	local s      = states[player.UserId]
+	local target = (s and s.walkSpeed) or CONFIG.DEFAULT_WALKSPEED
+
+	-- Saat carry aktif, CarrySystemHandler pemegang tunggal WalkSpeed.
+	local function apply()
+		if humanoid.Parent and not player:GetAttribute("InCarry") then
+			humanoid.WalkSpeed = target
+		end
+	end
+
+	apply()
+	task.delay(CONFIG.STOP_FADE + 0.1, function()
+		local current = states[player.UserId]
+		if current and current.dance then return end
+		apply()
+	end)
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- PLAY / STOP
+-- ═══════════════════════════════════════════════════════════
+
+-- Jalur langsung lewat Animator; dipakai sebagai cadangan kalau helper gagal.
+local function playDirect(player, danceName, speed, fadeIn)
+	local humanoid = getRig(player)
+	if not humanoid then return false end
+
+	local track = ensureTrack(player, danceName)
+	if not track then return false end
+
+	track.Priority = Enum.AnimationPriority.Action4
+	track.Looped   = true
+
+	local ok = pcall(function() track:Play(fadeIn, 1.0, speed) end)
+	if not ok then return false end
+
+	stopDanceTracks(humanoid, track, CONFIG.FADE_OUT)
+	return true
+end
+
+local function playDance(player, danceName, speed)
+	if not DANCES[danceName] then return false end
+
+	local humanoid = getRig(player)
+	if not humanoid then return false end
+
+	local s = getState(player)
+	speed = math.clamp(tonumber(speed) or 1.0, CONFIG.MIN_SPEED, CONFIG.MAX_SPEED)
+	s.speed = speed
+	setDanceWalkSpeed(player)
+
+	-- Dance yang sama dan masih hidup: cukup ubah kecepatannya.
+	if s.dance == danceName then
+		if isDanceAlive(humanoid, danceName) then
+			local called, changed = pcall(SmoothDanceHelper.setSpeed, player, speed, CONFIG.SPEED_TRANSITION)
+			if called and changed then return true end
+		end
+		s.dance = nil
+	end
+
+	-- Panaskan dulu, jadi helper tidak pernah memutar track dengan Length 0.
+	ensureTrack(player, danceName)
+
+	local called, ok = pcall(SmoothDanceHelper.playDance, player, danceName, {
+		fadeIn    = CONFIG.FADE_IN,
+		fadeOut   = CONFIG.FADE_OUT,
+		speed     = speed,
+		crossFade = true,
+	})
+	if not (called and ok) then
+		ok = playDirect(player, danceName, speed, CONFIG.FADE_IN)
+	end
+
+	if not ok then
+		restoreWalkSpeed(player)
+		return false
+	end
+
+	s.dance = danceName
+	player:SetAttribute("IsDancing", true)
+	return true
+end
+
+local function stopDance(player)
+	local s = states[player.UserId]
+	if s then s.dance = nil end
+	player:SetAttribute("IsDancing", false)
+
+	local humanoid = getRig(player)
+	if not humanoid then return end
+
+	local called, ok = pcall(SmoothDanceHelper.stopDance, player, CONFIG.STOP_FADE)
+	if not (called and ok) then
+		stopDanceTracks(humanoid, nil, CONFIG.STOP_FADE)
+	end
+
+	restoreWalkSpeed(player)
+end
+
+-- Carry pose bisa menimpa/mematikan track dance; pulihkan sambil menjaga fase.
+local function reassertDance(player)
+	local s = states[player.UserId]
+	if not s or not s.dance then return end
+	if player:GetAttribute("IsSyncing") then return end
+
+	local humanoid = getRig(player)
+	if not humanoid then return end
+
+	local danceName, speed = s.dance, s.speed or 1.0
+
+	if isDanceAlive(humanoid, danceName) then
+		setDanceWalkSpeed(player)
+		return
+	end
+
+	local previous = findTrack(humanoid, danceName)
+	local phase    = previous and previous.TimePosition or nil
+
+	-- Reset state internal helper dulu; helper bisa mengira dance masih main.
+	pcall(SmoothDanceHelper.stopDance, player, 0)
+	s.dance = nil
+
+	local ok = playDance(player, danceName, speed)
+
+	if not isDanceAlive(humanoid, danceName) then
+		stopDanceTracks(humanoid, nil, 0)
+		ok = playDirect(player, danceName, speed, CONFIG.REASSERT_FADE)
+		if ok then
+			setDanceWalkSpeed(player)
+			player:SetAttribute("IsDancing", true)
+		end
+	end
+
+	s.dance = danceName
+	s.speed = speed
+
+	if ok and phase then
+		local track = findTrack(humanoid, danceName)
+		if track and track.IsPlaying then
+			pcall(function() track.TimePosition = phase end)
+		end
+	end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- WATCHDOG CARRY x DANCE
+-- Satu loop untuk dua kondisi: selama di-carry (tanpa batas) dan
+-- verifikasi singkat setelah drop. Token per-generasi mematikan loop lama.
+-- ═══════════════════════════════════════════════════════════
+
+local function startWatch(player, carried)
+	local s = states[player.UserId]
+	if not s or not s.dance then return end
+
+	local danceName = s.dance
+	s.watchToken += 1
+	local token = s.watchToken
+
+	local interval = carried and CONFIG.CARRY_INTERVAL or CONFIG.DROP_INTERVAL
+	local steps    = carried and math.huge or CONFIG.DROP_STEPS
+
+	task.spawn(function()
+		task.wait(carried and 0 or interval) -- beri waktu pose/weld carry settle
+
+		local step = 0
+		while step < steps do
+			step += 1
+
+			if not player.Parent then return end
+			if player:GetAttribute("IsSyncing") then return end
+			if (player:GetAttribute("InCarry") == true) ~= carried then return end
+
+			local current = states[player.UserId]
+			if not current or current.watchToken ~= token or current.dance ~= danceName then return end
+
+			local humanoid = getRig(player)
+			if humanoid then
+				if not isDanceAlive(humanoid, danceName) then
+					reassertDance(player)
+				elseif carried then
+					setDanceWalkSpeed(player)
+				end
+			end
+
+			task.wait(interval)
+		end
+	end)
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- FAVORIT (DataStore)
+-- ═══════════════════════════════════════════════════════════
+
+local favoritesStore
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(CONFIG.DATASTORE_NAME)
+	end)
+	if ok then
+		favoritesStore = result
+	else
+		warn("[DanceHandler] DataStore tidak tersedia:", result)
+	end
+end
+
+local function favoritesKey(userId)
+	return "favorites_" .. userId
+end
+
+local function sanitizeFavorites(list)
+	local clean, seen = {}, {}
+	if type(list) ~= "table" then return clean end
+	for _, name in ipairs(list) do
+		if type(name) == "string" and DANCES[name] and not seen[name] then
+			seen[name] = true
+			clean[#clean + 1] = name
+			if #clean >= CONFIG.FAVORITES_LIMIT then break end
+		end
+	end
+	return clean
+end
+
+local function loadFavorites(player)
+	local s = getState(player)
+	if favoritesStore then
+		local ok, data = pcall(function()
+			return favoritesStore:GetAsync(favoritesKey(s.userId))
+		end)
+		if ok then s.favorites = sanitizeFavorites(data) end
+	end
+	return s.favorites
+end
+
+-- Tulis hanya kalau ada perubahan; tap bintang tidak lagi memicu SetAsync.
+local function flushFavorites(userId, immediate)
+	local s = states[userId]
+	if not s or not s.dirty or not favoritesStore then return end
+
+	s.dirty = false
+	local snapshot = table.clone(s.favorites)
+
+	local function write()
+		local ok = pcall(function()
+			favoritesStore:SetAsync(favoritesKey(userId), snapshot)
+		end)
+		if not ok then
+			local current = states[userId]
+			if current then current.dirty = true end
+		end
+	end
+
+	if immediate then write() else task.spawn(write) end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- REMOTE
+-- ═══════════════════════════════════════════════════════════
+
+local function getRemote(name)
+	local remote = ReplicatedStorage:FindFirstChild(name)
+	if remote then return remote end
+	remote        = Instance.new("RemoteEvent")
+	remote.Name   = name
+	remote.Parent = ReplicatedStorage
+	return remote
+end
+
+local danceRemote     = getRemote("DanceRequest")
+local favoritesRemote = getRemote("FavoritesRemote")
+
+danceRemote.OnServerEvent:Connect(function(player, danceName, speed)
+	if danceName ~= nil and type(danceName) ~= "string" then return end
+
+	local s   = getState(player)
+	local now = os.clock()
+	if now - s.lastRequest < CONFIG.REQUEST_COOLDOWN then return end
+	s.lastRequest = now
+
+	-- Dance manual ditolak saat sync (mirror diurus SyncHandler).
+	-- Dance saat di-carry diizinkan; stop hanya lewat drop-cleanup.
+	if player:GetAttribute("IsSyncing") then return end
+
+	if not danceName or danceName == "" then
+		stopDance(player)
+	else
+		playDance(player, danceName, speed)
+	end
+end)
+
+favoritesRemote.OnServerEvent:Connect(function(player, action, data)
+	local s = getState(player)
+
+	if action == "load" then
+		favoritesRemote:FireClient(player, "loaded", loadFavorites(player))
+
+	elseif action == "add" and type(data) == "string" and DANCES[data] then
+		if #s.favorites < CONFIG.FAVORITES_LIMIT and not table.find(s.favorites, data) then
+			table.insert(s.favorites, data)
+			s.dirty = true
+			favoritesRemote:FireClient(player, "updated", s.favorites)
+		end
+
+	elseif action == "remove" and type(data) == "string" then
+		local index = table.find(s.favorites, data)
+		if index then
+			table.remove(s.favorites, index)
+			s.dirty = true
+			favoritesRemote:FireClient(player, "updated", s.favorites)
+		end
+	end
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- SIKLUS PEMAIN
+-- ═══════════════════════════════════════════════════════════
+
+-- Memuat AnimationTrack ke Animator pemain supaya dance pertama tidak
+-- tersendat. Tambah nama ke POPULAR_DANCES kalau perlu; biayanya murah.
+local function warmUpPlayer(player)
+	if not player.Parent then return end
+	local _, animator = getRig(player)
+	if not animator then return end
+
+	pcall(SmoothDanceHelper.initializePlayer, player)
+	pcall(SmoothDanceHelper.preloadPopularAnimations, player, CONFIG.POPULAR_DANCES)
+
+	for _, danceName in ipairs(CONFIG.POPULAR_DANCES) do
+		if DANCES[danceName] then
+			getTrack(player, danceName)
+		else
+			warn("[DanceHandler] POPULAR_DANCES berisi nama yang tidak ada: " .. danceName)
+		end
+	end
+end
+
+local function onCharacterAdded(player, character)
+	local s = getState(player)
+
+	s.rig         = nil
+	s.dance       = nil
+	s.watchToken += 1  -- matikan watchdog carry dari karakter lama
+	clearTracks(s)
+	player:SetAttribute("IsDancing", false)
+
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if not humanoid then return end
+	if not humanoid:WaitForChild("Animator", 10) then return end
+
+	s.walkSpeed = humanoid.WalkSpeed
+	task.delay(CONFIG.WARMUP_DELAY, warmUpPlayer, player)
+end
+
+local function onPlayerAdded(player)
+	local s = getState(player)
+	if s.initialized then return end
+	s.initialized = true
+
+	player.CharacterAdded:Connect(function(character)
+		onCharacterAdded(player, character)
+	end)
+	if player.Character then
+		task.spawn(onCharacterAdded, player, player.Character)
+	end
+
+	player:GetAttributeChangedSignal("InCarry"):Connect(function()
+		if player:GetAttribute("IsSyncing") then return end
+		startWatch(player, player:GetAttribute("InCarry") == true)
+	end)
+
+	player:GetAttributeChangedSignal("IsSyncing"):Connect(function()
+		if not player:GetAttribute("IsSyncing") then return end
+		local current = states[player.UserId]
+		if current then
+			current.dance = nil
+			current.watchToken += 1
+		end
+		player:SetAttribute("IsDancing", false)
+	end)
+
+	task.spawn(function()
+		favoritesRemote:FireClient(player, "loaded", loadFavorites(player))
+	end)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in ipairs(Players:GetPlayers()) do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	local userId = player.UserId
+	pcall(SmoothDanceHelper.cleanupPlayer, player)
+	flushFavorites(userId, true)
+
+	local s = states[userId]
+	if s then clearTracks(s) end
+	states[userId] = nil
+end)
+
+game:BindToClose(function()
+	for userId in pairs(states) do
+		flushFavorites(userId, true)
+	end
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(CONFIG.AUTOSAVE_INTERVAL)
+		for userId in pairs(states) do
+			flushFavorites(userId, false)
+		end
+	end
+end)
+
+-- Hanya dance populer yang dipanaskan di server. Sisanya dipanaskan saat
+-- benar-benar dibutuhkan; memanaskan 200+ animasi sekaligus justru bikin lag.
+task.delay(CONFIG.SERVER_WARMUP_DELAY, function()
+	AnimationWarmup.addByName(DANCES, CONFIG.POPULAR_DANCES)
+end)
