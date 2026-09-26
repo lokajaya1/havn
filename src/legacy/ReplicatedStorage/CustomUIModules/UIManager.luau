@@ -198,7 +198,7 @@ end
 
 -- ── Init ────────────────────────────────────────────────────
 
-function UIManager.Init(): boolean
+local function initOnce(): boolean
 	if initComplete then return true end
 
 	player = Players.LocalPlayer
@@ -237,6 +237,24 @@ function UIManager.Init(): boolean
 
 	print("[UIManager] Ready |", Responsive.Device(), "|", Responsive.Orientation())
 	return true
+end
+
+-- [FIX 4c] Init bisa dipanggil 2x bersamaan (InteractionLoad: start + CharacterAdded saat Init pertama
+-- masih menunggu GUI) → dulu GUI di-setup 2x, listener resize/ChildAdded dobel, "Ready" tercetak 2x.
+-- Sekarang panggilan kedua MENUNGGU yang pertama selesai lalu memakai hasilnya.
+local initRunning = false
+function UIManager.Init(): boolean
+	if initComplete then return true end
+	if initRunning then
+		local t0 = os.clock()
+		repeat task.wait(0.1) until not initRunning or os.clock() - t0 > 60
+		return initComplete
+	end
+	initRunning = true
+	local ok, result = pcall(initOnce)
+	initRunning = false
+	if not ok then error(result, 0) end
+	return result
 end
 
 function UIManager.OnReady(callback: () -> ())
