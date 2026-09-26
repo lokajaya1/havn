@@ -33,6 +33,17 @@ end
 
 local carryPairs        = {}
 local pendingRequests   = {}
+-- [FIX 2b] modul carry dicatat server saat AskCarry; Carry hanya sah kalau ada permintaan tertunda
+local pendingModules    = {} -- [target] → ModuleScript yang diminta requester
+local lastAsk           = {} -- [player] → os.clock() AskCarry terakhir
+local ASK_COOLDOWN      = 1
+local function isCarryModule(mod)
+	if typeof(mod) ~= "Instance" or not mod:IsA("ModuleScript") then return false end
+	local choices = CarryReplic:FindFirstChild("CarryChoices")
+	local assets  = RS:FindFirstChild("Assets")
+	local extra   = assets and assets:FindFirstChild("Carry")
+	return (choices ~= nil and mod.Parent == choices) or (extra ~= nil and mod.Parent == extra)
+end
 local releaseFuncs      = {}
 local preCarryWalkSpeed = {}
 
@@ -285,7 +296,11 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 		if cmd == "AskCarry" then
 			local target   = args.targetPlr
 			local carryMod = args.carrychoicesss
-			if not target or not target:IsA("Player") then return end
+			if typeof(target) ~= "Instance" or not target:IsA("Player") or target == plr then return end
+			if not isCarryModule(carryMod) then return end -- [FIX 2b] hanya modul carry resmi
+			local now = os.clock()
+			if lastAsk[plr] and now - lastAsk[plr] < ASK_COOLDOWN then return end
+			lastAsk[plr] = now
 
 			-- FIX: set canAsk false di sini (dulu di PromptAction terpisah
 			-- yang bisa bikin race condition). Sekarang atomic dalam satu event.
@@ -298,6 +313,7 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 
 			if tCanAsk and tCanAsk.Value and tCarryble and tCarryble.Value and carryble.Value then
 				setPending(plr, target)
+				pendingModules[target] = carryMod -- [FIX 2b]
 				tCanAsk.Value = false
 				CarryRemote:FireClient(target, {
 					cmd = "GetMessage", messageSentBy = plr, carrychoicesss = carryMod,
@@ -310,8 +326,12 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 
 		elseif cmd == "Carry" then
 			local firstPlr = args.firstPlr
-			local carryMod = args.carrychoicesss
-			if not firstPlr or not firstPlr:IsA("Player") then return end
+			if typeof(firstPlr) ~= "Instance" or not firstPlr:IsA("Player") or firstPlr == plr then return end
+			-- [FIX 2b] hanya boleh menerima permintaan yang benar-benar ada (dulu: carry paksa tanpa persetujuan)
+			if pendingRequests[plr] ~= firstPlr then return end
+			local carryMod = pendingModules[plr]
+			pendingModules[plr] = nil
+			if not isCarryModule(carryMod) then return end
 
 			pendingRequests[plr] = nil
 			canAsk.Value = true; carryble.Value = false
@@ -371,6 +391,8 @@ Players.PlayerRemoving:Connect(function(plr)
 	carryPairs[plr] = nil
 	releaseFuncs[plr] = nil
 	preCarryWalkSpeed[plr] = nil
+	pendingModules[plr] = nil -- [FIX 2b]
+	lastAsk[plr] = nil
 end)
 
 local function bindRespawn(plr)
