@@ -34,9 +34,6 @@
       "MusicShared": {
         "$path": "src/legacy/ReplicatedStorage/MusicShared.luau"
       },
-      "ProfileService": {
-        "$path": "src/legacy/ReplicatedStorage/ProfileService.luau"
-      },
       "ShopConfig": {
         "$path": "src/legacy/ReplicatedStorage/ShopConfig.luau"
       },
@@ -133,9 +130,6 @@
       "ToolGiver": {
         "$path": "src/legacy/ServerScriptService/ToolGiver.server.luau"
       },
-      "Transferdonationdata": {
-        "$path": "src/legacy/ServerScriptService/Transferdonationdata.server.luau"
-      },
       "UnifiedRankManager": {
         "$path": "src/legacy/ServerScriptService/UnifiedRankManager.server.luau"
       }
@@ -212,9 +206,6 @@
         },
         "DanceClient": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceClient.client.luau"
-        },
-        "DanceController": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceController.client.luau"
         },
         "DonationVFX": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DonationVFX.client.luau"
