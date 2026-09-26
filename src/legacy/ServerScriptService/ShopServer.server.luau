@@ -43,6 +43,18 @@ local Store   = DataStoreService:GetDataStore(Config.dataStore.name)
 local Cache   = {}   -- [userId]  → data
 local Intents = {}   -- [player]  → { recipient, passName, timestamp }
 local RankCache = {} -- [userId]  → bool (isAdmin), cleared on leave
+-- [FIX 2a] data gagal dimuat → JANGAN pernah SetAsync (akan menimpa data asli dengan data kosong)
+local LoadFailed    = {} -- [userId] → true
+local OwnCheckCache = {} -- ["uid|pass"] → { value, expires }  (CheckPlayerOwnership)
+local LastCall      = {} -- [player] → { [remoteName] = os.clock() }
+local function throttled(player, name, cooldown)
+	local t = LastCall[player]
+	if not t then t = {}; LastCall[player] = t end
+	local now = os.clock()
+	if t[name] and now - t[name] < cooldown then return true end
+	t[name] = now
+	return false
+end
 
 local INTENT_TTL  = 300
 local MAX_RETRIES = Config.dataStore.retryAttempts
@@ -168,7 +180,8 @@ local function grantPass(userId, passName)
 	if not data then return false end
 	data.Gamepasses[passName] = true
 	task.spawn(function()
-		if not retry(Store.SetAsync, Store, userId, data) then
+		-- [FIX 2a] data belum termuat → lewati SetAsync, langsung UpdateAsync (gabung ke data tersimpan)
+		if LoadFailed[userId] or not retry(Store.SetAsync, Store, userId, data) then
 			task.wait(2)
 			retry(function()
 				return Store:UpdateAsync(userId, function(old)
@@ -186,6 +199,10 @@ local function loadData(player)
 	local uid = player.UserId
 	if Cache[uid] then return Cache[uid] end
 	local ok, data = retry(Store.GetAsync, Store, uid)
+	if not ok then
+		LoadFailed[uid] = true -- [FIX 2a]
+		warn(("[ShopServer] load data GAGAL uid %d → simpan hanya lewat UpdateAsync gabung"):format(uid))
+	end
 	data = ensureFields(ok and data or nil)
 	if not player.Parent then return nil end
 	Cache[uid] = data
@@ -199,15 +216,43 @@ local function loadData(player)
 end
 
 local function saveData(player)
-	local data = Cache[player.UserId]
-	if data then retry(Store.SetAsync, Store, player.UserId, data) end
+	local uid  = player.UserId
+	local data = Cache[uid]
+	if not data then return end
+	if not LoadFailed[uid] then
+		retry(Store.SetAsync, Store, uid, data)
+		return
+	end
+	-- [FIX 2a] data sesi ini dibuat dari nol (load gagal) → gabungkan, jangan timpa
+	local ok, merged = retry(function()
+		return Store:UpdateAsync(uid, function(old)
+			old = ensureFields(old)
+			for name, owned in pairs(data.Gamepasses) do
+				if owned then old.Gamepasses[name] = true end
+			end
+			for id, rec in pairs(data.Purchases) do
+				if old.Purchases[id] == nil then old.Purchases[id] = rec end
+			end
+			return old
+		end)
+	end)
+	if ok and merged then
+		LoadFailed[uid] = nil
+		if Cache[uid] then Cache[uid] = ensureFields(merged) end
+		print(("[ShopServer] data uid %d dipulihkan lewat UpdateAsync gabung"):format(uid))
+	else
+		warn(("[ShopServer] simpan uid %d dilewati (data belum pernah termuat)"):format(uid))
+	end
 end
 
 local function updateData(userId, fn)
 	local ok, newData = retry(function()
 		return Store:UpdateAsync(userId, function(old) return fn(ensureFields(old)) end)
 	end)
-	if ok and newData then Cache[userId] = newData end
+	if ok and newData then
+		Cache[userId] = newData
+		LoadFailed[userId] = nil -- [FIX 2a] cache kini = data tersimpan
+	end
 	return ok, newData
 end
 
@@ -362,9 +407,18 @@ R.GetOnlinePlayers.OnServerInvoke = function(player, passName)
 	return list
 end
 
-R.CheckPlayerOwnership.OnServerInvoke = function(_, targetId, passName)
-	if not targetId or not passName then return false end
-	return deepOwnershipCheck(targetId, passName)
+R.CheckPlayerOwnership.OnServerInvoke = function(player, targetId, passName)
+	-- [FIX 2a] validasi + cache 60 dtk + batas 1 panggilan/dtk (dulu: GetAsync ke userId bebas tanpa batas)
+	targetId = tonumber(targetId)
+	if not targetId or targetId ~= targetId or targetId <= 0 or targetId % 1 ~= 0 then return false end
+	if type(passName) ~= "string" or not Config.getGamepassByName(passName) then return false end
+	local key = targetId .. "|" .. passName
+	local hit = OwnCheckCache[key]
+	if hit and hit.expires > os.clock() then return hit.value end
+	if throttled(player, "CheckPlayerOwnership", 1) then return hit and hit.value or false end
+	local value = deepOwnershipCheck(targetId, passName) and true or false
+	OwnCheckCache[key] = { value = value, expires = os.clock() + 60 }
+	return value
 end
 
 -- PAID gift: server prompts purchase, ReceiptHandler processes
@@ -374,6 +428,7 @@ R.InitiateGift.OnServerEvent:Connect(function(player, recipientId, passName)
 		warn("[ShopServer] Gift berbayar dinonaktifkan (ReceiptHandler tidak ada).")
 		return
 	end
+	if throttled(player, "InitiateGift", 2) then return end -- [FIX 2a] anti-spam
 	if not validateGift(player, recipientId, passName) then return end
 	setIntent(player, recipientId, passName)
 
@@ -513,6 +568,8 @@ Players.PlayerRemoving:Connect(function(player)
 	Cache[uid]     = nil
 	Intents[player] = nil
 	RankCache[uid] = nil   -- bersihkan rank cache saat player keluar
+	LoadFailed[uid] = nil
+	LastCall[player] = nil
 end)
 
 for _, p in ipairs(Players:GetPlayers()) do task.spawn(loadData, p) end
