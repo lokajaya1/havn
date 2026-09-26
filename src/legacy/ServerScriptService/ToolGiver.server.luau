@@ -61,6 +61,15 @@ local function giveTool(player, toolName)
 	if source then source:Clone().Parent = player.Backpack end
 end
 
+-- patch: toolgiver-debug-flag
+-- true = tampilkan log debug pemberian tool di Output
+local DEBUG = false
+local function debugLog(msg)
+	if DEBUG then
+		warn(msg)
+	end
+end
+
 local function giveAllTools(player)
 	if not player.Character then return end
 
@@ -69,13 +78,13 @@ local function giveAllTools(player)
 	local hasVVIP = ownsGamepass(player, VVIP_GAMEPASS_ID, "VVIP Access")
 
 	-- DEBUG — lihat di output Roblox
-	warn(string.format("[ToolGiver DEBUG] %s | Rank:%d | HasVIP:%s | HasVVIP:%s | ShopReady:%s",
+	debugLog(string.format("[ToolGiver DEBUG] %s | Rank:%d | HasVIP:%s | HasVVIP:%s | ShopReady:%s",
 		player.Name, rank, tostring(hasVIP), tostring(hasVVIP), tostring(ShopReady)))
 
 	for _, rule in ipairs(TOOLS) do
 		if rule.check(rank, hasVIP, hasVVIP) then
 			for _, toolName in ipairs(rule.names) do
-				warn("[ToolGiver DEBUG] Giving '"..toolName.."' to "..player.Name)
+				debugLog("[ToolGiver DEBUG] Giving '"..toolName.."' to "..player.Name)
 				giveTool(player, toolName)
 			end
 		end
