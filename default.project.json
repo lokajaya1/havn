@@ -121,9 +121,6 @@
       "RoleManagerServer": {
         "$path": "src/legacy/ServerScriptService/RoleManagerServer.server.luau"
       },
-      "ScriptEmitter": {
-        "$path": "src/legacy/ServerScriptService/ScriptEmitter.server.luau"
-      },
       "ShopServer": {
         "$path": "src/legacy/ServerScriptService/ShopServer.server.luau"
       },
@@ -290,6 +287,15 @@
               "$path": "src/legacy/StarterPack/Sign/SignTextColor.server.luau"
             }
           }
+        }
+      }
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "Money Gun": {
+        "$className": "Tool",
+        "Serverscript": {
+          "$path": "src/legacy/ServerStorage/MoneyGun/Serverscript.server.luau"
         }
       }
     }
