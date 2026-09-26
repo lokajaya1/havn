@@ -17,7 +17,15 @@ local cameraModeVal = liveSystem:WaitForChild("CameraMode")
 local screenModeVal = liveSystem:WaitForChild("ScreenMode")
 
 local stageModel = Workspace:WaitForChild(STAGE_MODEL_NAME, 10)
-local screenFolder = stageModel and stageModel:WaitForChild(SCREEN_FOLDER_NAME, 5)
+-- [FIX 4a] StageScreens sekarang ada di DJ STAGE > stage > StageScreens (dulu langsung di DJ STAGE) → cari bertingkat
+local function findScreenFolder(root)
+	if not root then return nil end
+	local found = root:FindFirstChild(SCREEN_FOLDER_NAME, true)
+	if found then return found end
+	local stage = root:WaitForChild("stage", 10)
+	return (stage and stage:WaitForChild(SCREEN_FOLDER_NAME, 5)) or root:FindFirstChild(SCREEN_FOLDER_NAME, true)
+end
+local screenFolder = findScreenFolder(stageModel)
 if not screenFolder then warn("[MultiScreen] Folder not found") return end
 print("✅ [MultiScreen] Found:", screenFolder:GetFullName())
 

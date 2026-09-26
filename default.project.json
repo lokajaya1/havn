@@ -121,9 +121,6 @@
       "ShopServer": {
         "$path": "src/legacy/ServerScriptService/ShopServer.server.luau"
       },
-      "SyncGIFClones": {
-        "$path": "src/legacy/ServerScriptService/SyncGIFClones.server.luau"
-      },
       "TeamSystem": {
         "$path": "src/legacy/ServerScriptService/TeamSystem.server.luau"
       },
