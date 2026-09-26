@@ -265,6 +265,33 @@
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/sprintSystem.client.luau"
         }
       }
+    },
+    "StarterPack": {
+      "$className": "StarterPack",
+      "Sign": {
+        "$className": "Tool",
+        "LocalScript": {
+          "$className": "LocalScript",
+          "RemoteEvent": {
+            "$className": "RemoteEvent",
+            "Script": {
+              "$path": "src/legacy/StarterPack/Sign/SignText.server.luau"
+            }
+          },
+          "BGColor": {
+            "$className": "RemoteEvent",
+            "Script": {
+              "$path": "src/legacy/StarterPack/Sign/SignBGColor.server.luau"
+            }
+          },
+          "TextColor": {
+            "$className": "RemoteEvent",
+            "Script": {
+              "$path": "src/legacy/StarterPack/Sign/SignTextColor.server.luau"
+            }
+          }
+        }
+      }
     }
   }
 }
