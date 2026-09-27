@@ -79,7 +79,7 @@ local function playDance(player, danceName, speed, seq)
 	if not DANCES[danceName] then return false end
 
 	local humanoid = getRig(player)
-	if not humanoid then return false end
+	if not humanoid or humanoid.Health <= 0 then return false end -- mati: tunggu respawn
 
 	local s = getState(player)
 	speed = tonumber(speed); if speed ~= speed then speed = nil end -- tolak NaN ("nan" lolos math.clamp)

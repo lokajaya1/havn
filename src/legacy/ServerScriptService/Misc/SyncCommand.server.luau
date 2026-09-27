@@ -100,6 +100,11 @@ local function releaseMirror(track, fade)
 	task.delay(fade + 0.1, function() pcall(track.Destroy, track) end)
 end
 
+-- Pesan singkat ke pemain saat /sync atau menu Sync gagal (DanceClient → toast).
+local function syncError(player, message)
+	pcall(function() SyncRemote:FireClient(player, "syncError", { message = message }) end)
+end
+
 local function pauseSync(follower)
 	local userId = follower.UserId
 	local data   = syncData[userId]
@@ -480,7 +485,9 @@ SyncRemote.OnServerEvent:Connect(function(player, action, targetName)
 		if not targetChar then return end
 		local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
 		if not targetPlayer or targetPlayer == player then return end
-		startSync(player, targetPlayer)
+		if not startSync(player, targetPlayer) then
+			syncError(player, "Can't sync with " .. targetPlayer.DisplayName .. " right now")
+		end
 
 	elseif action == "stop" then
 		stopSync(player, nil)
@@ -512,7 +519,12 @@ local function handleChatCommand(player, message)
 			end
 		end
 
-		if found and allow(player, "startStop", START_STOP_GAP) then startSync(player, found) end
+		if not allow(player, "startStop", START_STOP_GAP) then return end
+		if not found then
+			syncError(player, "No player named \"" .. syncTarget .. "\"")
+		elseif not startSync(player, found) then
+			syncError(player, "Can't sync with " .. found.DisplayName .. " right now")
+		end
 		return
 	end
 
