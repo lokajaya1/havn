@@ -73,9 +73,14 @@ function DanceShared.isDanceTrack(track)
 	return id ~= nil and danceIds[id] == true
 end
 
+-- Pemain sedang menari atau sync (atribut dari DanceHandler / SyncCommand).
+function DanceShared.isDancing(player)
+	return player ~= nil and (player:GetAttribute("IsDancing") == true or player:GetAttribute("IsSyncing") == true)
+end
+
 -- WalkSpeed yang benar untuk pemain saat ini (menari / sync = lambat).
 function DanceShared.walkSpeedFor(player)
-	if player and (player:GetAttribute("IsDancing") or player:GetAttribute("IsSyncing")) then
+	if DanceShared.isDancing(player) then
 		return DanceShared.WALKSPEED.dance
 	end
 	return DanceShared.WALKSPEED.default

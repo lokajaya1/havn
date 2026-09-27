@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local camFolder = workspace:WaitForChild("360Cam")
@@ -116,7 +117,13 @@ local function deactivate360Cam()
 
 	local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
 	if humanoid then
-		humanoid.WalkSpeed = 16
+		-- Masih menari/sync → kembali ke kecepatan dance (6), bukan 16.
+		local dancing = player:GetAttribute("IsDancing") == true or player:GetAttribute("IsSyncing") == true
+		local modules = ReplicatedStorage:FindFirstChild("Modules")
+		local shared  = modules and modules:FindFirstChild("DanceShared")
+		local ok, DanceShared = pcall(function() return shared and require(shared) end)
+		local danceSpeed = (ok and DanceShared and DanceShared.WALKSPEED.dance) or 6
+		humanoid.WalkSpeed = dancing and danceSpeed or 16
 		humanoid.JumpPower = 50
 	end
 
