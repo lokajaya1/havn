@@ -4,13 +4,13 @@
 --     (dua nama dengan id sama membuat pengecekan "dance masih jalan" salah)
 --   • nama tidak boleh kembar beda huruf besar/kecil
 --     (SmoothDanceManager mencari nama tanpa membedakan kapital → dance salah diputar)
---   • semua nama di poseNames & POPULAR_DANCES (DanceHandler) harus ada
+--   • semua nama di poseNames & POPULAR_DANCES (DanceHandler/Config) harus ada
 local fs = require("@lune/fs")
 local luau = require("@lune/luau")
 local process = require("@lune/process")
 
 local ASSETS = "src/legacy/ReplicatedStorage/Assets/Animations/Dances/DanceAssets.luau"
-local HANDLER = "src/legacy/ServerScriptService/Misc/DanceHandler.server.luau"
+local HANDLER = "src/legacy/ServerScriptService/Misc/DanceHandler/Config.luau"
 
 local DanceAssets = luau.load(fs.readFile(ASSETS), { debugName = "DanceAssets" })()
 local dances = DanceAssets.dances

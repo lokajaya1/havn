@@ -17,10 +17,12 @@
 
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local DataStoreService  = game:GetService("DataStoreService")
 
 local DancePlayer       = require(script.Parent.DancePlayer)
 local DanceShared       = require(ReplicatedStorage.Modules.DanceShared)
+local CONFIG            = require(script.Config)
+local State             = require(script.State)
+local Favorites         = require(script.Favorites)
 
 -- Warm-up bersifat opsional: kalau modulnya belum dipasang, dance tetap jalan
 -- (hanya kehilangan pemanasan asset), bukan mematikan seluruh handler.
@@ -42,101 +44,11 @@ end
 
 local DANCES = DanceShared.dances
 
-local CONFIG = {
-	DANCE_WALKSPEED   = DanceShared.WALKSPEED.dance,
-	DEFAULT_WALKSPEED = DanceShared.WALKSPEED.default,
-
-	FADE_IN          = 0.12,
-	FADE_OUT         = 0.18,
-	STOP_FADE        = 0.22,
-	REASSERT_FADE    = 0.1,
-	SPEED_TRANSITION = 0.12,
-
-	LOAD_TIMEOUT = 0.6,  -- batas tunggu asset dingin sebelum tetap diputar
-	BROKEN_CHECK = 10,   -- baru dianggap rusak kalau selama ini tetap tidak termuat
-
-	MIN_SPEED = 0.5,
-	MAX_SPEED = 2.0,
-
-	MAX_TRACKS       = 48,   -- jauh di bawah batas 256 track per Animator
-	REQUEST_COOLDOWN = 0.05, -- anti spam FireServer
-
-	-- Kuota GANTI dance (tiap dance baru = LoadAnimation di server + semua
-	-- client mengunduh animasinya). Ubah speed dance yang sama tidak dihitung.
-	SWITCH_BURST  = 6,
-	SWITCH_REFILL = 3,       -- token per detik
-
-	-- Kuota remote favorit: "load" menjawab dari memori, tambah/hapus
-	-- mengirim ulang seluruh daftar.
-	FAV_LOAD_GAP   = 2,
-	FAV_EDIT_BURST = 10,
-	FAV_EDIT_REFILL = 5,
-
-	WARMUP_DELAY        = 0.4,
-	SERVER_WARMUP_DELAY = 2,
-	-- Nama harus sama persis dengan key di DanceAssets.dances (case-sensitive).
-	-- Nama yang salah akan di-warn saat warm-up, tidak diam-diam dilewati.
-	POPULAR_DANCES = {
-		"Fresh", "Floss", "Gangnam Style", "Electro Shuffle",
-		"Get Griddy", "Sturdy", "Breakdance", "Macarena",
-		"Salsa", "Party", "Hip Hop Dancing", "Boogie Down",
-	},
-
-	-- Watchdog: jaga dance tetap hidup selama di-carry, lalu verifikasi
-	-- sebentar setelah drop (Stop dari cleanup bisa pakai fade & telat).
-	CARRY_INTERVAL = 0.15,
-	DROP_INTERVAL  = 0.1,
-	DROP_STEPS     = 10,
-
-	FAVORITES_LIMIT   = 250,
-	AUTOSAVE_INTERVAL = 60,
-	DATASTORE_NAME    = "DanceFavorites",
-
-	-- DataStore bisa gagal sementara (InternalServerError, throttle): tiap
-	-- panggilan diulang, dan load yang gagal total dicoba lagi di latar.
-	DS_TRIES       = 3,
-	DS_RETRY_DELAY = 1,                  -- detik × nomor percobaan
-	RELOAD_DELAYS  = { 5, 15, 30, 60 },  -- lalu tetap tiap 60 dtk
-	CLOSE_WAIT     = 25,                 -- batas tunggu tulisan saat server tutup
-}
-
--- ═══════════════════════════════════════════════════════════
--- STATE
--- ═══════════════════════════════════════════════════════════
-
-local states = {}
-
-local function getState(player)
-	local userId = player.UserId
-	local s = states[userId]
-	if not s then
-		s = {
-			userId     = userId,
-			rig        = nil,   -- { humanoid, animator, character }
-			slot       = DancePlayer.newSlot(), -- track yang sedang diputar
-			tracks     = {},    -- danceName -> { track, used }
-			trackCount = 0,
-			clock      = 0,
-			dance      = nil,
-			speed      = 1.0,
-			walkSpeed  = CONFIG.DEFAULT_WALKSPEED,
-			favorites  = {},
-			dirty      = false,
-			-- Perubahan favorit yang dibuat sebelum data lama termuat; digabung
-			-- ke data DataStore begitu terbaca (load atau UpdateAsync).
-			pendingAdd    = {},
-			pendingRemove = {},
-			writing       = false,
-			watchToken = 0,
-			lastRequest = 0,
-			requestSeq  = 0,     -- permintaan terakhir yang menang (lihat playDance)
-			buckets     = {},
-			initialized = false,
-		}
-		states[userId] = s
-	end
-	return s
-end
+local states         = State.states
+local getState       = State.getState
+local loadFavorites  = Favorites.load
+local flushFavorites = Favorites.flush
+local notePending    = Favorites.notePending
 
 -- ═══════════════════════════════════════════════════════════
 -- RIG & TRACK CACHE
@@ -488,194 +400,6 @@ local function startWatch(player, carried)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- FAVORIT (DataStore)
--- ═══════════════════════════════════════════════════════════
-
-local favoritesStore
-do
-	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(CONFIG.DATASTORE_NAME)
-	end)
-	if ok then
-		favoritesStore = result
-	else
-		warn("[DanceHandler] DataStore tidak tersedia:", result)
-	end
-end
-
-local function favoritesKey(userId)
-	return "favorites_" .. userId
-end
-
-local function sanitizeFavorites(list)
-	local clean, seen = {}, {}
-	if type(list) ~= "table" then return clean end
-	for _, name in ipairs(list) do
-		if type(name) == "string" and DANCES[name] and not seen[name] then
-			seen[name] = true
-			clean[#clean + 1] = name
-			if #clean >= CONFIG.FAVORITES_LIMIT then break end
-		end
-	end
-	return clean
-end
-
-local function retry(fn)
-	local ok, result
-	for attempt = 1, CONFIG.DS_TRIES do
-		ok, result = pcall(fn)
-		if ok then return true, result end
-		if attempt < CONFIG.DS_TRIES then task.wait(CONFIG.DS_RETRY_DELAY * attempt) end
-	end
-	return false, result
-end
-
--- Diisi di bagian REMOTE; FireClient hanya ke pemain yang masih ada.
-local sendFavorites
-
--- Catat perubahan yang terjadi sebelum data lama termuat, supaya tidak hilang
--- saat data DataStore datang dan tidak menimpa favorit lama.
-local function notePending(s, name, added)
-	if s.favLoaded then return end
-	if added then
-		s.pendingAdd[name], s.pendingRemove[name] = true, nil
-	else
-		s.pendingRemove[name], s.pendingAdd[name] = true, nil
-	end
-end
-
--- Tambahan tertunda, urut sesuai urutan di daftar lokal.
-local function pendingAdds(s)
-	local list = {}
-	for _, name in ipairs(s.favorites) do
-		if s.pendingAdd[name] then list[#list + 1] = name end
-	end
-	return list
-end
-
-local function applyPending(base, adds, removes)
-	local out = {}
-	for _, name in ipairs(base) do
-		if not removes[name] then out[#out + 1] = name end
-	end
-	for _, name in ipairs(adds) do
-		if #out >= CONFIG.FAVORITES_LIMIT then break end
-		if not table.find(out, name) then out[#out + 1] = name end
-	end
-	return out
-end
-
--- Data DataStore sudah terbaca: gabungkan dengan perubahan tertunda.
-local function adopt(s, stored)
-	local hadPending = next(s.pendingAdd) ~= nil or next(s.pendingRemove) ~= nil
-	local merged = sanitizeFavorites(stored)
-	if hadPending then merged = applyPending(merged, pendingAdds(s), s.pendingRemove) end
-	s.favorites = merged
-	s.pendingAdd, s.pendingRemove = {}, {}
-	s.favLoaded = true
-	if hadPending then s.dirty = true end
-end
-
-local scheduleReload
-
-local function loadFavorites(player)
-	local s = getState(player)
-	-- Sudah termuat → pakai memori; spam "load" dibatasi 1x/2 dtk.
-	if s.favLoading then
-		-- Load lain (mis. saat join) sedang berjalan → tunggu hasilnya, jangan jawab kosong.
-		local t0 = os.clock()
-		repeat task.wait(0.1) until not s.favLoading or os.clock() - t0 > 10
-	end
-	if s.favLoaded then return s.favorites end
-	local now = os.clock()
-	if s.lastFavLoad and now - s.lastFavLoad < 2 then return s.favorites end
-	s.lastFavLoad = now
-	if favoritesStore then
-		s.favLoading = true
-		local ok, data = retry(function()
-			return favoritesStore:GetAsync(favoritesKey(s.userId))
-		end)
-		s.favLoading = false
-		if ok then
-			-- Tulisan mode gabung bisa lebih dulu memuat data lama.
-			if not s.favLoaded then adopt(s, data) end
-		else
-			warn("[DanceHandler] favorit gagal dimuat, dicoba lagi nanti:", data)
-			scheduleReload(player)
-		end
-	end
-	return s.favorites
-end
-
--- Load gagal total → coba lagi di latar, lalu kirim hasilnya ke client.
-scheduleReload = function(player)
-	local s = states[player.UserId]
-	if not s or s.reloadPending then return end
-	s.reloadPending = true
-	s.reloadCount = (s.reloadCount or 0) + 1
-	local delays = CONFIG.RELOAD_DELAYS
-	task.delay(delays[math.min(s.reloadCount, #delays)], function()
-		s.reloadPending = false
-		if not player.Parent or states[player.UserId] ~= s or s.favLoaded then return end
-		local list = loadFavorites(player)
-		if s.favLoaded then sendFavorites(player, "loaded", list) end
-	end)
-end
-
--- Jumlah flush yang masih berjalan; BindToClose menunggu sampai nol.
-local activeFlushes = 0
-
--- Tulis hanya kalau ada perubahan; tap bintang tidak lagi memicu SetAsync.
--- Satu tulisan per pemain pada satu waktu, supaya tulisan lama tidak
--- mendarat setelah tulisan baru.
-local function flushFavorites(userId, immediate)
-	local s = states[userId]
-	if not s or not favoritesStore then return end
-	if s.writing and not immediate then return end
-
-	local function run()
-		activeFlushes += 1
-		local t0 = os.clock()
-		while s.writing and os.clock() - t0 < CONFIG.CLOSE_WAIT do task.wait(0.1) end
-
-		if s.dirty and not s.writing then
-			s.dirty = false
-			s.writing = true
-			local loaded = s.favLoaded
-			local snapshot = table.clone(s.favorites)
-			local adds, removes = pendingAdds(s), table.clone(s.pendingRemove)
-
-			local ok, result = retry(function()
-				if loaded then
-					favoritesStore:SetAsync(favoritesKey(userId), snapshot)
-					return nil
-				end
-				-- Favorit lama belum pernah termuat → gabungkan, jangan timpa.
-				return favoritesStore:UpdateAsync(favoritesKey(userId), function(old)
-					return applyPending(sanitizeFavorites(old), adds, removes)
-				end)
-			end)
-
-			if not ok then
-				s.dirty = true
-				warn("[DanceHandler] favorit gagal disimpan:", result)
-			elseif not loaded and not s.favLoaded then
-				-- UpdateAsync sudah membaca data lama: pakai hasil gabungannya.
-				for _, name in ipairs(adds) do s.pendingAdd[name] = nil end
-				for name in pairs(removes) do s.pendingRemove[name] = nil end
-				adopt(s, result)
-				local player = Players:GetPlayerByUserId(userId)
-				if player then sendFavorites(player, "updated", s.favorites) end
-			end
-			s.writing = false
-		end
-		activeFlushes -= 1
-	end
-
-	if immediate then run() else task.spawn(run) end
-end
-
--- ═══════════════════════════════════════════════════════════
 -- REMOTE
 -- ═══════════════════════════════════════════════════════════
 
@@ -698,9 +422,10 @@ local danceRemote     = DanceShared.remote("DanceRequest")
 local favoritesRemote = DanceShared.remote("FavoritesRemote")
 
 -- Pemain yang sudah keluar tidak dikirimi (FireClient ke pemain yang pergi = error).
-sendFavorites = function(player, kind, list)
+local function sendFavorites(player, kind, list)
 	if player.Parent then favoritesRemote:FireClient(player, kind, list) end
 end
+Favorites.setSend(sendFavorites)
 
 danceRemote.OnServerEvent:Connect(function(player, danceName, speed)
 	if danceName ~= nil and type(danceName) ~= "string" then return end
@@ -854,7 +579,7 @@ game:BindToClose(function()
 		task.spawn(flushFavorites, userId, true)
 	end
 	local t0 = os.clock()
-	while activeFlushes > 0 and os.clock() - t0 < CONFIG.CLOSE_WAIT do
+	while Favorites.activeFlushes() > 0 and os.clock() - t0 < CONFIG.CLOSE_WAIT do
 		task.wait(0.1)
 	end
 end)
