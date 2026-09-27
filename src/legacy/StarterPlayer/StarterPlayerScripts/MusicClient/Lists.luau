@@ -360,8 +360,31 @@ local function libItem(song, parent, lo, mineView)
 	end
 end
 
+-- [FIX R3] RENDER BERTAHAP. Dulu semua baris dibuat dalam satu frame: cari "a"
+-- = ±500 baris x ±14 instance sekaligus → HP patah-patah. Sekarang BATCH baris
+-- pertama langsung, sisanya BATCH per frame. Render baru (ketik lagi, ganti tab,
+-- library ter-update) membatalkan sisa render lama lewat renderGen.
+local BATCH = 30
+local renderGen = 0
+
+local function renderRows(songs, parent, mineView)
+	local gen, n = renderGen, #songs
+	for i = 1, math.min(n, BATCH) do libItem(songs[i], parent, i, mineView) end
+	if n <= BATCH then return end
+	task.spawn(function()
+		for start = BATCH + 1, n, BATCH do
+			task.wait()
+			if gen ~= renderGen or not parent.Parent then return end
+			for i = start, math.min(n, start + BATCH - 1) do libItem(songs[i], parent, i, mineView) end
+		end
+	end)
+end
+
 -- ══ SEKSI KREATOR (accordion) ═════════════════════════════════════════════
 local sections = {}
+-- [FIX R3] Grup yang sedang dibuka diingat, jadi tetap terbuka saat library
+-- ter-update (dulu setiap tambah/hapus lagu menutup semua grup).
+local openCreator = nil
 
 local function creatorSection(group, parent, lo)
 	local creator, songs, isIndie = group.creator, group.songs, group.isIndie
@@ -436,7 +459,7 @@ local function creatorSection(group, parent, lo)
 		isOpen = open
 		if open and not rendered then
 			rendered = true
-			for i, song in ipairs(songs) do libItem(song, songList, i, false) end
+			renderRows(songs, songList, false) -- [FIX R3]
 		end
 		arrow.Text  = open and "▲" or "▼"
 		local bg    = open and C.bgLight or C.bgCard
@@ -456,6 +479,7 @@ local function creatorSection(group, parent, lo)
 
 	header.MouseButton1Click:Connect(function()
 		local willOpen = not isOpen
+		openCreator = willOpen and creator or nil -- [FIX R3]
 		if willOpen then
 			for key, ctrl in pairs(sections) do
 				if key ~= creator then ctrl(false, true) end
@@ -465,6 +489,7 @@ local function creatorSection(group, parent, lo)
 	end)
 
 	UI.hover(header, C.bgCard, C.bgLight)
+	if openCreator == creator then setOpen(true, false) end -- [FIX R3]
 end
 
 -- ══ UPDATE VIEW ═══════════════════════════════════════════════════════════
@@ -486,6 +511,7 @@ function L.refreshLib()
 	local isSearch  = q ~= ""
 	local mineView  = (S.libView == "mine")
 
+	renderGen += 1 -- [FIX R3] hentikan sisa render sebelumnya
 	sections  = {}
 	S.libBtns = {}
 	S.favBtns = {}
@@ -506,7 +532,7 @@ function L.refreshLib()
 		elseif #songs == 0 then
 			emptyRow("No songs found")
 		else
-			for i, song in ipairs(songs) do libItem(song, ui.libList, i, true) end
+			renderRows(songs, ui.libList, true)
 		end
 		return
 	end
@@ -519,7 +545,7 @@ function L.refreshLib()
 		if #songs == 0 then
 			emptyRow("No songs found")
 		else
-			for i, song in ipairs(sortSongs(songs)) do libItem(song, ui.libList, i, false) end
+			renderRows(sortSongs(songs), ui.libList, false)
 		end
 	else
 		ui.libLabel.Text = "LIBRARY (" .. total .. ")"
@@ -600,6 +626,8 @@ end
 
 function L.reset()
 	sections = {}
+	openCreator = nil -- [FIX R3]
+	renderGen += 1
 	UI.stopAllMarquees()
 	L.resetThumbs()
 end
