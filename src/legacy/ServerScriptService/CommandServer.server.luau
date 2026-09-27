@@ -55,35 +55,39 @@ local function safeCall(fn, errLabel, ...)
 	return ok, err
 end
 
-local function withUserCache(cache, computeFn)
-	return function(player)
-		local uid    = player.UserId
-		local cached = cache[uid]
-		if cached ~= nil then return cached end
-		local result = computeFn(player)
-		cache[uid] = result
-		return result
-	end
-end
-
 -- ── Cache per userId ──────────────────────────────────────
 local _passCache = {}
 local _rankCache = {}
 local undoStacks = {}
 local stamps     = {}
+local buckets    = {}
+
+-- Kuota bersama semua perintah (remote + chat) per pemain, di atas cooldown per
+-- perintah: 5 perintah beruntun, lalu terisi 2 per detik.
+local BUCKET_MAX  = 5
+local BUCKET_RATE = 2
 
 local function invalidatePassCache(uid) _passCache[uid] = nil end
 
 -- ── Access checks ─────────────────────────────────────────
-local checkPassDirect = withUserCache(_passCache, function(player)
+-- Hasil hanya dicache kalau API tidak error; error = coba lagi di perintah berikutnya.
+local function checkPassDirect(player)
+	local uid = player.UserId
+	if _passCache[uid] ~= nil then return _passCache[uid] end
 	-- pass baru ATAU pass HAVN lama
-	return ShopConfig.userOwnsPass(player.UserId, COMMANDS_INFO)
-end)
+	local owned, errored = ShopConfig.userOwnsPass(uid, COMMANDS_INFO)
+	if owned or not errored then _passCache[uid] = owned == true end
+	return owned == true
+end
 
-local getGroupRank = withUserCache(_rankCache, function(player)
+local function getGroupRank(player)
+	local uid = player.UserId
+	if _rankCache[uid] ~= nil then return _rankCache[uid] end
 	local ok, rank = pcall(player.GetRankInGroup, player, GROUP_ID)
-	return (ok and type(rank) == "number") and rank or 0
-end)
+	if not ok or type(rank) ~= "number" then return 0 end
+	_rankCache[uid] = rank
+	return rank
+end
 
 local function hasGamepass(player)
 	if type(_G.ShopHasGamepass) == "function" then
@@ -282,29 +286,49 @@ end
 H.sit   = function(p) local h = getHum(p); if h then h.Sit = true end end
 H.stand = function(p) local h = getHum(p); if h then h.Sit = false; h.Jump = true end end
 
+-- Label di atas kepala (/afk, /nametag). Ukuran dalam STUD (Scale, sama seperti
+-- OverheadTag: 36 px desain per stud) → ikut mengecil saat jauh, dan hilang
+-- setelah MaxDistance. Dulu Offset (piksel layar): makin jauh terlihat makin
+-- besar dibanding avatar dan menutupi pandangan dari seluruh map.
+local LABEL_PPS          = 36
+local LABEL_MAX_DISTANCE = 80
+
+local function headLabel(head, name, text, widthPx, heightPx, offsetY, bg, bgTrans, fg)
+	local bb = Instance.new("BillboardGui")
+	bb.Name           = name
+	bb.Size           = UDim2.fromScale(widthPx / LABEL_PPS, heightPx / LABEL_PPS)
+	bb.StudsOffset    = Vector3.new(0, offsetY, 0)
+	bb.MaxDistance    = LABEL_MAX_DISTANCE
+	bb.LightInfluence = 0
+	bb.Parent         = head
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size                   = UDim2.fromScale(1, 1)
+	lbl.BackgroundColor3       = bg
+	lbl.BackgroundTransparency = bgTrans
+	lbl.BorderSizePixel        = 0
+	lbl.Text                   = text
+	lbl.TextColor3             = fg
+	lbl.Font                   = Enum.Font.GothamBold
+	lbl.TextScaled             = true -- tinggi huruf ±50% kotak, seperti TextSize 11 di kotak 22 px
+	lbl.Parent                 = bb
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop    = UDim.new(0.25, 0)
+	pad.PaddingBottom = UDim.new(0.25, 0)
+	pad.PaddingLeft   = UDim.new(0.04, 0)
+	pad.PaddingRight  = UDim.new(0.04, 0)
+	pad.Parent        = lbl
+	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0.2, 0)
+end
+
 H.afk = function(p)
 	local _, char = getHum(p); if not char then return end
 	local head = char:FindFirstChild("Head"); if not head then return end
 	local ex   = head:FindFirstChild("DT_AFK")
 	if ex then ex:Destroy(); return end
 
-	local bb = Instance.new("BillboardGui")
-	bb.Name        = "DT_AFK"
-	bb.Size        = UDim2.new(0, 52, 0, 20)
-	bb.StudsOffset = Vector3.new(0, 2.8, 0)
-	bb.Parent      = head
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size                   = UDim2.new(1, 0, 1, 0)
-	lbl.BackgroundColor3       = Color3.fromRGB(20, 20, 26)
-	lbl.BackgroundTransparency = 0.15
-	lbl.BorderSizePixel        = 0
-	lbl.Text                   = "AFK"
-	lbl.TextColor3             = Color3.fromRGB(255, 195, 40)
-	lbl.Font                   = Enum.Font.GothamBold
-	lbl.TextSize               = 11
-	lbl.Parent                 = bb
-	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4)
+	headLabel(head, "DT_AFK", "AFK", 52, 20, 2.8,
+		Color3.fromRGB(20, 20, 26), 0.15, Color3.fromRGB(255, 195, 40))
 end
 
 H.headless = function(p) toggleDescProp(p, "DT_Headless", "Head",     ASSET.HEADLESS, ASSET.DEFAULT) end
@@ -481,23 +505,8 @@ H.nametag = function(p, args)
 	txt = filtered
 	if not char.Parent or not head.Parent then return end
 
-	local bb = Instance.new("BillboardGui")
-	bb.Name        = "DT_Nametag"
-	bb.Size        = UDim2.new(0, 140, 0, 22)
-	bb.StudsOffset = Vector3.new(0, 3.5, 0)
-	bb.Parent      = head
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size                   = UDim2.new(1, 0, 1, 0)
-	lbl.BackgroundColor3       = Color3.fromRGB(15, 15, 20)
-	lbl.BackgroundTransparency = 0.2
-	lbl.BorderSizePixel        = 0
-	lbl.Text                   = txt
-	lbl.TextColor3             = Color3.fromRGB(230, 230, 238)
-	lbl.Font                   = Enum.Font.GothamBold
-	lbl.TextSize               = 11
-	lbl.Parent                 = bb
-	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4)
+	headLabel(head, "DT_Nametag", txt, 140, 22, 3.5,
+		Color3.fromRGB(15, 15, 20), 0.2, Color3.fromRGB(230, 230, 238))
 end
 
 H.undo = function(p)
@@ -516,6 +525,20 @@ local CD = {
 	highlight=1, sparkle=1, fire=1, smoke=1, trail=1,
 	glow=1, hat=1, nametag=1, normal=2, undo=1,
 }
+
+local function takeToken(player)
+	local now = os.clock()
+	local b = buckets[player.UserId]
+	if not b then
+		b = { tokens = BUCKET_MAX, at = now }
+		buckets[player.UserId] = b
+	end
+	b.tokens = math.min(BUCKET_MAX, b.tokens + (now - b.at) * BUCKET_RATE)
+	b.at = now
+	if b.tokens < 1 then return false end
+	b.tokens -= 1
+	return true
+end
 
 local function isOnCooldown(player, id)
 	local uid  = player.UserId
@@ -548,6 +571,7 @@ local function tryExec(player, id, args)
 	if type(id) ~= "string" or #id > 24 then return end
 	id = id:lower():match("^%s*(.-)%s*$")
 	local h = H[id]; if not h then return end
+	if not takeToken(player) then return end
 	if not FREE_CMDS[id] and not hasAccess(player) then return end
 	if isOnCooldown(player, id) then return end
 	safeCall(h, ("Error '%s' (%s)"):format(id, player.Name), player, sanitizeArgs(args))
@@ -600,7 +624,7 @@ MarketplaceSvc.PromptGamePassPurchaseFinished:Connect(function(player, passId, p
 end)
 
 -- ── Player lifecycle ──────────────────────────────────────
-local PER_USER_CACHES = {stamps, undoStacks, _rankCache, _passCache}
+local PER_USER_CACHES = {stamps, undoStacks, _rankCache, _passCache, buckets}
 
 local function onPlayerAdded(p)
 	hookChat(p)

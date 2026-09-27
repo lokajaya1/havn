@@ -183,9 +183,15 @@ end)
 -- REMOTE: Target Player (admin manual control)
 -- ★ CHANGED: isWhitelisted → isAdmin
 -- ═══════════════════════════════════════════════════════════
+-- Non-admin cukup dicatat SEKALI per pemain (remote bisa di-spam → Output banjir).
+local warnedUnauthorized = {}
+
 remote.OnServerEvent:Connect(function(player, targetName)
 	if not isAdmin(player) then
-		warn("[LiveScreen] Unauthorized access by:", player.Name)
+		if not warnedUnauthorized[player] then
+			warnedUnauthorized[player] = true
+			warn("[LiveScreen] Unauthorized access by:", player.Name)
+		end
 		return
 	end
 
@@ -221,7 +227,7 @@ cameraModeRemote.OnServerEvent:Connect(function(player, newMode)
 	if not isAdmin(player) then return end
 	if newMode ~= "Static" and newMode ~= "Dynamic" then return end
 
-	local now = tick()
+	local now = os.clock()
 	if now - lastCameraModeTime < 0.2 then return end
 	lastCameraModeTime = now
 
@@ -239,7 +245,7 @@ screenModeRemote.OnServerEvent:Connect(function(player, newMode)
 	if not isAdmin(player) then return end
 	if newMode ~= "Live" and newMode ~= "VJ" then return end
 
-	local now = tick()
+	local now = os.clock()
 	if now - lastScreenModeTime < MODE_COOLDOWN then return end
 	lastScreenModeTime = now
 
@@ -259,6 +265,8 @@ end)
 -- Cleanup
 -- ═══════════════════════════════════════════════════════════
 Players.PlayerRemoving:Connect(function(leavingPlayer)
+	warnedUnauthorized[leavingPlayer] = nil
+
 	if isDonationActive and currentTarget.Value == leavingPlayer.Name then
 		donationVersion += 1
 		isDonationActive = false
