@@ -346,6 +346,7 @@ function Audio.hardResync(data, auto, quiet) -- [FIX M7] quiet: tanpa notifikasi
 		Audio.track(lastPath)
 	end)
 
+	-- selene: allow(empty_if)
 	if quiet then -- [FIX M7]
 	elseif auto then
 		UI.notify("Playing locally", UI.C.accent, 2)

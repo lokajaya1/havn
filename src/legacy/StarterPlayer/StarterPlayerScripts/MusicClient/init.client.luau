@@ -208,7 +208,7 @@ end
 local HEAL_AFTER, HEAL_GAP, HEAL_MAX = 12, 12, 8
 local heal = { seq = -1, silentSince = nil, lastAt = 0, count = 0, zeroSince = nil }
 
-local function healTick(snd, loaded)
+local function healTick(_snd, loaded)
 	if heal.seq ~= songSeq then
 		heal.seq, heal.silentSince, heal.lastAt, heal.count, heal.zeroSince = songSeq, nil, 0, 0, nil
 	end
