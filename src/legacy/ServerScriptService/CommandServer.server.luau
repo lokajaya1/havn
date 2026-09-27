@@ -310,7 +310,8 @@ H.headless = function(p) toggleDescProp(p, "DT_Headless", "Head",     ASSET.HEAD
 H.korblox  = function(p) toggleDescProp(p, "DT_Korblox",  "RightLeg", ASSET.KORBLOX,  ASSET.DEFAULT) end
 
 H.size = function(p, args)
-	local n = math.clamp(tonumber(args[1]) or 1, 0.1, 1)
+	local n = tonumber(args[1]); if n ~= n then n = nil end -- [FIX 2c3] tolak NaN ("nan" lolos math.clamp)
+	n = math.clamp(n or 1, 0.1, 1)
 	local hum = getHum(p); if not hum then return end
 	pushUndo(p)
 	local desc = getCurrentDesc(p); if not desc then return end
