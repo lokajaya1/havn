@@ -3,7 +3,9 @@
 -- Location: ServerScriptService > RankConfig
 -- ═══════════════════════════════════════════════════════════
 
-local MarketplaceService = game:GetService("MarketplaceService")
+local ShopConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("ShopConfig"))
+local VIP_PASS   = ShopConfig.getGamepassByName("VIP Access")
+local VVIP_PASS  = ShopConfig.getGamepassByName("VVIP Access")
 
 local RankConfig = {}
 
@@ -12,8 +14,9 @@ local RankConfig = {}
 ------------------------------------------------------------------------
 
 RankConfig.GROUP_ID         = 277580244
-RankConfig.VIP_GAMEPASS_ID  = 1891084979
-RankConfig.VVIP_GAMEPASS_ID = 1891384972
+-- ID dari ShopConfig (satu sumber). Kepemilikan juga mengecek ID lama (ShopConfig.userOwnsPass).
+RankConfig.VIP_GAMEPASS_ID  = VIP_PASS.id
+RankConfig.VVIP_GAMEPASS_ID = VVIP_PASS.id
 
 ------------------------------------------------------------------------
 -- ⚠️ UPDATE PENTING (Roblox Communities) ⚠️
@@ -269,17 +272,8 @@ function RankConfig.ResolvePlayerRole(player)
 	local okGroup, groupResult = pcall(player.IsInGroup, player, RankConfig.GROUP_ID)
 	if okGroup then isGroupMember = groupResult end
 
-	local okVip, vipResult = pcall(
-		MarketplaceService.UserOwnsGamePassAsync,
-		MarketplaceService, player.UserId, RankConfig.VIP_GAMEPASS_ID
-	)
-	if okVip then hasVIPGamepass = vipResult end
-
-	local okVvip, vvipResult = pcall(
-		MarketplaceService.UserOwnsGamePassAsync,
-		MarketplaceService, player.UserId, RankConfig.VVIP_GAMEPASS_ID
-	)
-	if okVvip then hasVVIPGamepass = vvipResult end
+	hasVIPGamepass  = ShopConfig.userOwnsPass(player.UserId, VIP_PASS)
+	hasVVIPGamepass = ShopConfig.userOwnsPass(player.UserId, VVIP_PASS)
 
 	return RankConfig.GetRoleName(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember),
 	rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember

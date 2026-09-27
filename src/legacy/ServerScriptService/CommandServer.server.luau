@@ -25,7 +25,9 @@ end
 local GROUP_ID       = RankConfig.GROUP_ID
 local ADMIN_MIN_RANK = RankConfig.ADMIN_MIN_RANK
 local PASS_NAME      = "Commands"
-local COMMANDS_PASS  = 1889855059
+local ShopConfig     = require(RS:WaitForChild("ShopConfig"))
+local COMMANDS_INFO  = ShopConfig.getGamepassByName(PASS_NAME)
+local COMMANDS_PASS  = COMMANDS_INFO.id
 local UNDO_MAX       = 5
 local MAX_ARGS       = 8
 local MAX_ARG_LEN    = 50
@@ -74,9 +76,8 @@ local function invalidatePassCache(uid) _passCache[uid] = nil end
 
 -- ── Access checks ─────────────────────────────────────────
 local checkPassDirect = withUserCache(_passCache, function(player)
-	local ok, owned = pcall(MarketplaceSvc.UserOwnsGamePassAsync,
-		MarketplaceSvc, player.UserId, COMMANDS_PASS)
-	return ok and owned or false
+	-- pass baru ATAU pass HAVN lama
+	return ShopConfig.userOwnsPass(player.UserId, COMMANDS_INFO)
 end)
 
 local getGroupRank = withUserCache(_rankCache, function(player)

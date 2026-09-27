@@ -3,14 +3,14 @@
 -- Location: ServerScriptService > ToolGiver (Script)
 -- ═══════════════════════════════════════════════════════════
 
-local Marketplace   = game:GetService("MarketplaceService")
 local ServerStorage = game:GetService("ServerStorage")
 local SSS           = game:GetService("ServerScriptService")
 local Players       = game:GetService("Players")
+local ShopConfig    = require(game:GetService("ReplicatedStorage"):WaitForChild("ShopConfig"))
 
 local GROUP_ID         = 277580244
-local VIP_GAMEPASS_ID  = 1891084979
-local VVIP_GAMEPASS_ID = 1891384972
+local VIP_GAMEPASS_ID  = ShopConfig.getGamepassByName("VIP Access").id
+local VVIP_GAMEPASS_ID = ShopConfig.getGamepassByName("VVIP Access").id
 
 local TOOLS = {
 	{
@@ -43,8 +43,8 @@ local function ownsGamepass(player, passId, passName)
 		local ok, owns = pcall(_G.ShopServer.HasGamepass, player.UserId, passName, true)
 		if ok and owns then return true end
 	end
-	local ok, owns = pcall(Marketplace.UserOwnsGamePassAsync, Marketplace, player.UserId, passId)
-	return ok and owns or false
+	-- pass baru ATAU pass HAVN lama
+	return ShopConfig.userOwnsPass(player.UserId, ShopConfig.getGamepassById(passId))
 end
 
 local function getGroupRank(player)

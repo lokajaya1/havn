@@ -83,7 +83,7 @@ local SEARCH_H      = 38
 local ROW_H         = 42
 local PAD           = 9
 local BTN_SZ        = 40
-local COMMANDS_PASS = 1889855059
+local COMMANDS_PASS = require(RepStorage:WaitForChild("ShopConfig")).getGamepassByName("Commands").id
 local FILTER_DEBOUNCE = 0.06
 
 local FREE_CMDS = { re = true, normal = true, rejoin = true }
