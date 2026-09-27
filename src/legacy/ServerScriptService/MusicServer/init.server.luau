@@ -43,6 +43,7 @@ local function isDJ(p)
 	return false
 end
 local function liveBlocks(p) return Live.isActive() and not isDJ(p) end
+local function skipBlocked(p) return liveBlocks(p) or Live.isFollowing() end -- [FIX L2] server pendengar: skip dikunci
 
 local function queueLimit(p)
 	if isAdmin(p) then return 999 end
@@ -114,6 +115,14 @@ Playback.setGlobalVolume(Shared.defaultVolume)
 -- (hanya berefek kalau server ini sedang siaran). Status siaran ke semua pemain.
 Playback.onSongStart = function(song) Live.songChanged(song, 0) end
 Live.onChange(function(st) Shared.all("LiveState", st) end)
+-- [FIX L2] Server ini ikut siaran server lain: posisi = jam sekarang − jam mulai.
+Live.onFollow(function(st)
+	if not st then return Playback.unfollow() end
+	local song = st.song and table.clone(st.song) or nil
+	if song then song.Requester = "LIVE - DJ " .. tostring(st.dj) end
+	local offset = st.startedAtMs and (DateTime.now().UnixTimestampMillis - st.startedAtMs) / 1000 or 0
+	Playback.follow(song, offset)
+end)
 
 local playerData = {}
 local volTimers  = {}
@@ -425,7 +434,7 @@ local function addToQueue(p, songId)
 		LibOwner = song.Requester,
 	}
 
-	if not Playback.isPlaying() then
+	if not Playback.isPlaying() and not Playback.isFollowing() then -- [FIX L2] saat ikut siaran: masuk antrian lokal
 		Playback.play(entry)
 		Playback.broadcastQueue()
 		Playback.broadcastIds()
@@ -474,6 +483,7 @@ end
 
 local function forceSkip(p)
 	if not (isAdmin(p) or (Live.isActive() and isDJ(p))) then return Shared.to(p, "SkipError", "Admin only!") end -- [FIX L1b] DJ saat live
+	if Live.isFollowing() then return Shared.to(p, "SkipError", "Live: controlled by the DJ on another server") end -- [FIX L2]
 	Playback.resetVotes()
 	Shared.all("AdminSkipped", p.Name)
 	Playback.skip()
@@ -506,7 +516,7 @@ local function setSpatialSettings(p, s)
 	if cfg.max <= cfg.min then cfg.max = cfg.min + 50 end
 	if type(s.autoplay) == "boolean" and cfg.autoplay ~= s.autoplay then -- [FIX A1]
 		cfg.autoplay = s.autoplay
-		if cfg.autoplay and not Playback.isPlaying() then task.defer(Playback.next) end
+		if cfg.autoplay and not Playback.isPlaying() and not Playback.isFollowing() then task.defer(Playback.next) end -- [FIX L2]
 	end
 
 	if modeChanged then Playback.applyMode(cfg.mode) else Playback.applySpatial(cfg) end
@@ -530,7 +540,7 @@ local Actions = {
 	AddToQueue         = addToQueue,
 	RemoveFromQueue    = removeFromQueue,
 	VoteSkip           = function(p)
-		if liveBlocks(p) then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX L1b]
+		if skipBlocked(p) then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX L1b] [FIX L2]
 		local okRate, msg = checkRate(p, "VoteSkip", 1) -- [FIX M3]
 		if not okRate then return Shared.to(p, "SkipError", msg) end
 		Playback.voteSkip(p)
@@ -640,7 +650,7 @@ for _, p in ipairs(Players:GetPlayers()) do task.spawn(initPlayer, p) end
 -- [FIX A1] Auto play mulai begitu ada pendengar (server kosong tidak memutar apa pun).
 local function kickAutoplay()
 	task.delay(2, function()
-		if Shared.spatial.autoplay and not Playback.isPlaying() and #Players:GetPlayers() > 0 then
+		if Shared.spatial.autoplay and not Playback.isPlaying() and not Playback.isFollowing() and #Players:GetPlayers() > 0 then -- [FIX L2]
 			Playback.next()
 		end
 	end)

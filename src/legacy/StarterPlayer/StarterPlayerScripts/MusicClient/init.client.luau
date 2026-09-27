@@ -709,6 +709,11 @@ H.LiveState = function(data) -- [FIX L1]
 	updateSectionVis()
 	paintLive()
 	if liveOn ~= was then notify(liveOn and ("LIVE - DJ " .. tostring(data.dj)) or "Live ended") end
+	local wasF = S.liveFollow -- [FIX L2] server ini ikut siaran server lain
+	S.liveFollow = data.following == true
+	if S.liveFollow ~= (wasF == true) then
+		notify(S.liveFollow and ("LIVE from another server - DJ " .. tostring(data.dj)) or "Live ended")
+	end
 end
 H.LoudnessSync = function(data)
 	if not data then return end
