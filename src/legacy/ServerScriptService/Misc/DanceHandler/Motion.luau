@@ -81,7 +81,7 @@ local function playDance(player, danceName, speed, seq)
 	if not humanoid then return false end
 
 	local s = getState(player)
-	speed = tonumber(speed); if speed ~= speed then speed = nil end -- [FIX 2c3] tolak NaN ("nan" lolos math.clamp)
+	speed = tonumber(speed); if speed ~= speed then speed = nil end -- tolak NaN ("nan" lolos math.clamp)
 	speed = math.clamp(speed or 1.0, CONFIG.MIN_SPEED, CONFIG.MAX_SPEED)
 	s.speed = speed
 	setDanceWalkSpeed(player)
