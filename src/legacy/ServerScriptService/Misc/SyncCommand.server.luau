@@ -89,6 +89,17 @@ local function notifyClient(follower, isSyncing, target, reason, currentDance)
 	end)
 end
 
+-- Hentikan track mirror lalu Destroy setelah fade. Tanpa Destroy, tiap
+-- ganti dance leader menambah satu track di Animator follower sampai batas
+-- 256 track → dance follower berhenti.
+local function releaseMirror(track, fade)
+	if not track then return end
+	if track.IsPlaying then
+		pcall(function() track:Stop(fade) end)
+	end
+	task.delay(fade + 0.1, function() pcall(track.Destroy, track) end)
+end
+
 local function pauseSync(follower)
 	local userId = follower.UserId
 	local data   = syncData[userId]
@@ -99,9 +110,7 @@ local function pauseSync(follower)
 	data.paused = true
 
 	for _, track in pairs(snapshot) do
-		if track and track.IsPlaying then
-			pcall(function() track:Stop(STOP_FADE) end)
-		end
+		releaseMirror(track, STOP_FADE)
 	end
 
 	restoreFollowerWalkSpeed(follower)
@@ -123,9 +132,7 @@ local function stopSync(follower, reason)
 	data.connections = {}
 
 	for _, track in pairs(data.tracks) do
-		if track and track.IsPlaying then
-			pcall(function() track:Stop(STOP_FADE) end)
-		end
+		releaseMirror(track, STOP_FADE)
 	end
 	data.tracks = {}
 
@@ -237,9 +244,7 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 		local d = syncData[userId]
 		if not d or d.tracks[animName] ~= newTrack then return end
 
-		if newTrack.IsPlaying then
-			pcall(function() newTrack:Stop(FADE_OUT) end)
-		end
+		releaseMirror(newTrack, FADE_OUT)
 		d.tracks[animName] = nil
 
 		for stillName, t in pairs(d.tracks) do
