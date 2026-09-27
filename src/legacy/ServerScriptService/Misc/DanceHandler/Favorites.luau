@@ -58,14 +58,18 @@ end
 -- Diisi init (bagian REMOTE) lewat Favorites.setSend; FireClient hanya ke pemain yang masih ada.
 local sendFavorites
 
--- Catat perubahan yang terjadi sebelum data lama termuat, supaya tidak hilang
--- saat data DataStore datang dan tidak menimpa favorit lama.
+-- Catat setiap tambah/hapus sebagai perubahan tertunda. Tulisan ke DataStore
+-- selalu MENGGABUNG perubahan ini ke data terbaru (UpdateAsync), bukan menimpa
+-- seluruh daftar: saat pindah server, server lama masih bisa menulis setelah
+-- server baru membaca, dan SetAsync dari server baru dulu menghapus perubahan
+-- terakhir di server lama. Nilai = nomor edit, supaya perubahan yang terjadi
+-- selagi tulisan berjalan tidak ikut dianggap sudah tersimpan.
 local function notePending(s, name, added)
-	if s.favLoaded then return end
+	s.editSeq = (s.editSeq or 0) + 1
 	if added then
-		s.pendingAdd[name], s.pendingRemove[name] = true, nil
+		s.pendingAdd[name], s.pendingRemove[name] = s.editSeq, nil
 	else
-		s.pendingRemove[name], s.pendingAdd[name] = true, nil
+		s.pendingRemove[name], s.pendingAdd[name] = s.editSeq, nil
 	end
 end
 
@@ -96,7 +100,7 @@ local function adopt(s, stored)
 	local merged = sanitizeFavorites(stored)
 	if hadPending then merged = applyPending(merged, pendingAdds(s), s.pendingRemove) end
 	s.favorites = merged
-	s.pendingAdd, s.pendingRemove = {}, {}
+	-- Perubahan tertunda tetap dicatat sampai benar-benar tertulis (flush).
 	s.favLoaded = true
 	if hadPending then s.dirty = true end
 end
@@ -166,16 +170,10 @@ local function flushFavorites(userId, immediate)
 		if s.dirty and not s.writing then
 			s.dirty = false
 			s.writing = true
-			local loaded = s.favLoaded
-			local snapshot = table.clone(s.favorites)
-			local adds, removes = pendingAdds(s), table.clone(s.pendingRemove)
+			local addSeq, removes = table.clone(s.pendingAdd), table.clone(s.pendingRemove)
+			local adds = pendingAdds(s)
 
 			local ok, result = retry(function()
-				if loaded then
-					favoritesStore:SetAsync(favoritesKey(userId), snapshot)
-					return nil
-				end
-				-- Favorit lama belum pernah termuat → gabungkan, jangan timpa.
 				return favoritesStore:UpdateAsync(favoritesKey(userId), function(old)
 					return applyPending(sanitizeFavorites(old), adds, removes)
 				end)
@@ -184,13 +182,26 @@ local function flushFavorites(userId, immediate)
 			if not ok then
 				s.dirty = true
 				warn("[DanceHandler] favorit gagal disimpan:", result)
-			elseif not loaded and not s.favLoaded then
-				-- UpdateAsync sudah membaca data lama: pakai hasil gabungannya.
-				for _, name in ipairs(adds) do s.pendingAdd[name] = nil end
-				for name in pairs(removes) do s.pendingRemove[name] = nil end
-				adopt(s, result)
+			else
+				-- Hapus hanya perubahan yang ikut tertulis (belum diubah lagi sejak itu).
+				for name, seq in pairs(addSeq) do
+					if s.pendingAdd[name] == seq then s.pendingAdd[name] = nil end
+				end
+				for name, seq in pairs(removes) do
+					if s.pendingRemove[name] == seq then s.pendingRemove[name] = nil end
+				end
 				local player = Players:GetPlayerByUserId(userId)
-				if player then sendFavorites(player, "updated", s.favorites) end
+				if not s.favLoaded then
+					adopt(s, result)
+					if player then sendFavorites(player, "updated", s.favorites) end
+				else
+					-- Data terbaru bisa berisi perubahan dari server lain.
+					local merged = applyPending(sanitizeFavorites(result), pendingAdds(s), s.pendingRemove)
+					if table.concat(merged, "\0") ~= table.concat(s.favorites, "\0") then
+						s.favorites = merged
+						if player then sendFavorites(player, "updated", s.favorites) end
+					end
+				end
 			end
 			s.writing = false
 		end

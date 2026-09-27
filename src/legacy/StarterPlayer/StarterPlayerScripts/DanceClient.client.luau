@@ -226,6 +226,8 @@ local danceRemote     = ReplicatedStorage:WaitForChild("DanceRequest")
 -- Remote dibuat server saat start; tunggu sebentar supaya tidak terlewat.
 local favoritesRemote = ReplicatedStorage:WaitForChild("FavoritesRemote", 10)
 local syncRemote      = ReplicatedStorage:WaitForChild("SyncRemote", 10)
+-- Toast yang sama dengan sistem carry (opsional).
+local CarryUI = requireFrom({ "CustomUIModules", "CarryUI" }, 5)
 
 local POSE_KEYWORDS = {
 	"pose", "stand", "idle", "sit", "lean", "squat",
@@ -867,6 +869,8 @@ end
 
 function playOrStop(name)
 	if State.isSyncing then return end
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.Health <= 0 then return end -- mati: server menolak, baris jangan menyala
 
 	-- Kalau dance ini belum dipanaskan, dorong ke depan antrean.
 	local assetId = DanceAssets.dances[name]
@@ -998,6 +1002,10 @@ if syncRemote then
 			else
 				updateSyncUI(data.isSyncing, data.target, data.currentDance)
 				if not data.isSyncing then clearPlaying() end
+			end
+		elseif action == "syncError" and type(data) == "table" then
+			if CarryUI and type(CarryUI.Toast) == "function" then
+				CarryUI.Toast("Sync", tostring(data.message or "Sync failed"), 3)
 			end
 		elseif action == "leadDisconnected" then
 			updateSyncUI(false, "None", nil)

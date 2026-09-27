@@ -180,6 +180,14 @@ local function onCharacterAdded(player, character)
 	if not humanoid then return end
 	if not humanoid:WaitForChild("Animator", 10) then return end
 
+	-- Mati → dance berhenti (badan ragdoll tidak ikut menari, baris padam).
+	humanoid.Died:Connect(function()
+		local current = states[player.UserId]
+		if current and current.dance and player.Character == character then
+			stopDance(player)
+		end
+	end)
+
 	s.walkSpeed = humanoid.WalkSpeed
 	task.delay(CONFIG.WARMUP_DELAY, warmUpPlayer, player)
 end
