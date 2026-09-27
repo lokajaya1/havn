@@ -37,10 +37,10 @@ local FADE_OUT      = num("fadeOut",       1, 0)
 local MIN_PLAY_TIME = num("minPlayTime",   8, 3)
 local MAX_RETRY     = num("maxLoadRetry",  2, 0)
 
-local PROGRESS_TTL = 8    -- laporan posisi dianggap basi setelah ini
-local HARD_TIMEOUT = 900  -- anti-macet total
+local PROGRESS_TTL = Shared.progressTTL -- [FIX R7] angka di MusicShared
+local HARD_TIMEOUT = Shared.hardTimeout
 local TICK         = 0.5
-local MAX_DUR      = 1800   -- 30 menit, di atas ini pasti laporan ngawur
+local MAX_DUR      = Shared.maxDuration
 
 -- ══ STATE ═════════════════════════════════════════════════════════════════
 local sound, soundPath
@@ -533,7 +533,7 @@ end
 -- Tidak mengulang RECENT_MAX lagu terakhir (kalau library kecil, aturan ini
 -- dilonggarkan), melewati lagu `unavailable`, dan tidak jalan tanpa pemain.
 -- Lagu pemain selalu didahulukan karena hanya dipakai saat antrian kosong.
-local RECENT_MAX = 20
+local RECENT_MAX = Shared.autoRecent
 local recent = {}
 
 local function remember(id)

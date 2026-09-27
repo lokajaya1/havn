@@ -166,13 +166,14 @@ local function removeMySong(p, songId)
 	end)
 end
 
+-- [FIX R7] angka jeda ada di MusicShared
 local M = {}
 
 M.handlers = {
 	AddSong          = addSong,
 	RemoveSong       = removeSong,
-	RequestMyLibrary = function(p) if checkRate(p, "MyLib", 1) then requestMyLibrary(p) end end, -- [FIX M3]
-	RequestLibrary   = function(p) if checkRate(p, "Lib", 2) then Library.broadcast(p) end end, -- [FIX R1] delta terlewat
+	RequestMyLibrary = function(p) if checkRate(p, "MyLib", Shared.myLibCooldown) then requestMyLibrary(p) end end, -- [FIX M3]
+	RequestLibrary   = function(p) if checkRate(p, "Lib", Shared.libCooldown) then Library.broadcast(p) end end, -- [FIX R1] delta terlewat
 	ToggleFavorite   = toggleFavorite,
 	AddMySong        = addMySong,
 	RemoveMySong     = removeMySong,

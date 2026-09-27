@@ -88,7 +88,7 @@ local pendingState = {}
 local function requestState(p, data)
 	local d = playerData[p]
 	if not d then pendingState[p] = true; return end
-	if not checkRate(p, "State", 1.5, true) then return end
+	if not checkRate(p, "State", Shared.stateCooldown, true) then return end -- [FIX R7]
 	task.spawn(function()
 		Shared.to(p, "SoundLocation", Playback.path())
 		-- [FIX R2] tombol reload hanya butuh status lagu, bukan library 130 KB;

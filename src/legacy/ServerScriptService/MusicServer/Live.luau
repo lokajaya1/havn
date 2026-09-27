@@ -8,15 +8,16 @@
 
 local MSS = game:GetService("MemoryStoreService")
 local Msg = game:GetService("MessagingService")
+local Shared = require(game:GetService("ReplicatedStorage"):WaitForChild("MusicShared")) -- [FIX R7]
 
 local Live = {}
 
 local MAP_NAME = "MusicLive"
 local KEY      = "state"
 local TOPIC    = "MusicLive"
-local LEASE    = 30   -- detik
-local RENEW    = 10   -- detik; perpanjang lease selama siaran
-local MAX_MISS = 3    -- gagal perpanjang berturut-turut → berhenti
+local LEASE    = Shared.live.lease
+local RENEW    = Shared.live.renew
+local MAX_MISS = Shared.live.maxMiss
 
 local map   = MSS:GetHashMap(MAP_NAME)
 local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. game:GetService("HttpService"):GenerateGUID(false)) -- [FIX L1c] unik tiap sesi Studio
@@ -42,7 +43,7 @@ end
 -- [FIX L3] SERAH TERIMA: DJ yang sedang live pindah server lewat Server List.
 -- Server lama tetap menyiarkan maks HANDOVER_SEC dtk dan menandai status
 -- "handoverTo = UserId DJ"; server baru yang dimasuki DJ itu boleh mengambil alih.
-local HANDOVER_SEC = 30
+local HANDOVER_SEC = Shared.live.handover
 local handingOver, handoverUid = false, nil
 local function buildState()
 	return {
@@ -90,7 +91,7 @@ end
 -- [FIX L2] SISI PENDENGAR. Server yang tidak siaran membaca status di MemoryStore
 -- (saat ada pesan + tiap POLL detik). Ada siaran milik server lain → ikut;
 -- status hilang (DJ berhenti / lease habis) → kembali ke musik server ini.
-local POLL = 10
+local POLL = Shared.live.poll
 local following, followKey, followDj = false, nil, nil
 local followDjId -- [FIX M6b]
 local followFns = {}   -- fn(state) ikut lagu siaran | fn(nil) berhenti ikut
