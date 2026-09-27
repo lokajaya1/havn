@@ -210,6 +210,9 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 	local fOut = isInitial and 0 or FADE_OUT
 
 	newTrack:Play(fIn, 1.0, targetTrack.Speed)
+	if follower:GetAttribute("InCarry") then
+		pcall(function() newTrack:AdjustWeight(DanceShared.CARRY_WEIGHT, 0) end)
+	end
 	if oldTrack and oldTrack.IsPlaying then
 		oldTrack:Stop(fOut)
 	end
@@ -269,7 +272,7 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 end
 
 -- Pastikan follower me-mirror SEMUA dance yang SEDANG dimainkan lead.
--- Idempotent: track yang benar-benar hidup (main penuh, WeightTarget>=0.5)
+-- Idempotent: track yang benar-benar hidup (DanceShared.isTrackAlive)
 -- TIDAK di-restart (anti-stutter); hanya yang mati/belum ada yang di-mirror
 -- ulang. Return true kalau lead memang sedang menari. Dipakai untuk MENJAGA
 -- dance follower tetap jalan saat & sesudah di-carry.
@@ -287,7 +290,7 @@ local function ensureMirrorAlive(follower)
 		leadDancing = true
 		local name     = track.Animation.Name
 		local existing = data.tracks[name]
-		if not (existing and existing.IsPlaying and existing.WeightTarget >= 0.5) then
+		if not DanceShared.isTrackAlive(existing) then
 			mirrorTrack(follower, track, false)
 		end
 	end

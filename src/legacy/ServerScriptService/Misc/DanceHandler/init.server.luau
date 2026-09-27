@@ -197,6 +197,9 @@ local function onPlayerAdded(player)
 	end
 
 	player:GetAttributeChangedSignal("InCarry"):Connect(function()
+		-- Pose gendong menang selama carry; dance (sendiri atau mirror sync)
+		-- kembali penuh saat dilepas.
+		DanceShared.applyDanceWeight(player, DanceShared.WEIGHT_FADE)
 		if player:GetAttribute("IsSyncing") then return end
 		startWatch(player, player:GetAttribute("InCarry") == true)
 	end)
