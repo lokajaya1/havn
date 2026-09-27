@@ -404,6 +404,7 @@ local function replayCurrent(tk)
 	duration, durSource = 0, "?"
 	Shared.all("SongRetry",  { name = nowPlaying.Name or "?", attempt = retryUsed })
 	Shared.all("NowPlaying", nowPlaying)
+	if P.onSongStart then task.spawn(P.onSongStart, nowPlaying) end -- [FIX L1]
 	warn(("[Music] retry #%d memuat: %s (%s)")
 		:format(retryUsed, tostring(nowPlaying.Name), tostring(nowPlaying.RawId or id)))
 end
@@ -598,6 +599,7 @@ function P.play(song)
 	endedConn = sound.Ended:Connect(function() onEnded(tk) end)
 
 	Shared.all("NowPlaying", song)
+	if P.onSongStart then task.spawn(P.onSongStart, song) end -- [FIX L1] lapor ke siaran live
 	Shared.all("SkipVoteUpdate", P.votes())
 	P.broadcastIds()
 
@@ -622,6 +624,7 @@ function P.next()
 		Shared.all("NowPlaying",     { Name = "No song playing", Requester = "" })
 		Shared.all("SkipVoteUpdate", P.votes())
 		Shared.all("SongStopped",    true)
+		if P.onSongStart then task.spawn(P.onSongStart, nil) end -- [FIX L1]
 		P.broadcastIds()
 	end
 end

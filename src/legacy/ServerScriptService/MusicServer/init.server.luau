@@ -16,6 +16,8 @@ local SSS     = game:GetService("ServerScriptService")
 local Shared   = require(RS:WaitForChild("MusicShared"))
 local Library  = require(script:WaitForChild("Library"))
 local Playback = require(script:WaitForChild("Playback"))
+local Live     = require(script:WaitForChild("Live")) -- [FIX L1] siaran live
+local liveCooldown = {}
 
 local VolDS = DSS:GetDataStore("MusicVolume")
 
@@ -29,6 +31,18 @@ end)()
 
 local function isAdmin(p)   return p ~= nil and p:GetAttribute("IsAdmin")   == true end
 local function isPremium(p) return p ~= nil and p:GetAttribute("IsPremium") == true end
+
+-- [FIX L1b] DJ = admin ATAU peran di Shared.liveDjRoles. Saat server ini siaran
+-- live, hanya DJ yang boleh request lagu dan skip.
+local function isDJ(p)
+	if isAdmin(p) then return true end
+	local role = p and p:GetAttribute("Role")
+	for _, r in ipairs(Shared.liveDjRoles or {}) do
+		if role == r then return true end
+	end
+	return false
+end
+local function liveBlocks(p) return Live.isActive() and not isDJ(p) end
 
 local function queueLimit(p)
 	if isAdmin(p) then return 999 end
@@ -95,6 +109,11 @@ Library.bindToClose()
 Playback.init()
 Playback.applyMode(Shared.spatial.mode)
 Playback.setGlobalVolume(Shared.defaultVolume)
+
+-- [FIX L1] Lagu yang mulai / diulang / berhenti di server ini dilaporkan ke Live
+-- (hanya berefek kalau server ini sedang siaran). Status siaran ke semua pemain.
+Playback.onSongStart = function(song) Live.songChanged(song, 0) end
+Live.onChange(function(st) Shared.all("LiveState", st) end)
 
 local playerData = {}
 local volTimers  = {}
@@ -174,11 +193,13 @@ local function requestState(p)
 		Shared.to(p, "QueueUpdate",  Playback.queue())
 		Shared.to(p, "VolumeUpdate", d.volume or 0.7)
 		Shared.to(p, "IsAdmin",      isAdmin(p))
+		Shared.to(p, "IsDJ",         isDJ(p)) -- [FIX L1b]
 		Shared.to(p, "QueueLimit",   { current = Playback.queueSize(), max = Shared.maxGlobalQueue, myLimit = queueLimit(p) })
 		-- Setelan ruang dikirim ke SEMUA pemain: client memakainya untuk
 		-- menempatkan salinan lokal saat audio server gagal dimuat.
 		Shared.to(p, "SpatialSettings", table.clone(Shared.spatial))
 		Shared.to(p, "LoudnessSync", loudnessPayload())
+		Shared.to(p, "LiveState", Live.state()) -- [FIX L1]
 
 		local np = Playback.current()
 		if np then
@@ -362,6 +383,7 @@ end
 -- ── ANTRIAN ───────────────────────────────────────────────────────────────
 local function addToQueue(p, songId)
 	if not songId then return end
+	if liveBlocks(p) then return Shared.to(p, "QueueError", "Live: only the DJ can request songs") end -- [FIX L1b]
 
 	local ok, msg = checkRate(p, "AddQueue", Shared.addQueueCooldown)
 	if not ok then return Shared.to(p, "QueueError", msg) end
@@ -451,7 +473,7 @@ local function removeFromQueue(p, data)
 end
 
 local function forceSkip(p)
-	if not isAdmin(p) then return Shared.to(p, "SkipError", "Admin only!") end
+	if not (isAdmin(p) or (Live.isActive() and isDJ(p))) then return Shared.to(p, "SkipError", "Admin only!") end -- [FIX L1b] DJ saat live
 	Playback.resetVotes()
 	Shared.all("AdminSkipped", p.Name)
 	Playback.skip()
@@ -508,6 +530,7 @@ local Actions = {
 	AddToQueue         = addToQueue,
 	RemoveFromQueue    = removeFromQueue,
 	VoteSkip           = function(p)
+		if liveBlocks(p) then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX L1b]
 		local okRate, msg = checkRate(p, "VoteSkip", 1) -- [FIX M3]
 		if not okRate then return Shared.to(p, "SkipError", msg) end
 		Playback.voteSkip(p)
@@ -516,6 +539,21 @@ local Actions = {
 	SetVolume          = setVolume,
 	SetSpatialSettings = setSpatialSettings,
 	RequestState       = requestState,
+	SetLive            = function(p, on) -- [FIX L1] admin, jeda 2 dtk
+		if not isDJ(p) then return Shared.to(p, "SettingsError", "DJ only!") end -- [FIX L1b]
+		if type(on) ~= "boolean" then return end
+		local now = os.clock()
+		if liveCooldown[p] and now - liveCooldown[p] < 2 then return Shared.to(p, "SettingsError", "Wait 2s") end
+		liveCooldown[p] = now
+		task.spawn(function()
+			if on then
+				local ok, err = Live.start(p, Playback.current(), Playback.elapsed())
+				if not ok then Shared.to(p, "SettingsError", err) end
+			else
+				Live.stop("dimatikan oleh " .. p.Name)
+			end
+		end)
+	end,
 
 	RequestMyLibrary   = function(p) if checkRate(p, "MyLib", 1) then requestMyLibrary(p) end end, -- [FIX M3]
 	ToggleFavorite     = toggleFavorite,
@@ -563,10 +601,11 @@ local function initPlayer(p)
 		if not p.Parent or not d then return end
 		d.queueLimit = queueLimit(p)
 		Shared.to(p, "IsAdmin",    isAdmin(p))
+		Shared.to(p, "IsDJ",       isDJ(p)) -- [FIX L1b]
 		Shared.to(p, "QueueLimit", { current = Playback.queueSize(), max = Shared.maxGlobalQueue, myLimit = d.queueLimit })
 		if isAdmin(p) then Shared.to(p, "SpatialSettings", table.clone(Shared.spatial)) end
 	end
-	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass" }) do
+	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass", "Role" }) do -- [FIX L1b] Role: peran DJ
 		pcall(function() p:GetAttributeChangedSignal(attr):Connect(onRankChanged) end)
 	end
 end
@@ -577,6 +616,8 @@ local function cleanupPlayer(p)
 		Library.myUnload(p)
 	end)
 	Playback.clearVote(p)
+	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
+	liveCooldown[p] = nil
 	lastState[p] = nil
 	reportBucket[p] = nil -- [FIX M3]
 

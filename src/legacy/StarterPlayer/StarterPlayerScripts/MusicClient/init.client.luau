@@ -52,6 +52,8 @@ local S = {
 	sortMode   = "last",
 	libView    = "all",     -- "all" | "mine"
 	isAdmin    = false,
+	isDJ       = false, -- [FIX L1b]
+	liveOn     = false,
 	queueLimit = { current = 0, max = Shared.maxGlobalQueue, myLimit = 1 },
 	spatial    = {},
 }
@@ -237,8 +239,16 @@ end
 -- ══ NOW PLAYING ═══════════════════════════════════════════════════════════
 local function updateSectionVis()
 	ui.queueSection.Visible  = #S.fullQueue > 0
-	ui.adminSettings.Visible = S.isAdmin
-	ui.forceSkipBtn.Visible  = S.isAdmin
+	-- [FIX L1b] DJ non-admin: kotak "DJ" yang hanya berisi tombol Live.
+	local djOnly = (not S.isAdmin) and S.isDJ
+	ui.adminSettings.Visible = S.isAdmin or S.isDJ
+	for _, ch in ipairs(ui.adminCt:GetChildren()) do
+		if ch:IsA("GuiObject") and ch ~= ui.liveRow and ch ~= ui.adminTitle then ch.Visible = not djOnly end
+	end
+	ui.adminTitle.Text       = djOnly and "DJ" or "ADMIN SETTINGS"
+	ui.liveRow.Position      = djOnly and UDim2.new(0, 0, 0, 18) or UDim2.new(0, 0, 0, 288)
+	ui.adminSettings.Size    = djOnly and UDim2.new(1, 0, 0, 66) or UDim2.new(1, 0, 0, 348)
+	ui.forceSkipBtn.Visible  = S.isAdmin or (S.isDJ and S.liveOn)
 	-- Library global: hanya admin yang bisa menambah/menghapus isinya.
 	ui.addGlobalBtn.Visible  = S.isAdmin
 	ui.addMineBtn.Size = S.isAdmin and UDim2.new(0.5, -3, 0, 26) or UDim2.new(1, 0, 0, 26)
@@ -464,6 +474,19 @@ ui.autoplayBtn.MouseButton1Click:Connect(function()
 	notify(autoOn and "Auto play on" or "Auto play off") -- [FIX A1]
 end)
 
+-- [FIX L1] Siaran live (admin). Status resmi datang dari server lewat LiveState.
+local liveOn = false
+local function paintLive()
+	ui.liveBtn.Text             = liveOn and "LIVE - On" or "Off"
+	ui.liveBtn.BackgroundColor3 = liveOn and P.danger or P.panel
+	ui.liveBtn.TextColor3       = liveOn and C.white or C.gray
+end
+paintLive()
+ui.liveBtn.MouseButton1Click:Connect(function()
+	remote:FireServer("SetLive", not liveOn)
+	notify(liveOn and "Stopping live..." or "Starting live...")
+end)
+
 local function numFrom(box, lo, hi)
 	local v = tonumber(box.Text)
 	return v and math.clamp(v, lo, hi) or nil
@@ -648,6 +671,10 @@ H.VolumeUpdate = function(data)
 	ui.volLabel.Text  = "Volume " .. math.floor(v * 100) .. "%"
 end
 
+H.IsDJ = function(data)
+	S.isDJ = (data == true)
+	updateSectionVis()
+end
 H.IsAdmin = function(data)
 	local was = S.isAdmin
 	S.isAdmin = (data == true)
@@ -674,6 +701,15 @@ H.SpatialSettings = function(data)
 	if data.autoplay ~= nil then autoOn = data.autoplay == true; paintAuto() end -- [FIX A1]
 end
 
+H.LiveState = function(data) -- [FIX L1]
+	if type(data) ~= "table" then return end
+	local was = liveOn
+	liveOn = data.active == true
+	S.liveOn = liveOn -- [FIX L1b]
+	updateSectionVis()
+	paintLive()
+	if liveOn ~= was then notify(liveOn and ("LIVE - DJ " .. tostring(data.dj)) or "Live ended") end
+end
 H.LoudnessSync = function(data)
 	if not data then return end
 	Audio.syncLoudness(data)
