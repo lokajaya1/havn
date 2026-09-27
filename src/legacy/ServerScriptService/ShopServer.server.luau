@@ -256,6 +256,44 @@ local function updateData(userId, fn)
 	return ok, newData
 end
 
+-- Ubah sebagian data: UpdateAsync ke DataStore, lalu fungsi yang SAMA ke cache.
+-- Cache tidak diganti, jadi perubahan sesi yang belum tersimpan tetap ada.
+-- mutate harus aman dijalankan berulang (UpdateAsync bisa mengulang transform).
+local function commit(userId, mutate)
+	local ok = retry(function()
+		return Store:UpdateAsync(userId, function(old) return mutate(ensureFields(old)) end)
+	end)
+	if ok and Cache[userId] then mutate(Cache[userId]) end
+	return ok
+end
+
+-- ── Tujuan gift tersimpan (PendingGifts) ──────────────────────
+-- Struk gift bisa diulang Roblox di sesi LAIN (pembeli keluar/server mati sebelum
+-- selesai). Tujuan disimpan di data pembeli: PendingGifts[passName] = { To, Time }.
+-- PendingWant = keadaan terakhir yang diminta server ini; tulisan yang telat
+-- selalu menulis keadaan terakhir (urutan tulis tidak penting).
+local PendingWant = {} -- [userId] → { [passName] = entry | false }
+
+local function setPending(userId, passName, entry)
+	PendingWant[userId] = PendingWant[userId] or {}
+	PendingWant[userId][passName] = entry or false
+	local data = Cache[userId]
+	if data then
+		if type(data.PendingGifts) ~= "table" then data.PendingGifts = {} end
+		data.PendingGifts[passName] = entry
+	end
+end
+
+local function syncPending(userId, passName)
+	return commit(userId, function(d)
+		local want = PendingWant[userId]
+		if want == nil or want[passName] == nil then return d end -- pemain sudah keluar: jangan ubah
+		if type(d.PendingGifts) ~= "table" then d.PendingGifts = {} end
+		d.PendingGifts[passName] = want[passName] or nil
+		return d
+	end)
+end
+
 -- ── Gift intent ───────────────────────────────────────────────
 local function setIntent(player, recipientId, passName)
 	Intents[player] = { recipient = recipientId, passName = passName, timestamp = os.time() }
@@ -263,6 +301,8 @@ local function setIntent(player, recipientId, passName)
 		local i = Intents[player]
 		if i and os.time() - i.timestamp >= INTENT_TTL then Intents[player] = nil end
 	end)
+	setPending(player.UserId, passName, { To = recipientId, Time = os.time() })
+	task.spawn(syncPending, player.UserId, passName)
 end
 
 -- ── Gift validation (paid path) ────────────────────────────────
@@ -286,7 +326,11 @@ local function processGift(receipt, intent)
 	local senderName  = sender and sender.Name or "Someone"
 
 	if not Config.getGamepassByName(passName) then return false end
-	if deepOwnershipCheck(recipientId, passName) then return true end
+	if deepOwnershipCheck(recipientId, passName) then
+		warn(("[ShopServer] gift %s dari uid %d: penerima uid %d sudah punya → struk %s diterima tanpa hadiah")
+			:format(passName, senderId, recipientId, tostring(receipt.PurchaseId)))
+		return true
+	end
 
 	local ok = updateData(recipientId, function(data)
 		data.Gamepasses[passName] = true
@@ -430,6 +474,7 @@ R.InitiateGift.OnServerEvent:Connect(function(player, recipientId, passName)
 	end
 	if throttled(player, "InitiateGift", 2) then return end -- [FIX 2a] anti-spam
 	if not validateGift(player, recipientId, passName) then return end
+	recipientId = tonumber(recipientId)
 	setIntent(player, recipientId, passName)
 
 	local pass       = Config.getGamepassByName(passName)
@@ -492,26 +537,45 @@ local function handleGiftReceipt(receipt, player)
 
 	ensureFields(data)
 
-	-- Anti-duplicate lapis kedua (selain PurchaseHistoryDS milik ReceiptHandler)
+	-- Anti-duplicate lapis kedua (selain PurchaseHistoryDS milik ReceiptHandler).
+	-- Purchases dicatat HANYA setelah hadiah benar-benar tersimpan.
 	if data.Purchases[purchaseId] then
 		return true
 	end
-	data.Purchases[purchaseId] = {
-		Time=os.time(), ProductId=productId, PassName=pass.name, Type="Gift",
-	}
+	local record = { Time=os.time(), ProductId=productId, PassName=pass.name, Type="Gift" }
+	local function markDone(d)
+		d.Purchases[purchaseId] = d.Purchases[purchaseId] or record
+		if type(d.PendingGifts) == "table" then d.PendingGifts[pass.name] = nil end
+		return d
+	end
 
+	-- Tujuan: intent sesi ini; kalau tidak ada → PendingGifts tersimpan (struk diulang di sesi lain)
 	local intent = Intents[player]
 	if not intent or intent.passName ~= pass.name then
-		-- Intent hilang/tidak cocok → jangan refund. Grant ke pembeli sendiri.
-		Intents[player] = nil
-		grantPass(userId, pass.name)
+		local saved = type(data.PendingGifts) == "table" and data.PendingGifts[pass.name]
+		local to = type(saved) == "table" and tonumber(saved.To)
+		intent = to and { recipient = to, passName = pass.name } or nil
+	end
+
+	if not intent then
+		-- Tanpa tujuan → pass untuk pembeli sendiri; disimpan DULU, baru struk diterima
+		local ok = commit(userId, function(d)
+			d.Gamepasses[pass.name] = true
+			return markDone(d)
+		end)
+		if not ok then return false end
 		onPassGranted(player, pass.name, nil)
 		return true
 	end
 
-	local ok = processGift(receipt, intent)
-	Intents[player] = nil
-	return ok
+	-- Gagal → tujuan tetap tersimpan, Roblox mengulang struk ke penerima yang sama
+	if not processGift(receipt, intent) then return false end
+
+	local cur = Intents[player]
+	if cur and cur.passName == pass.name then Intents[player] = nil end
+	if PendingWant[userId] then PendingWant[userId][pass.name] = false end
+	commit(userId, markDone) -- gagal tidak apa: hadiah sudah tersimpan, processGift idempoten
+	return true
 end
 
 -- Daftarkan semua gift product (reguler + regional) ke ReceiptHandler
@@ -570,6 +634,7 @@ Players.PlayerRemoving:Connect(function(player)
 	RankCache[uid] = nil   -- bersihkan rank cache saat player keluar
 	LoadFailed[uid] = nil
 	LastCall[player] = nil
+	PendingWant[uid] = nil
 end)
 
 for _, p in ipairs(Players:GetPlayers()) do task.spawn(loadData, p) end
