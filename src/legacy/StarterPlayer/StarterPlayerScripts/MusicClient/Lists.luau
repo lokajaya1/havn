@@ -540,7 +540,7 @@ function L.updateQueue(songs)
 
 	local max = (S.queueLimit and S.queueLimit.max) or Shared.maxGlobalQueue
 	local n   = #songs
-	ui.queueLabel.Text = ("QUEUE (%d/%d)"):format(n, max) .. ((S.liveAny and n > 0) and "  ·  ON HOLD (LIVE)" or "") -- [FIX M6]
+	ui.queueLabel.Text = ("QUEUE (%d/%d)"):format(n, max) .. (S.liveAny and "  ·  LIVE" or "") -- [FIX M6] [FIX M6b]
 	ui.queueLabel.TextColor3 =
 		n >= max * 0.8 and C.danger or n >= max * 0.6 and C.accent or C.white
 
@@ -568,6 +568,7 @@ function L.updateQueue(songs)
 
 		-- Admin ATAU pemilik antrian boleh menghapus.
 		local canRemove = (S.isAdmin == true) or (song.RequesterId == player.UserId)
+			or (S.liveOn == true and S.liveDjId == player.UserId) -- [FIX M6c] DJ live kelola antrian
 		local nameW = canRemove and -108 or -74
 
 		w.text({ Size = UDim2.new(1, nameW, 0, 13), Position = UDim2.new(0, 72, 0, 3),
@@ -575,7 +576,7 @@ function L.updateQueue(songs)
 			TextColor3 = C.white, TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd, Parent = ct })
 		w.text({ Size = UDim2.new(1, nameW, 0, 10), Position = UDim2.new(0, 72, 0, 18),
-			Text = "by " .. (song.Requester or "?"), TextSize = 8,
+			Text = "by " .. (song.Requester or "?") .. ((S.liveAny and (S.liveFollow or song.RequesterId ~= S.liveDjId)) and "  ·  ON HOLD" or ""), TextSize = 8, -- [FIX M6b]
 			TextColor3 = C.muted, TextXAlignment = Enum.TextXAlignment.Left, Parent = ct })
 
 		if canRemove then

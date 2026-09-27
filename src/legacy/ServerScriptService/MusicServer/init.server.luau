@@ -44,7 +44,8 @@ local function isDJ(p)
 end
 -- [FIX M6] Saat live (server ini stasiun ATAU ikut siaran server lain) hanya DJ yang boleh request.
 local function liveBlocks(p) return (Live.isActive() or Live.isFollowing()) and not isDJ(p) end
-local function skipBlocked(p) return liveBlocks(p) or Live.isFollowing() end -- [FIX L2] server pendengar: skip dikunci
+-- [FIX M6b] Saat live: skip hanya oleh DJ yang menyalakan siaran (admin lain juga dikunci).
+local function skipBlocked(p) return Live.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId()) end
 
 local function queueLimit(p)
 	if isAdmin(p) then return 999 end
@@ -115,7 +116,10 @@ Playback.setGlobalVolume(Shared.defaultVolume)
 -- [FIX L1] Lagu yang mulai / diulang / berhenti di server ini dilaporkan ke Live
 -- (hanya berefek kalau server ini sedang siaran). Status siaran ke semua pemain.
 Playback.onSongStart = function(song) Live.songChanged(song, 0) end
-Live.onChange(function(st) Shared.all("LiveState", st) end)
+Live.onChange(function(st)
+	Playback.liveDjId = Live.djId() -- [FIX M6b] antrian DJ saja selama live
+	Shared.all("LiveState", st)
+end)
 -- [FIX L2] Server ini ikut siaran server lain: posisi = jam sekarang − jam mulai.
 Live.onFollow(function(st)
 	if not st then return Playback.unfollow() end
@@ -435,7 +439,8 @@ local function addToQueue(p, songId)
 		LibOwner = song.Requester,
 	}
 
-	if not Playback.isPlaying() and not Playback.isFollowing() then -- [FIX L2] saat ikut siaran: masuk antrian lokal
+	local held = Playback.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId()) -- [FIX M6b]
+	if not Playback.isPlaying() and not held then -- [FIX L2] saat ikut siaran: masuk antrian lokal
 		Playback.play(entry)
 		Playback.broadcastQueue()
 		Playback.broadcastIds()
@@ -445,6 +450,7 @@ local function addToQueue(p, songId)
 	Playback.enqueue(entry, isPremium(p), isPremium)
 	Playback.broadcastQueue()
 	Playback.broadcastIds()
+	if held then Shared.to(p, "QueueRemoveSuccess", "Queued - on hold until the live ends") end -- [FIX M6b]
 end
 
 local function removeFromQueue(p, data)
@@ -454,8 +460,8 @@ local function removeFromQueue(p, data)
 	if not okRate then return Shared.to(p, "QueueError", msg) end
 	if type(idx) == "number" and idx ~= idx then return Shared.to(p, "QueueError", "Invalid index") end
 
-	-- Non-admin boleh menghapus antrian miliknya sendiri.
-	if not isAdmin(p) then
+	-- Non-admin boleh menghapus antrian miliknya sendiri; DJ yang sedang live boleh menghapus semua. [FIX M6c]
+	if not isAdmin(p) and not (Live.isActive() and p.UserId == Live.djId()) then
 		local q, target = Playback.queue(), nil
 		if id then
 			for _, item in ipairs(q) do
@@ -484,6 +490,7 @@ end
 
 local function forceSkip(p)
 	if not (isAdmin(p) or (Live.isActive() and isDJ(p))) then return Shared.to(p, "SkipError", "Admin only!") end -- [FIX L1b] DJ saat live
+	if Live.isActive() and p.UserId ~= Live.djId() then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX M6b]
 	if Live.isFollowing() then return Shared.to(p, "SkipError", "Live: controlled by the DJ on another server") end -- [FIX L2]
 	Playback.resetVotes()
 	Shared.all("AdminSkipped", p.Name)

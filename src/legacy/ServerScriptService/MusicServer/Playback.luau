@@ -698,7 +698,17 @@ function P.next()
 	duration, durSource = 0, "?"
 	resetReports()
 
-	local song = table.remove(queue, 1) or pickAuto() -- [FIX A1] antrian kosong → auto play
+	-- [FIX M6b] Saat server ini siaran, yang diputar hanya request DJ; request lain
+	-- tetap di antrian (ditahan) sampai live selesai. Tidak ada → auto play.
+	local song
+	if P.liveDjId then
+		for i, q in ipairs(queue) do
+			if q.RequesterId == P.liveDjId then song = table.remove(queue, i); break end
+		end
+	else
+		song = table.remove(queue, 1)
+	end
+	song = song or pickAuto() -- [FIX A1] antrian kosong → auto play
 	if song then
 		P.broadcastQueue()
 		P.play(song)
