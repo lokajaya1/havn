@@ -263,14 +263,16 @@ local CLIENT = {
 	fps = toggleFps,
 
 	cam = function(a)
-		local n = math.clamp(tonumber(a[1]) or 16, 5, 128)
+		local n = tonumber(a[1]); if n ~= n then n = nil end -- tolak NaN ("nan" lolos math.clamp)
+		n = math.clamp(n or 16, 5, 128)
 		player.CameraMaxZoomDistance = n
 		player.CameraMinZoomDistance = math.max(n - 5, 0.5)
 		toast("Kamera: " .. n .. " studs")
 	end,
 
 	fov = function(a)
-		local n = math.clamp(tonumber(a[1]) or 70, 30, 120)
+		local n = tonumber(a[1]); if n ~= n then n = nil end
+		n = math.clamp(n or 70, 30, 120)
 		local cam = workspace.CurrentCamera
 		if cam then cam.FieldOfView = n end
 		toast("FOV: " .. n .. "°")
