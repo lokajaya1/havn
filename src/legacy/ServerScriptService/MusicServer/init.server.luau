@@ -1,7 +1,8 @@
 -- ServerScriptService/MusicServer  (Script)
 -- Bootstrap + handler aksi + lifecycle player. [FIX R5] ModuleScript anak:
 --   Library (library global + My Library), Playback (Sound & antrian),
---   Live (siaran lintas server), Permissions, RateLimit, Volume.
+--   Live (siaran lintas server), Permissions, RateLimit, Volume,
+--   LibraryActions (aksi library global & My Library). [FIX R5b]
 --
 -- FIX PENTING:
 --   Actions.ReportDuration dulu memanggil Playback.report(data.id, data.len,
@@ -24,6 +25,7 @@ local liveBlocks, skipBlocked, queueLimit = Perm.liveBlocks, Perm.skipBlocked, P
 
 local Rate   = require(script:WaitForChild("RateLimit"))
 local Volume = require(script:WaitForChild("Volume"))
+local LibraryActions = require(script:WaitForChild("LibraryActions"))
 local checkRate, isNum, allowReport = Rate.check, Rate.isNum, Rate.allowReport
 
 -- ═══ BOOT ═════════════════════════════════════════════════════════════════
@@ -109,162 +111,6 @@ local function requestState(p, data)
 		Shared.to(p, "NowPlaying",     np)
 		Shared.to(p, "SkipVoteUpdate", Playback.votes())
 		Shared.to(p, "QueueIds",       Playback.queueIds())
-	end)
-end
-
--- ── LIBRARY GLOBAL (admin) ────────────────────────────────────────────────
-local function addSong(p, data)
-	if type(data) ~= "table" or not data.Id then return Shared.to(p, "SongError", "Invalid request") end
-	if not isAdmin(p) then return Shared.to(p, "SongError", "Admins only") end
-
-	local rawId = Shared.rawId(data.Id)
-	if not rawId then return Shared.to(p, "SongError", "Invalid ID") end
-
-	local ok, msg = checkRate(p, "AddSong", Shared.addSongCooldown)
-	if not ok then return Shared.to(p, "SongError", msg) end
-
-	local id = "rbxassetid://" .. rawId
-	if Library.find(id) then return Shared.to(p, "SongError", "Already in the library") end
-	if Library.isFull() then return Shared.to(p, "SongError", "Library is full") end
-
-	task.spawn(function()
-		Shared.to(p, "SongValidating", Shared.loadTimeout)
-		local valid, info = Library.validate(rawId)
-		if not valid        then return Shared.to(p, "SongError", info) end
-		if Library.find(id) then return Shared.to(p, "SongError", "Already added") end
-
-		Library.insert(Library.fromInfo(rawId, info, { -- [FIX R4]
-			Requester = p.Name, RequesterId = p.UserId, AddedTime = os.time(),
-		}))
-		Library.broadcast()
-		Library.save()
-		Shared.to(p, "SongAdded", info.name)
-	end)
-end
-
-local function removeSong(p, songId)
-	if not songId then return Shared.to(p, "SongError", "Invalid request") end
-	local idx, song = Library.find(tostring(songId))
-	if not idx then return Shared.to(p, "SongError", "Not found") end
-
-	local mine = song.RequesterId == p.UserId
-		or (not song.RequesterId and song.Requester == p.Name)
-	if not mine and not isAdmin(p) then
-		return Shared.to(p, "SongError", "You can only remove your own songs")
-	end
-
-	Library.removeAt(idx)
-	Playback.removeFromQueueById(song.Id)
-	Library.myPurge(song.Id)
-	Library.broadcast()
-	Playback.broadcastQueue()
-	Playback.broadcastIds()
-	Shared.to(p, "SongRemoved", song.Name)
-	Library.saveNow()
-end
-
--- ── LIBRARY SAYA (semua player) ───────────────────────────────────────────
--- [FIX R2] My Library hanya dikirim kalau diminta client. Diminta saat masih
--- dimuat → dikirim SEKALI begitu selesai (dulu terkirim 3-4x saat join).
-local wantMy = {}
-local function sendMyIfWanted(p)
-	if wantMy[p] and p.Parent then
-		wantMy[p] = nil
-		Library.myBroadcast(p)
-	end
-end
-
-local function requestMyLibrary(p)
-	if Library.myIsLoaded(p) then return Library.myBroadcast(p) end
-	wantMy[p] = true
-	task.spawn(function()
-		Library.myLoad(p)
-		sendMyIfWanted(p)
-	end)
-end
-
--- Toggle favorit: kalau lagu sudah ada di Library Saya -> dihapus,
--- kalau belum -> disalin dari library global.
--- Semua aksi Library Saya memuat datanya lebih dulu (idempotent), jadi tidak
--- pernah ada penolakan "masih dimuat" yang bikin tombol ♥ terasa mati.
-local function toggleFavorite(p, songId)
-	if not songId then return end
-	local ok, msg = checkRate(p, "Fav", Shared.favCooldown)
-	if not ok then return Shared.to(p, "MyLibError", msg) end
-
-	task.spawn(function()
-		Library.myLoad(p)
-		if not p.Parent then return end
-
-		local id = tostring(songId)
-		local idx, existing = Library.myFind(p, id)
-		if idx then
-			Library.myRemoveAt(p, idx)
-			Library.myBroadcast(p)
-			return Shared.to(p, "FavUpdate", { added = false, name = existing and existing.Name or "?" })
-		end
-
-		local _, song = Library.find(id)
-		if not song then return Shared.to(p, "MyLibError", "Song is not in the library") end
-
-		local added, res = Library.myAdd(p, Library.meta(song, { source = "fav", AddedTime = os.time() })) -- [FIX R4]
-		if not added then return Shared.to(p, "MyLibError", res) end
-
-		Library.myBroadcast(p)
-		Shared.to(p, "FavUpdate", { added = true, name = song.Name })
-	end)
-end
-
--- Player menambah lagu sendiri. Terbuka untuk SEMUA player (admin juga), dan
--- hanya masuk Library Saya milik pengirim.
-local function addMySong(p, data)
-	local rawId = Shared.rawId(type(data) == "table" and data.Id or data)
-	if not rawId then return Shared.to(p, "MyLibError", "Invalid ID") end
-
-	local ok, msg = checkRate(p, "AddMySong", Shared.addSongCooldown)
-	if not ok then return Shared.to(p, "MyLibError", msg) end
-
-	task.spawn(function()
-		Library.myLoad(p)
-		if not p.Parent then return end
-
-		local id = "rbxassetid://" .. rawId
-		if Library.myFind(p, id) then return Shared.to(p, "MyLibError", "Already in My Library") end
-		if Library.myIsFull(p)   then return Shared.to(p, "MyLibError", "My Library is full") end
-
-		-- Metadata dipakai ulang dari library global kalau lagunya sudah ada
-		-- di sana: hemat panggilan Marketplace API.
-		local _, exist = Library.find(id)
-		local entry
-		if exist then
-			entry = Library.meta(exist, { source = "own", AddedTime = os.time() }) -- [FIX R4]
-		else
-			Shared.to(p, "SongValidating", Shared.loadTimeout)
-			local valid, info = Library.validate(rawId)
-			if not valid then return Shared.to(p, "MyLibError", info) end
-			if not p.Parent then return end
-			entry = Library.fromInfo(rawId, info, { source = "own", AddedTime = os.time() })
-		end
-
-		local added, res = Library.myAdd(p, entry)
-		if not added then return Shared.to(p, "MyLibError", res) end
-
-		Library.myBroadcast(p)
-		Shared.to(p, "MySongAdded", entry.Name)
-	end)
-end
-
-local function removeMySong(p, songId)
-	if not songId then return end
-	local okRate, msg = checkRate(p, "RemoveMySong", Shared.favCooldown) -- [FIX M3]
-	if not okRate then return Shared.to(p, "MyLibError", msg) end
-	task.spawn(function()
-		Library.myLoad(p)
-		if not p.Parent then return end
-		local removed = Library.myRemove(p, tostring(songId))
-		if not removed then return Shared.to(p, "MyLibError", "Not in My Library") end
-		Library.myBroadcast(p)
-		Shared.to(p, "FavUpdate", { added = false, name = removed.Name or "?" })
 	end)
 end
 
@@ -410,8 +256,6 @@ local function setSpatialSettings(p, s)
 end
 
 local Actions = {
-	AddSong            = addSong,
-	RemoveSong         = removeSong,
 	AddToQueue         = addToQueue,
 	RemoveFromQueue    = removeFromQueue,
 	VoteSkip           = function(p)
@@ -439,16 +283,13 @@ local Actions = {
 		end)
 	end,
 
-	RequestMyLibrary   = function(p) if checkRate(p, "MyLib", 1) then requestMyLibrary(p) end end, -- [FIX M3]
-	RequestLibrary     = function(p) if checkRate(p, "Lib", 2) then Library.broadcast(p) end end, -- [FIX R1] delta terlewat
-	ToggleFavorite     = toggleFavorite,
-	AddMySong          = addMySong,
-	RemoveMySong       = removeMySong,
 
 	-- Client melaporkan durasi asli / posisi / kegagalan load. Server tidak
 	-- me-render audio, jadi ini satu-satunya sumber yang bisa dipercaya.
 	ReportDuration     = function(p, data) if allowReport(p) then Playback.report(p, data) end end, -- [FIX M3]
 }
+
+for name, h in pairs(LibraryActions.handlers) do Actions[name] = h end -- [FIX R5b]
 
 Shared.remote.OnServerEvent:Connect(function(p, action, data)
 	if type(action) ~= "string" or not p or not p.Parent then return end
@@ -470,10 +311,7 @@ local function initPlayer(p)
 		end
 	end)
 
-	task.spawn(function()
-		Library.myLoad(p)
-		sendMyIfWanted(p) -- [FIX R2]
-	end)
+	LibraryActions.onJoin(p) -- [FIX R5b]
 
 	-- [FIX R2] Tidak ada lagi push buta 0.5 & 3 dtk (library terkirim 2-3x).
 	-- Client meminta sendiri saat UI-nya siap; yang terlanjur datang dijawab di sini.
@@ -505,7 +343,8 @@ local function cleanupPlayer(p)
 		Playback.broadcastIds()
 	end
 	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
-	pendingState[p], wantMy[p] = nil, nil -- [FIX R2]
+	pendingState[p] = nil -- [FIX R2]
+	LibraryActions.forget(p) -- [FIX R5b]
 	Rate.forget(p) -- [FIX R5] jeda & kuota laporan
 
 	local d = playerData[p]
