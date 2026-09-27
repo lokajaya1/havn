@@ -13,6 +13,13 @@ local STRICT = {
 	"src/legacy/ServerScriptService/MusicServer",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient",
 	"src/legacy/ReplicatedStorage/MusicShared.luau",
+	-- ruangan DANCE
+	"src/legacy/ServerScriptService/Misc",
+	"src/legacy/ReplicatedStorage/Modules/DanceShared.luau",
+	"src/legacy/ReplicatedStorage/Modules/AnimationWarmup.luau",
+	"src/legacy/ReplicatedStorage/Config/DanceConfig.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/DanceClient.client.luau",
+	"src/legacy/ReplicatedStorage/CustomUIModules/SyncManager.luau",
 }
 local REPORT = { "src/legacy" }
 

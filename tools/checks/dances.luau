@@ -3,7 +3,7 @@
 --   • id animasi harus angka bulat positif dan tidak kembar
 --     (dua nama dengan id sama membuat pengecekan "dance masih jalan" salah)
 --   • nama tidak boleh kembar beda huruf besar/kecil
---     (SmoothDanceManager mencari nama tanpa membedakan kapital → dance salah diputar)
+--     (pencarian di DanceClient membandingkan nama dalam huruf kecil → hasil kembar)
 --   • semua nama di poseNames & POPULAR_DANCES (DanceHandler/Config) harus ada
 local fs = require("@lune/fs")
 local luau = require("@lune/luau")

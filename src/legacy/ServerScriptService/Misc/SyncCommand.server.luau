@@ -94,10 +94,7 @@ local function pauseSync(follower)
 	local data   = syncData[userId]
 	if not data or data.paused then return end
 
-	local snapshot = {}
-	for animName, track in pairs(data.tracks) do
-		snapshot[animName] = track
-	end
+	local snapshot = table.clone(data.tracks)
 	data.tracks = {}
 	data.paused = true
 
@@ -217,7 +214,7 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 		oldTrack:Stop(fOut)
 	end
 	if oldTrack then
-		-- [FIX 2c2] bebaskan track lama (dulu menumpuk sampai batas 256 track per Animator)
+		-- Bebaskan track lama; tanpa ini track menumpuk sampai batas 256 per Animator.
 		task.delay(fOut + 0.1, function() pcall(oldTrack.Destroy, oldTrack) end)
 	end
 
