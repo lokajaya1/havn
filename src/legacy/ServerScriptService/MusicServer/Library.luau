@@ -400,11 +400,19 @@ local function clean(song)
 end
 
 -- YIELDS. Panggil dari task.spawn.
+-- [FIX M2] `loaded` baru dipasang SETELAH data datang. Pemanggil yang datang
+-- selagi load berjalan menunggu, bukan memakai daftar kosong (dulu ♥ di detik
+-- awal hilang ditimpa hasil load walau notifikasi bilang "Saved").
 function Library.myLoad(p)
 	local uid = uidOf(p)
 	local s   = slot(uid)
 	if s.loaded then return s.list end
-	s.loaded = true   -- kunci lebih dulu supaya tidak dobel-load
+	if s.loading then
+		local t0 = os.clock()
+		while s.loading and os.clock() - t0 < 30 do task.wait(0.1) end
+		return s.list
+	end
+	s.loading = true
 
 	local ok, data
 	for i = 1, 3 do
@@ -422,10 +430,15 @@ function Library.myLoad(p)
 			end
 		end
 	end
-	s.list = out
-	s.failed = not ok -- [FIX 2c2] load gagal → myWrite menggabungkan, bukan menimpa
+	s.list    = out
+	s.failed  = not ok -- [FIX 2c2] load gagal → myWrite menggabungkan, bukan menimpa
+	s.loaded  = true
+	s.loading = false
 	return s.list
 end
+
+-- [FIX M2] jumlah tulis Library Saya yang sedang berjalan (ditunggu BindToClose)
+local myPending = 0
 
 local function myWrite(uid)
 	local s = mine[uid]
@@ -434,9 +447,11 @@ local function myWrite(uid)
 	local snap = {}
 	for _, song in ipairs(s.list) do table.insert(snap, clean(song)) end
 	local merge = s.failed
+	myPending += 1
+	local ok, res
 	for i = 1, 3 do
-		local ok = pcall(function()
-			FavDS:UpdateAsync("MyLib_" .. uid, function(old)
+		ok, res = pcall(function()
+			return FavDS:UpdateAsync("MyLib_" .. uid, function(old)
 				if not merge then return snap end
 				-- [FIX 2c2] library lama belum pernah termuat → gabung (lama + baru), jangan timpa
 				local out, seen = {}, {}
@@ -454,10 +469,25 @@ local function myWrite(uid)
 				return out
 			end)
 		end)
-		if ok then return end
+		if ok then break end
 		task.wait(1)
 	end
-	warn("[Music] gagal simpan Library Saya untuk UserId", uid)
+	myPending -= 1
+	if not ok then
+		s.dirty = true -- [FIX M2] jangan dibuang diam-diam: ikut ditulis saat keluar / shutdown
+		warn("[Music] gagal simpan Library Saya untuk UserId", uid)
+		return
+	end
+	-- [FIX M2] Gabungan berhasil → daftar lokal = hasil gabungan dan mode gabung
+	-- dimatikan. Dulu `failed` tidak pernah direset, jadi hapus favorit
+	-- sesudahnya tidak pernah tersimpan (lagu lama selalu ikut kembali).
+	if merge and not s.dirty and type(res) == "table" and mine[uid] == s then
+		local out = {}
+		for _, song in ipairs(res) do table.insert(out, clean(song)) end
+		s.list, s.failed = out, false
+		local p = Players:GetPlayerByUserId(uid)
+		if p then Library.myBroadcast(p) end
+	end
 end
 
 function Library.mySave(p)
@@ -556,6 +586,8 @@ function Library.bindToClose()
 				end)
 			end)
 		end
+		-- [FIX M2] tunggu tulis Library Saya dari PlayerRemoving, lalu tulis sisanya
+		while myPending > 0 and os.clock() - t0 < 25 do task.wait(0.2) end
 		for uid, s in pairs(mine) do
 			if s.dirty then pcall(myWrite, uid) end
 		end

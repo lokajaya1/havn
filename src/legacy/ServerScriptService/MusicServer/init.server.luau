@@ -94,15 +94,38 @@ local function loadVol(p)
 	return 0.7
 end
 
+-- [FIX M2] Volume hanya disimpan kalau pemain benar-benar menggesernya. Dulu:
+-- load gagal → 0.7, lalu saat keluar SELALU SetAsync → setelan asli tertimpa.
+local pendingVol = 0
+
+local function writeVol(uid, vol)
+	pendingVol += 1
+	local ok = false
+	for i = 1, 3 do
+		ok = pcall(VolDS.SetAsync, VolDS, "Vol_" .. uid, vol)
+		if ok then break end
+		if i < 3 then task.wait(i) end
+	end
+	pendingVol -= 1
+	return ok
+end
+
 local function saveVolDebounced(p)
 	local d = playerData[p]
 	if not d then return end
+	d.volDirty = true
 	if volTimers[p] then task.cancel(volTimers[p]) end
 	volTimers[p] = task.delay(5, function()
 		volTimers[p] = nil
-		pcall(VolDS.SetAsync, VolDS, "Vol_" .. p.UserId, d.volume)
+		local v = d.volume
+		if writeVol(p.UserId, v) and d.volume == v then d.volDirty = false end
 	end)
 end
+
+game:BindToClose(function()
+	local t0 = os.clock()
+	while pendingVol > 0 and os.clock() - t0 < 25 do task.wait(0.2) end
+end)
 
 -- Loudness dikirim ke SEMUA player (bukan cuma admin): client butuh nilai
 -- terbaru untuk clone Sound mode darurat.
@@ -529,7 +552,7 @@ local function cleanupPlayer(p)
 	if not d then return end
 	local uid, vol = p.UserId, d.volume
 	if volTimers[p] then task.cancel(volTimers[p]); volTimers[p] = nil end
-	task.spawn(function() pcall(VolDS.SetAsync, VolDS, "Vol_" .. uid, vol) end)
+	if d.volDirty then task.spawn(writeVol, uid, vol) end -- [FIX M2] hanya kalau diubah
 	playerData[p] = nil
 	local prefix = p.UserId .. "_"
 	for k in pairs(rateHits) do
