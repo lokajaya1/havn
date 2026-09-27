@@ -1,6 +1,7 @@
 -- ServerScriptService/MusicServer  (Script)
--- Bootstrap + izin + rate limit + handler aksi + lifecycle player + bulk import.
--- Logika berat ada di dua ModuleScript anak: Library dan Playback.
+-- Bootstrap + handler aksi + lifecycle player. [FIX R5] ModuleScript anak:
+--   Library (library global + My Library), Playback (Sound & antrian),
+--   Live (siaran lintas server), Permissions, RateLimit, Volume.
 --
 -- FIX PENTING:
 --   Actions.ReportDuration dulu memanggil Playback.report(data.id, data.len,
@@ -10,100 +11,20 @@
 
 local Players = game:GetService("Players")
 local RS      = game:GetService("ReplicatedStorage")
-local DSS     = game:GetService("DataStoreService")
-local SSS     = game:GetService("ServerScriptService")
 
 local Shared   = require(RS:WaitForChild("MusicShared"))
 local Library  = require(script:WaitForChild("Library"))
 local Playback = require(script:WaitForChild("Playback"))
 local Live     = require(script:WaitForChild("Live")) -- [FIX L1] siaran live
 
-local VolDS = DSS:GetDataStore("MusicVolume")
+-- ═══ IZIN & RATE LIMIT ════════════════════════════════════════════════════
+local Perm = require(script:WaitForChild("Permissions")) -- [FIX R5]
+local isAdmin, isPremium, isDJ = Perm.isAdmin, Perm.isPremium, Perm.isDJ
+local liveBlocks, skipBlocked, queueLimit = Perm.liveBlocks, Perm.skipBlocked, Perm.queueLimit
 
--- ═══ IZIN ═════════════════════════════════════════════════════════════════
-local RankConfig = (function()
-	local mod = SSS:FindFirstChild("RankConfig")
-	if not mod then return nil end
-	local ok, m = pcall(require, mod)
-	return (ok and type(m) == "table") and m or nil
-end)()
-
-local function isAdmin(p)   return p ~= nil and p:GetAttribute("IsAdmin")   == true end
-local function isPremium(p) return p ~= nil and p:GetAttribute("IsPremium") == true end
-
--- [FIX L1b] DJ = admin ATAU peran di Shared.liveDjRoles. Saat server ini siaran
--- live, hanya DJ yang boleh request lagu dan skip.
-local function isDJ(p)
-	if isAdmin(p) then return true end
-	local role = p and p:GetAttribute("Role")
-	for _, r in ipairs(Shared.liveDjRoles or {}) do
-		if role == r then return true end
-	end
-	return false
-end
--- [FIX M6] Saat live (server ini stasiun ATAU ikut siaran server lain) hanya DJ yang boleh request.
-local function liveBlocks(p) return (Live.isActive() or Live.isFollowing()) and not isDJ(p) end
--- [FIX M6b] Saat live: skip hanya oleh DJ yang menyalakan siaran (admin lain juga dikunci).
-local function skipBlocked(p) return Live.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId()) end
-
-local function queueLimit(p)
-	if isAdmin(p) then return 999 end
-	if RankConfig and RankConfig.GetQueueLimit then
-		return RankConfig.GetQueueLimit(
-			p:GetAttribute("GroupRank") or 0,
-			p:GetAttribute("HasVIPGamepass")  == true,
-			p:GetAttribute("HasVVIPGamepass") == true
-		)
-	end
-	if isPremium(p) then return 3 end
-	if p:GetAttribute("IsVVIP") == true or p:GetAttribute("HasVVIPGamepass") == true then return 2 end
-	return 1
-end
-
--- ═══ RATE LIMIT ═══════════════════════════════════════════════════════════
-local rateHits = {}
-
--- [FIX R4] Satu pembatas untuk semua aksi. everyone = true: admin juga dibatasi
--- (dulu SetLive & RequestState punya tabel jeda sendiri).
-local function checkRate(p, action, cooldown, everyone)
-	if isAdmin(p) and not everyone then return true end
-	local key  = p.UserId .. "_" .. action
-	local now  = os.clock()
-	local last = rateHits[key]
-	if last and (now - last) < cooldown then
-		return false, ("Wait %ds"):format(math.ceil(cooldown - (now - last)))
-	end
-	rateHits[key] = now
-	return true
-end
-
-task.spawn(function()
-	while true do
-		task.wait(300)
-		local now = os.clock()
-		for k, t in pairs(rateHits) do
-			if (now - t) > 120 then rateHits[k] = nil end
-		end
-	end
-end)
-
--- [FIX M3] Angka dari client wajib angka sungguhan: NaN lolos math.clamp.
-local function isNum(v) return type(v) == "number" and v == v end
-
--- [FIX M3] ReportDuration: kuota token per pemain (5 token, terisi 1/dtk).
--- Laporan sah: posisi tiap 3 dtk + durasi sekali + gagal ≤2 → tidak pernah habis.
--- Spam dibuang supaya tidak memicu SongDuration ke semua pemain.
-local reportBucket = {}
-local function allowReport(p)
-	local now = os.clock()
-	local b = reportBucket[p]
-	if not b then b = { tokens = 5, at = now }; reportBucket[p] = b end
-	b.tokens = math.min(5, b.tokens + (now - b.at))
-	b.at = now
-	if b.tokens < 1 then return false end
-	b.tokens -= 1
-	return true
-end
+local Rate   = require(script:WaitForChild("RateLimit"))
+local Volume = require(script:WaitForChild("Volume"))
+local checkRate, isNum, allowReport = Rate.check, Rate.isNum, Rate.allowReport
 
 -- ═══ BOOT ═════════════════════════════════════════════════════════════════
 Library.load()
@@ -131,44 +52,11 @@ Live.onFollow(function(st)
 end)
 
 local playerData = {}
-local volTimers  = {}
-
--- DataStore bisa gagal sesaat walau API Services aktif. Diulang dulu sebelum
--- jatuh ke nilai bawaan, supaya setelan volume pemain tidak "hilang" sendiri.
-local function loadVol(p)
-	local ok, v = Shared.retry(3, function(i) return 0.5 * i end, VolDS.GetAsync, VolDS, "Vol_" .. p.UserId) -- [FIX R4]
-	if ok and type(v) == "number" then return math.clamp(v, 0, 1) end
-	return 0.7
-end
-
--- [FIX M2] Volume hanya disimpan kalau pemain benar-benar menggesernya. Dulu:
--- load gagal → 0.7, lalu saat keluar SELALU SetAsync → setelan asli tertimpa.
-local pendingVol = 0
-
-local function writeVol(uid, vol)
-	pendingVol += 1
-	local ok = Shared.retry(3, function(i) return i end, VolDS.SetAsync, VolDS, "Vol_" .. uid, vol) -- [FIX R4]
-	pendingVol -= 1
-	return ok
-end
 
 local function saveVolDebounced(p)
 	local d = playerData[p]
-	if not d then return end
-	d.volDirty = true
-	if volTimers[p] then task.cancel(volTimers[p]) end
-	volTimers[p] = task.delay(5, function()
-		volTimers[p] = nil
-		local v = d.volume
-		if writeVol(p.UserId, v) and d.volume == v then d.volDirty = false end
-	end)
+	if d then Volume.saveLater(p, d) end
 end
-
-game:BindToClose(function()
-	local t0 = os.clock()
-	while pendingVol > 0 and os.clock() - t0 < 25 do task.wait(0.2) end
-end)
-
 -- Loudness dikirim ke SEMUA player (bukan cuma admin): client butuh nilai
 -- terbaru untuk clone Sound mode darurat.
 local function loudnessPayload()
@@ -575,7 +463,7 @@ local function initPlayer(p)
 	playerData[p] = { volume = 0.7, queueLimit = queueLimit(p) }
 
 	task.spawn(function()
-		local v = loadVol(p)
+		local v = Volume.load(p)
 		if playerData[p] then
 			playerData[p].volume = v
 			Shared.to(p, "VolumeUpdate", v)
@@ -618,18 +506,12 @@ local function cleanupPlayer(p)
 	end
 	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
 	pendingState[p], wantMy[p] = nil, nil -- [FIX R2]
-	reportBucket[p] = nil -- [FIX M3]
+	Rate.forget(p) -- [FIX R5] jeda & kuota laporan
 
 	local d = playerData[p]
 	if not d then return end
-	local uid, vol = p.UserId, d.volume
-	if volTimers[p] then task.cancel(volTimers[p]); volTimers[p] = nil end
-	if d.volDirty then task.spawn(writeVol, uid, vol) end -- [FIX M2] hanya kalau diubah
+	Volume.flush(p, d) -- [FIX M2] ditulis hanya kalau diubah
 	playerData[p] = nil
-	local prefix = p.UserId .. "_"
-	for k in pairs(rateHits) do
-		if k:sub(1, #prefix) == prefix then rateHits[k] = nil end
-	end
 end
 
 Players.PlayerAdded:Connect(initPlayer)
