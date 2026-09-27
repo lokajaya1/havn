@@ -620,6 +620,7 @@ end
 H.GlobalVolumeUpdate = function(data)
 	if not data then return end
 	local pct = math.clamp(data, 0, 1)
+	Audio.setGlobalVolume(pct) -- [FIX M5] pribadi × global
 	ui.globalVolSlider.Size = UDim2.new(pct, 0, 1, 0)
 	ui.globalVolLabel.Text  = "Global " .. math.floor(pct * 100) .. "%"
 end
@@ -645,6 +646,7 @@ end
 H.SpatialSettings = function(data)
 	if not data then return end
 	Audio.setSpatial(data)          -- dipakai salinan lokal agar terdengar sama
+	Audio.setGlobalVolume(data.volume) -- [FIX M5] pemain baru join langsung tahu volume global
 	if not S.isAdmin then return end
 	S.spatial = data
 	ui.minDistInput.Text = tostring(math.floor(data.min  or 10))
