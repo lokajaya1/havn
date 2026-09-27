@@ -81,6 +81,37 @@ function DanceShared.walkSpeedFor(player)
 	return DanceShared.WALKSPEED.default
 end
 
+-- Selama di-carry pose gendong harus menang. Dance TIDAK dihentikan (fase &
+-- sync tetap jalan), hanya bobotnya diturunkan: prioritas sama (Action4)
+-- dicampur menurut bobot, jadi 0,01 ≈ tak terlihat. Terbukti tereplikasi
+-- ke client (uji Studio 2026-09-28).
+DanceShared.CARRY_WEIGHT = 0.01
+DanceShared.WEIGHT_FADE  = 0.2
+
+function DanceShared.danceWeightFor(player)
+	return (player and player:GetAttribute("InCarry") == true) and DanceShared.CARRY_WEIGHT or 1
+end
+
+-- Track dance masih "hidup": sedang main dan tidak sedang memudar karena
+-- Stop (Stop membuat WeightTarget 0; bobot carry 0,01 tetap dianggap hidup).
+function DanceShared.isTrackAlive(track)
+	return track ~= nil and track.IsPlaying and track.WeightTarget > DanceShared.CARRY_WEIGHT / 2
+end
+
+-- Samakan bobot semua track dance yang sedang main dengan status carry pemain.
+function DanceShared.applyDanceWeight(player, fade)
+	local _, animator = DanceShared.getRig(player)
+	if not animator then return end
+	local weight = DanceShared.danceWeightFor(player)
+	for _, track in ipairs(DanceShared.playingDanceTracks(animator)) do
+		-- Hanya kalau berbeda: AdjustWeight(1, 0) pada dance yang baru mulai
+		-- akan memotong fade-in-nya.
+		if track.WeightTarget > 0 and math.abs(track.WeightTarget - weight) > 1e-3 then
+			pcall(function() track:AdjustWeight(weight, fade or 0) end)
+		end
+	end
+end
+
 -- Hentikan semua track dance kecuali `except`.
 function DanceShared.stopDanceTracks(rigPart, except, fade)
 	for _, track in ipairs(DanceShared.playingTracks(rigPart)) do

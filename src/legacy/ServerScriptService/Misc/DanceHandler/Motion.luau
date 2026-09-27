@@ -69,6 +69,7 @@ local function playDirect(player, danceName, speed, fadeIn)
 	if not ok then return false end
 
 	stopDanceTracks(humanoid, track, CONFIG.FADE_OUT)
+	DanceShared.applyDanceWeight(player, 0) -- sedang di-carry → bobot kecil
 	return true
 end
 
@@ -116,6 +117,7 @@ local function playDance(player, danceName, speed, seq)
 
 	s.dance = danceName
 	player:SetAttribute("IsDancing", true)
+	DanceShared.applyDanceWeight(player, 0) -- sedang di-carry → bobot kecil
 	return true
 end
 
@@ -209,7 +211,9 @@ local function startWatch(player, carried)
 			if (player:GetAttribute("InCarry") == true) ~= carried then return end
 
 			local current = states[player.UserId]
-			if not current or current.watchToken ~= token or current.dance ~= danceName then return end
+			if not current or current.watchToken ~= token or not current.dance then return end
+			-- Ganti dance saat digendong: jaga dance yang baru (dulu watchdog berhenti).
+			danceName = current.dance
 
 			local humanoid = getRig(player)
 			if humanoid then

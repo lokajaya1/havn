@@ -149,7 +149,7 @@ end
 local function isDanceAlive(humanoid, danceName)
 	if not danceName then return false end
 	local track = findTrack(humanoid, danceName)
-	return track ~= nil and track.IsPlaying and track.WeightTarget >= 0.5
+	return DanceShared.isTrackAlive(track)
 end
 
 return {
