@@ -60,6 +60,17 @@ local CONFIG = {
 	MAX_TRACKS       = 48,   -- jauh di bawah batas 256 track per Animator
 	REQUEST_COOLDOWN = 0.05, -- anti spam FireServer
 
+	-- Kuota GANTI dance (tiap dance baru = LoadAnimation di server + semua
+	-- client mengunduh animasinya). Ubah speed dance yang sama tidak dihitung.
+	SWITCH_BURST  = 6,
+	SWITCH_REFILL = 3,       -- token per detik
+
+	-- Kuota remote favorit: "load" menjawab dari memori, tambah/hapus
+	-- mengirim ulang seluruh daftar.
+	FAV_LOAD_GAP   = 2,
+	FAV_EDIT_BURST = 10,
+	FAV_EDIT_REFILL = 5,
+
 	WARMUP_DELAY        = 0.4,
 	SERVER_WARMUP_DELAY = 2,
 	-- Nama harus sama persis dengan key di DanceAssets.dances (case-sensitive).
@@ -116,6 +127,8 @@ local function getState(player)
 			writing       = false,
 			watchToken = 0,
 			lastRequest = 0,
+			requestSeq  = 0,     -- permintaan terakhir yang menang (lihat playDance)
+			buckets     = {},
 			initialized = false,
 		}
 		states[userId] = s
@@ -128,7 +141,10 @@ end
 -- ═══════════════════════════════════════════════════════════
 
 local function getRig(player)
-	local s   = getState(player)
+	-- Dipanggil juga dari thread tertunda; pemain yang sudah keluar tidak
+	-- boleh mendapat state baru lagi.
+	local s = states[player.UserId]
+	if not s then return nil, nil end
 	local rig = s.rig
 	if rig and rig.character.Parent and rig.humanoid.Parent and rig.animator.Parent then
 		return rig.humanoid, rig.animator
@@ -167,7 +183,8 @@ local function getTrack(player, danceName)
 	local animationId = DANCES[danceName]
 	if not animationId then return nil end
 
-	local s = getState(player)
+	local s = states[player.UserId]
+	if not s then return nil end
 	s.clock += 1
 
 	local entry = s.tracks[danceName]
@@ -314,7 +331,9 @@ local function playDirect(player, danceName, speed, fadeIn)
 	return true
 end
 
-local function playDance(player, danceName, speed)
+-- seq: nomor permintaan dari remote. Load asset dingin bisa menunggu, jadi
+-- permintaan lama tidak boleh menang atas permintaan yang datang sesudahnya.
+local function playDance(player, danceName, speed, seq)
 	if not DANCES[danceName] then return false end
 
 	local humanoid = getRig(player)
@@ -337,6 +356,7 @@ local function playDance(player, danceName, speed)
 
 	-- Panaskan dulu, jadi helper tidak pernah memutar track dengan Length 0.
 	ensureTrack(player, danceName)
+	if seq and (states[player.UserId] ~= s or s.requestSeq ~= seq) then return false end
 
 	local called, ok = pcall(SmoothDanceHelper.playDance, player, danceName, {
 		fadeIn    = CONFIG.FADE_IN,
@@ -656,6 +676,21 @@ end
 -- REMOTE
 -- ═══════════════════════════════════════════════════════════
 
+-- Token bucket per pemain: `burst` langsung, lalu `refill` per detik.
+local function takeToken(s, key, burst, refill)
+	local now = os.clock()
+	local b = s.buckets[key]
+	if not b then
+		b = { tokens = burst, at = now }
+		s.buckets[key] = b
+	end
+	b.tokens = math.min(burst, b.tokens + (now - b.at) * refill)
+	b.at = now
+	if b.tokens < 1 then return false end
+	b.tokens -= 1
+	return true
+end
+
 local function getRemote(name)
 	local remote = ReplicatedStorage:FindFirstChild(name)
 	if remote then return remote end
@@ -675,30 +710,46 @@ end
 
 danceRemote.OnServerEvent:Connect(function(player, danceName, speed)
 	if danceName ~= nil and type(danceName) ~= "string" then return end
+	if not player.Parent then return end
 
 	local s   = getState(player)
 	local now = os.clock()
 	if now - s.lastRequest < CONFIG.REQUEST_COOLDOWN then return end
-	s.lastRequest = now
 
 	-- Dance manual ditolak saat sync (mirror diurus SyncHandler).
 	-- Dance saat di-carry diizinkan; stop hanya lewat drop-cleanup.
 	if player:GetAttribute("IsSyncing") then return end
 
+	local switching = danceName ~= nil and danceName ~= "" and danceName ~= s.dance
+	if switching then
+		if not DANCES[danceName] then return end
+		if not takeToken(s, "switch", CONFIG.SWITCH_BURST, CONFIG.SWITCH_REFILL) then return end
+	end
+	s.lastRequest = now
+	s.requestSeq += 1
+
 	if not danceName or danceName == "" then
 		stopDance(player)
 	else
-		playDance(player, danceName, speed)
+		playDance(player, danceName, speed, s.requestSeq)
 	end
 end)
 
 favoritesRemote.OnServerEvent:Connect(function(player, action, data)
+	if not player.Parent then return end
 	local s = getState(player)
 
 	if action == "load" then
+		local now = os.clock()
+		if s.lastLoadRequest and now - s.lastLoadRequest < CONFIG.FAV_LOAD_GAP then return end
+		s.lastLoadRequest = now
 		sendFavorites(player, "loaded", loadFavorites(player))
+		return
+	end
+	if action ~= "add" and action ~= "remove" then return end
+	if not takeToken(s, "fav", CONFIG.FAV_EDIT_BURST, CONFIG.FAV_EDIT_REFILL) then return end
 
-	elseif action == "add" and type(data) == "string" and DANCES[data] then
+	if action == "add" and type(data) == "string" and DANCES[data] then
 		if #s.favorites < CONFIG.FAVORITES_LIMIT and not table.find(s.favorites, data) then
 			table.insert(s.favorites, data)
 			notePending(s, data, true)

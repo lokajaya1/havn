@@ -16,6 +16,8 @@ local SPEED_THRESHOLD   = 0.05
 local LEAD_STOP_GRACE   = 0.25
 local TIGHT_SYNC_TIME   = 0.4
 local CARRY_WATCH_INTERVAL = 0.2 -- watchdog jaga mirror hidup selama follower di-carry
+local START_STOP_GAP    = 0.5  -- jeda start/stop sync (remote maupun chat)
+local STATUS_GAP        = 1    -- jeda getSyncStatus
 
 local function getOrCreate(name)
 	local r = ReplicatedStorage:FindFirstChild(name)
@@ -455,15 +457,27 @@ task.spawn(function()
 	end
 end)
 
-local lastSyncAction = {} -- [FIX 2c2] player → os.clock()
-Players.PlayerRemoving:Connect(function(p) lastSyncAction[p] = nil end)
+-- Jeda per pemain per jenis aksi; dipakai remote DAN perintah chat.
+local lastAction = {} -- [player] → { [kind] = os.clock() }
+local function allow(player, kind, gap)
+	local now = os.clock()
+	local slot = lastAction[player]
+	if not slot then
+		slot = {}
+		lastAction[player] = slot
+	end
+	if slot[kind] and now - slot[kind] < gap then return false end
+	slot[kind] = now
+	return true
+end
+Players.PlayerRemoving:Connect(function(p) lastAction[p] = nil end)
 
 SyncRemote.OnServerEvent:Connect(function(player, action, targetName)
 	if type(action) ~= "string" then return end
 	if action == "start" or action == "stop" then
-		local now = os.clock()
-		if lastSyncAction[player] and now - lastSyncAction[player] < 0.5 then return end
-		lastSyncAction[player] = now
+		if not allow(player, "startStop", START_STOP_GAP) then return end
+	elseif action == "getSyncStatus" then
+		if not allow(player, "status", STATUS_GAP) then return end
 	end
 	if action == "getSyncStatus" then
 		local data = syncData[player.UserId]
@@ -512,14 +526,19 @@ local function handleChatCommand(player, message)
 			end
 		end
 
-		if found then startSync(player, found) end
+		if found and allow(player, "startStop", START_STOP_GAP) then startSync(player, found) end
 		return
 	end
 
 	if trimmed == "/unsync" or trimmed == "/stopsync" or trimmed == "/sync stop" then
-		stopSync(player, nil)
+		if allow(player, "startStop", START_STOP_GAP) then stopSync(player, nil) end
 	end
 end
+
+-- Nomor generasi watchdog carry per pemain: InCarry yang berkedip cepat
+-- tidak boleh menjalankan dua loop sekaligus.
+local carryWatch = {}
+Players.PlayerRemoving:Connect(function(p) carryWatch[p.UserId] = nil end)
 
 local function onPlayerAdded(player)
 	player.Chatted:Connect(function(msg)
@@ -541,11 +560,15 @@ local function onPlayerAdded(player)
 	player:GetAttributeChangedSignal("InCarry"):Connect(function()
 		local userId = player.UserId
 
+		carryWatch[userId] = (carryWatch[userId] or 0) + 1
+		local generation = carryWatch[userId]
+
 		if player:GetAttribute("InCarry") then
 			if not syncData[userId] then return end
 			task.spawn(function()
 				task.wait() -- 1 frame biar carry pose/weld settle
-				while player.Parent and player:GetAttribute("InCarry") and syncData[userId] do
+				while player.Parent and player:GetAttribute("InCarry") and syncData[userId]
+					and carryWatch[userId] == generation do
 					ensureMirrorAlive(player)
 					task.wait(CARRY_WATCH_INTERVAL)
 				end
