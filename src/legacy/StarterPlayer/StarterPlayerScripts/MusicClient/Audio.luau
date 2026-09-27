@@ -28,6 +28,11 @@ local ancestryConn, fadeConn
 local lastPath = ""
 local volume   = 0.7     -- volume personal player
 local fade     = 1       -- pengali transisi 0..1, TERPISAH dari volume personal
+-- [FIX M5] Volume global dari admin (Admin Settings → Global). Yang terdengar =
+-- pribadi × global. Dulu nilai server tereplikasi ke Sound dan MENIMPA volume
+-- pribadi semua pemain sampai lagu berganti.
+local globalVol = 1
+local volConn
 local lastSongId
 
 -- ── mencari Sound ─────────────────────────────────────────────────────────
@@ -52,11 +57,18 @@ function Audio.getVolume() return volume end
 
 function Audio.apply()
 	if not current or not current.Parent then return end
-	pcall(function() current.Volume = volume * fade end)
+	pcall(function() current.Volume = volume * fade * globalVol end) -- [FIX M5]
 end
 
 function Audio.setVolume(v)
 	volume = math.clamp(v or 0, 0, 1)
+	Audio.apply()
+end
+
+-- [FIX M5]
+function Audio.setGlobalVolume(v)
+	if type(v) ~= "number" or v ~= v then return end
+	globalVol = math.clamp(v, 0, 1)
 	Audio.apply()
 end
 
@@ -115,8 +127,20 @@ local function resolvePath(path)
 	return found
 end
 
+-- [FIX M5] Server mengubah Sound.Volume (volume global) → nilai itu tereplikasi
+-- dan menimpa nilai lokal. Begitu terjadi, volume pribadi × global dipasang lagi.
+local function watchVolume()
+	if volConn then volConn:Disconnect(); volConn = nil end
+	local snd = current
+	if not snd then return end
+	volConn = snd:GetPropertyChangedSignal("Volume"):Connect(function()
+		if current ~= snd then return end
+		if math.abs(snd.Volume - volume * fade * globalVol) > 1e-3 then Audio.apply() end
+	end)
+end
 local function bindAncestry()
 	if ancestryConn then ancestryConn:Disconnect(); ancestryConn = nil end
+	watchVolume() -- [FIX M5]
 	if not current then return end
 	ancestryConn = current.AncestryChanged:Connect(function()
 		if current and current.Parent then return end
@@ -339,6 +363,7 @@ end
 
 function Audio.cleanup()
 	if ancestryConn then ancestryConn:Disconnect(); ancestryConn = nil end
+	if volConn     then volConn:Disconnect();     volConn = nil end -- [FIX M5]
 	if fadeConn     then fadeConn:Disconnect();     fadeConn = nil end
 	for _, c in ipairs(SoundService:GetChildren()) do
 		if c:IsA("Sound") and c:GetAttribute("LocalResync") then
