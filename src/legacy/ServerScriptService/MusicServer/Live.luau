@@ -1,5 +1,5 @@
 -- MusicServer/Live  (ModuleScript)
--- [FIX L1] SIARAN LIVE — sisi DJ (stasiun).
+-- SIARAN LIVE — sisi DJ (stasiun).
 -- Satu server bisa menjadi stasiun: lagu yang diputar di server ini dicatat di
 -- MemoryStore (sumber kebenaran, dengan lease) dan diumumkan lewat
 -- MessagingService. Hanya SATU siaran dalam satu waktu. Kalau server stasiun
@@ -8,7 +8,7 @@
 
 local MSS = game:GetService("MemoryStoreService")
 local Msg = game:GetService("MessagingService")
-local Shared = require(game:GetService("ReplicatedStorage"):WaitForChild("MusicShared")) -- [FIX R7]
+local Shared = require(game:GetService("ReplicatedStorage"):WaitForChild("MusicShared"))
 
 local Live = {}
 
@@ -20,7 +20,7 @@ local RENEW    = Shared.live.renew
 local MAX_MISS = Shared.live.maxMiss
 
 local map   = MSS:GetHashMap(MAP_NAME)
-local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. game:GetService("HttpService"):GenerateGUID(false)) -- [FIX L1c] unik tiap sesi Studio
+local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. game:GetService("HttpService"):GenerateGUID(false)) -- unik tiap sesi Studio
 
 local active = false
 local djName, djId
@@ -40,7 +40,7 @@ local function slim(song)
 	}
 end
 
--- [FIX L3] SERAH TERIMA: DJ yang sedang live pindah server lewat Server List.
+-- SERAH TERIMA: DJ yang sedang live pindah server lewat Server List.
 -- Server lama tetap menyiarkan maks HANDOVER_SEC dtk dan menandai status
 -- "handoverTo = UserId DJ"; server baru yang dimasuki DJ itu boleh mengambil alih.
 local HANDOVER_SEC = Shared.live.handover
@@ -48,7 +48,7 @@ local handingOver, handoverUid = false, nil
 local function buildState()
 	return {
 		jobId = jobId, dj = djName, djId = djId, ver = ver,
-		handoverTo = handingOver and handoverUid or nil, -- [FIX L3]
+		handoverTo = handingOver and handoverUid or nil,
 		song = current and current.song or nil,
 		startedAtMs = current and current.startedAtMs or nil,
 	}
@@ -56,7 +56,7 @@ end
 
 -- Tulis status kalau kunci kosong/kedaluwarsa atau milik server ini.
 -- Hasil: true | false, namaDjLain | false, nil, galat
-local function claim(takeoverUid) -- [FIX L3] takeoverUid: ambil alih siaran yang diserahkan
+local function claim(takeoverUid) -- takeoverUid: ambil alih siaran yang diserahkan
 	local busyBy
 	local ok, res = pcall(function()
 		return map:UpdateAsync(KEY, function(old)
@@ -88,12 +88,12 @@ local function changed()
 	for _, fn in ipairs(listeners) do task.spawn(fn, st) end
 end
 
--- [FIX L2] SISI PENDENGAR. Server yang tidak siaran membaca status di MemoryStore
+-- SISI PENDENGAR. Server yang tidak siaran membaca status di MemoryStore
 -- (saat ada pesan + tiap POLL detik). Ada siaran milik server lain → ikut;
 -- status hilang (DJ berhenti / lease habis) → kembali ke musik server ini.
 local POLL = Shared.live.poll
 local following, followKey, followDj = false, nil, nil
-local followDjId -- [FIX M6b]
+local followDjId
 local followFns = {}   -- fn(state) ikut lagu siaran | fn(nil) berhenti ikut
 
 function Live.isFollowing() return following end
@@ -109,7 +109,7 @@ local function syncFollower()
 		followKey = key
 		local first = not following
 		following, followDj = true, st.dj
-		followDjId = st.djId -- [FIX M6b]
+		followDjId = st.djId
 		local lag = st.startedAtMs and (nowMs() - st.startedAtMs) or 0
 		print(("[Live] ikut siaran DJ %s | lagu %s | mulai di detik %.1f")
 			:format(tostring(st.dj), tostring(st.song and st.song.Name), lag / 1000))
@@ -124,13 +124,13 @@ local function syncFollower()
 end
 Live.syncNow = syncFollower
 
-function Live.state() -- [FIX L2] + following
+function Live.state() -- + following
 	return { active = active, dj = active and djName or followDj, here = active, following = following,
-		djId = active and djId or (following and followDjId or nil) } -- [FIX M6b]
+		djId = active and djId or (following and followDjId or nil) }
 end
 
 function Live.isActive() return active end
-function Live.djId() return active and djId or nil end -- [FIX M6b]
+function Live.djId() return active and djId or nil end
 function Live.onChange(fn) table.insert(listeners, fn) end
 function Live.onRemote(fn) table.insert(remoteFns, fn) end
 
@@ -143,7 +143,7 @@ local function setCurrent(song, elapsed)
 end
 
 -- YIELDS. Mulai siaran dari server ini.
-function Live.start(p, song, elapsed, takeover) -- [FIX L3] takeover
+function Live.start(p, song, elapsed, takeover) -- takeover
 	if active then return false, "Live is already running on this server" end
 	djName, djId = p.Name, p.UserId
 	setCurrent(song, elapsed)
@@ -191,7 +191,7 @@ end
 function Live.stop(reason, skipRemove)
 	if not active then return end
 	active = false
-	handingOver, handoverUid = false, nil -- [FIX L3]
+	handingOver, handoverUid = false, nil
 	ver += 1
 	if not skipRemove then
 		local ok, old = pcall(map.GetAsync, map, KEY)
@@ -218,12 +218,12 @@ end
 
 function Live.playerLeft(p)
 	if active and p.UserId == djId then
-		if handingOver and handoverUid == p.UserId then return end -- [FIX L3] sedang serah terima
+		if handingOver and handoverUid == p.UserId then return end -- sedang serah terima
 		task.spawn(Live.stop, "DJ keluar")
 	end
 end
 
--- [FIX L3] Dipanggil ServerList sebelum teleport. true = serah terima dimulai.
+-- Dipanggil ServerList sebelum teleport. true = serah terima dimulai.
 function Live.handover(p)
 	if not active or p.UserId ~= djId then return false end
 	handingOver, handoverUid = true, p.UserId
@@ -241,7 +241,7 @@ function Live.handover(p)
 	return true
 end
 
--- [FIX L3] Teleport gagal → siaran lanjut normal di server ini.
+-- Teleport gagal → siaran lanjut normal di server ini.
 function Live.cancelHandover(p)
 	if not handingOver or (p and p.UserId ~= handoverUid) then return end
 	handingOver, handoverUid = false, nil
@@ -250,7 +250,7 @@ function Live.cancelHandover(p)
 	print("[Live] serah terima dibatalkan (teleport gagal)")
 end
 
--- [FIX L3] YIELDS. Server baru: apakah siaran sedang diserahkan ke pemain ini?
+-- YIELDS. Server baru: apakah siaran sedang diserahkan ke pemain ini?
 function Live.handoverFor(uid)
 	if active then return false end
 	local ok, st = pcall(map.GetAsync, map, KEY)
@@ -271,13 +271,13 @@ task.spawn(function()
 			print(("[Live] pesan '%s' dari server %s (DJ %s) | selisih jam+latensi %d ms")
 				:format(tostring(d.type), string.sub(tostring(d.jobId), 1, 8), tostring(d.dj), lag))
 			for _, fn in ipairs(remoteFns) do task.spawn(fn, d) end
-			task.spawn(syncFollower) -- [FIX L2]
+			task.spawn(syncFollower)
 		end)
 	end)
 	if not ok then warn("[Live] SubscribeAsync gagal:", err) end
 end)
 
--- [FIX L2] Cadangan pesan yang hilang + server baru yang lahir di tengah siaran.
+-- Cadangan pesan yang hilang + server baru yang lahir di tengah siaran.
 task.spawn(function()
 	task.wait(3)
 	while true do

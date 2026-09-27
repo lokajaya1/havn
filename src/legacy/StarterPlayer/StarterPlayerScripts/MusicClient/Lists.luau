@@ -33,7 +33,7 @@ function L.init(ctx)
 end
 
 -- ══ THUMBNAIL ═════════════════════════════════════════════════════════════
-local MAX_QUEUE   = Shared.thumbQueueMax -- [FIX R7]
+local MAX_QUEUE   = Shared.thumbQueueMax
 local NEG_TTL     = Shared.thumbFailTTL -- kegagalan hanya di-cache sebentar, lalu dicoba lagi
 local tCache, tQueue, tRunning = {}, {}, false
 
@@ -54,7 +54,7 @@ local function cacheSet(rawId, img)
 	tCache[rawId] = { img = img, at = os.clock() }
 end
 
--- [FIX R6] Info aset (jaga jarak 0.15 dtk + ulang 3x) & URL thumbnail kreator
+-- Info aset (jaga jarak 0.15 dtk + ulang 3x) & URL thumbnail kreator
 -- memakai helper MusicShared yang sama dengan server.
 local function resolve(rawId)
 	local num = tonumber(rawId)
@@ -161,7 +161,7 @@ local function paintQueueBtn(songId, btn)
 	elseif status == "diAntrian" then
 		btn.BackgroundColor3 = C.inQueue; btn.TextColor3 = C.white
 		btn.Text = "✓"; btn.TextSize = 12
-	elseif S.liveLocked then -- [FIX M6] live: request dikunci
+	elseif S.liveLocked then -- live: request dikunci
 		btn.BackgroundColor3 = C.bgLight; btn.TextColor3 = C.muted
 		btn.Text = "▶"; btn.TextSize = 10
 	else
@@ -195,7 +195,7 @@ function L.repaintFavBtns()
 	end
 end
 
--- [FIX R6] ID angka lagu: Shared.rawId (dulu UI.extractId).
+-- ID angka lagu: Shared.rawId (dulu UI.extractId).
 -- ══ ITEM LIBRARY ══════════════════════════════════════════════════════════
 -- mineView = true -> item berasal dari "My Library"
 local function libItem(song, parent, lo, mineView)
@@ -299,13 +299,13 @@ local function libItem(song, parent, lo, mineView)
 				UI.notify("Already playing", C.playing, 2); return
 			elseif status == "diAntrian" then
 				UI.notify("Already in the queue", C.inQueue, 2); return
-			elseif S.liveLocked then -- [FIX M6]
+			elseif S.liveLocked then
 				UI.notify("Live: song requests are paused", C.danger, 2); return
 			end
 			remote:FireServer("AddToQueue", song.Id)
 		end)
 		qBtn.MouseEnter:Connect(function()
-			if not (S.queueIds or {})[song.Id] and not S.liveLocked then tws(qBtn, { BackgroundColor3 = C.accentDk }) end -- [FIX M6]
+			if not (S.queueIds or {})[song.Id] and not S.liveLocked then tws(qBtn, { BackgroundColor3 = C.accentDk }) end
 		end)
 		qBtn.MouseLeave:Connect(function()
 			if not (S.queueIds or {})[song.Id] then paintQueueBtn(song.Id, qBtn) end
@@ -338,7 +338,7 @@ local function libItem(song, parent, lo, mineView)
 	end
 end
 
--- [FIX R3] RENDER BERTAHAP. Dulu semua baris dibuat dalam satu frame: cari "a"
+-- RENDER BERTAHAP. Dulu semua baris dibuat dalam satu frame: cari "a"
 -- = ±500 baris x ±14 instance sekaligus → HP patah-patah. Sekarang BATCH baris
 -- pertama langsung, sisanya BATCH per frame. Render baru (ketik lagi, ganti tab,
 -- library ter-update) membatalkan sisa render lama lewat renderGen.
@@ -360,7 +360,7 @@ end
 
 -- ══ SEKSI KREATOR (accordion) ═════════════════════════════════════════════
 local sections = {}
--- [FIX R3] Grup yang sedang dibuka diingat, jadi tetap terbuka saat library
+-- Grup yang sedang dibuka diingat, jadi tetap terbuka saat library
 -- ter-update (dulu setiap tambah/hapus lagu menutup semua grup).
 local openCreator = nil
 
@@ -437,7 +437,7 @@ local function creatorSection(group, parent, lo)
 		isOpen = open
 		if open and not rendered then
 			rendered = true
-			renderRows(songs, songList, false) -- [FIX R3]
+			renderRows(songs, songList, false)
 		end
 		arrow.Text  = open and "▲" or "▼"
 		local bg    = open and C.bgLight or C.bgCard
@@ -457,7 +457,7 @@ local function creatorSection(group, parent, lo)
 
 	header.MouseButton1Click:Connect(function()
 		local willOpen = not isOpen
-		openCreator = willOpen and creator or nil -- [FIX R3]
+		openCreator = willOpen and creator or nil
 		if willOpen then
 			for key, ctrl in pairs(sections) do
 				if key ~= creator then ctrl(false, true) end
@@ -467,7 +467,7 @@ local function creatorSection(group, parent, lo)
 	end)
 
 	UI.hover(header, C.bgCard, C.bgLight)
-	if openCreator == creator then setOpen(true, false) end -- [FIX R3]
+	if openCreator == creator then setOpen(true, false) end
 end
 
 -- ══ UPDATE VIEW ═══════════════════════════════════════════════════════════
@@ -489,7 +489,7 @@ function L.refreshLib()
 	local isSearch  = q ~= ""
 	local mineView  = (S.libView == "mine")
 
-	renderGen += 1 -- [FIX R3] hentikan sisa render sebelumnya
+	renderGen += 1 -- hentikan sisa render sebelumnya
 	sections  = {}
 	S.libBtns = {}
 	S.favBtns = {}
@@ -544,7 +544,7 @@ function L.updateQueue(songs)
 
 	local max = (S.queueLimit and S.queueLimit.max) or Shared.maxGlobalQueue
 	local n   = #songs
-	ui.queueLabel.Text = ("QUEUE (%d/%d)"):format(n, max) .. (S.liveAny and "  ·  LIVE" or "") -- [FIX M6] [FIX M6b]
+	ui.queueLabel.Text = ("QUEUE (%d/%d)"):format(n, max) .. (S.liveAny and "  ·  LIVE" or "")
 	ui.queueLabel.TextColor3 =
 		n >= max * 0.8 and C.danger or n >= max * 0.6 and C.accent or C.white
 
@@ -572,7 +572,7 @@ function L.updateQueue(songs)
 
 		-- Admin ATAU pemilik antrian boleh menghapus.
 		local canRemove = (S.isAdmin == true) or (song.RequesterId == player.UserId)
-			or (S.liveOn == true and S.liveDjId == player.UserId) -- [FIX M6c] DJ live kelola antrian
+			or (S.liveOn == true and S.liveDjId == player.UserId) -- DJ live kelola antrian
 		local nameW = canRemove and -108 or -74
 
 		w.text({ Size = UDim2.new(1, nameW, 0, 13), Position = UDim2.new(0, 72, 0, 3),
@@ -580,7 +580,7 @@ function L.updateQueue(songs)
 			TextColor3 = C.white, TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd, Parent = ct })
 		w.text({ Size = UDim2.new(1, nameW, 0, 10), Position = UDim2.new(0, 72, 0, 18),
-			Text = "by " .. (song.Requester or "?") .. ((S.liveAny and (S.liveFollow or song.RequesterId ~= S.liveDjId)) and "  ·  ON HOLD" or ""), TextSize = 8, -- [FIX M6b]
+			Text = "by " .. (song.Requester or "?") .. ((S.liveAny and (S.liveFollow or song.RequesterId ~= S.liveDjId)) and "  ·  ON HOLD" or ""), TextSize = 8,
 			TextColor3 = C.muted, TextXAlignment = Enum.TextXAlignment.Left, Parent = ct })
 
 		if canRemove then
@@ -604,7 +604,7 @@ end
 
 function L.reset()
 	sections = {}
-	openCreator = nil -- [FIX R3]
+	openCreator = nil
 	renderGen += 1
 	UI.stopAllMarquees()
 	L.resetThumbs()

@@ -1,4 +1,4 @@
--- MusicServer/Volume  (ModuleScript)  [FIX R5] dipindah dari init.server
+-- MusicServer/Volume  (ModuleScript)  dipindah dari init.server
 -- Volume pribadi pemain. Store & kunci TETAP: MusicVolume / "Vol_<UserId>".
 
 local DSS = game:GetService("DataStoreService")
@@ -13,18 +13,18 @@ local timers = {}
 -- DataStore bisa gagal sesaat walau API Services aktif. Diulang dulu sebelum
 -- jatuh ke nilai bawaan, supaya setelan volume pemain tidak "hilang" sendiri.
 function Volume.load(p)
-	local ok, v = Shared.retry(3, function(i) return 0.5 * i end, VolDS.GetAsync, VolDS, "Vol_" .. p.UserId) -- [FIX R4]
+	local ok, v = Shared.retry(3, function(i) return 0.5 * i end, VolDS.GetAsync, VolDS, "Vol_" .. p.UserId)
 	if ok and type(v) == "number" then return math.clamp(v, 0, 1) end
 	return 0.7
 end
 
--- [FIX M2] Volume hanya disimpan kalau pemain benar-benar menggesernya. Dulu:
+-- Volume hanya disimpan kalau pemain benar-benar menggesernya. Dulu:
 -- load gagal → 0.7, lalu saat keluar SELALU SetAsync → setelan asli tertimpa.
 local pendingVol = 0
 
 local function writeVol(uid, vol)
 	pendingVol += 1
-	local ok = Shared.retry(3, function(i) return i end, VolDS.SetAsync, VolDS, "Vol_" .. uid, vol) -- [FIX R4]
+	local ok = Shared.retry(3, function(i) return i end, VolDS.SetAsync, VolDS, "Vol_" .. uid, vol)
 	pendingVol -= 1
 	return ok
 end
@@ -43,7 +43,7 @@ end
 -- Pemain keluar: batalkan timer, tulis sekarang hanya kalau memang diubah.
 function Volume.flush(p, d)
 	if timers[p] then task.cancel(timers[p]); timers[p] = nil end
-	if d.volDirty then task.spawn(writeVol, p.UserId, d.volume) end -- [FIX M2]
+	if d.volDirty then task.spawn(writeVol, p.UserId, d.volume) end
 end
 
 game:BindToClose(function()

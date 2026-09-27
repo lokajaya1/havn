@@ -1,4 +1,4 @@
--- MusicServer/QueueActions  (ModuleScript)  [FIX R5c] dipindah dari init.server
+-- MusicServer/QueueActions  (ModuleScript)  dipindah dari init.server
 -- Aksi remote antrian, skip, dan siaran live. init.server menggabungkan
 -- `handlers` ke tabel Actions-nya dan memberi tabel data pemain lewat bind().
 
@@ -19,7 +19,7 @@ local playerData = {} -- diganti tabel milik init.server lewat M.bind()
 -- ── ANTRIAN ───────────────────────────────────────────────────────────────
 local function addToQueue(p, songId)
 	if not songId then return end
-	if liveBlocks(p) then return Shared.to(p, "QueueError", "Live: song requests are paused") end -- [FIX L1b] [FIX M6]
+	if liveBlocks(p) then return Shared.to(p, "QueueError", "Live: song requests are paused") end
 
 	local ok, msg = checkRate(p, "AddQueue", Shared.addQueueCooldown)
 	if not ok then return Shared.to(p, "QueueError", msg) end
@@ -52,10 +52,10 @@ local function addToQueue(p, songId)
 			("Your queue limit is %d (currently %d)"):format(limit, myCount))
 	end
 
-	local entry = Playback.entry(song, p.Name, p.UserId) -- [FIX R4]
+	local entry = Playback.entry(song, p.Name, p.UserId)
 
-	local held = Playback.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId()) -- [FIX M6b]
-	if not Playback.isPlaying() and not held then -- [FIX L2] saat ikut siaran: masuk antrian lokal
+	local held = Playback.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId())
+	if not Playback.isPlaying() and not held then -- saat ikut siaran: masuk antrian lokal
 		Playback.play(entry)
 		Playback.broadcastQueue()
 		Playback.broadcastIds()
@@ -65,17 +65,17 @@ local function addToQueue(p, songId)
 	Playback.enqueue(entry, isPremium(p), isPremium)
 	Playback.broadcastQueue()
 	Playback.broadcastIds()
-	if held then Shared.to(p, "QueueRemoveSuccess", "Queued - on hold until the live ends") end -- [FIX M6b]
+	if held then Shared.to(p, "QueueRemoveSuccess", "Queued - on hold until the live ends") end
 end
 
 local function removeFromQueue(p, data)
 	local idx = type(data) == "table" and data.index or data
 	local id  = type(data) == "table" and data.id or nil
-	local okRate, msg = checkRate(p, "RemoveQueue", Shared.removeQueueCooldown) -- [FIX M3]
+	local okRate, msg = checkRate(p, "RemoveQueue", Shared.removeQueueCooldown)
 	if not okRate then return Shared.to(p, "QueueError", msg) end
 	if type(idx) == "number" and idx ~= idx then return Shared.to(p, "QueueError", "Invalid index") end
 
-	-- Non-admin boleh menghapus antrian miliknya sendiri; DJ yang sedang live boleh menghapus semua. [FIX M6c]
+	-- Non-admin boleh menghapus antrian miliknya sendiri; DJ yang sedang live boleh menghapus semua.
 	if not isAdmin(p) and not (Live.isActive() and p.UserId == Live.djId()) then
 		local q, target = Playback.queue(), nil
 		if id then
@@ -104,25 +104,25 @@ local function removeFromQueue(p, data)
 end
 
 local function forceSkip(p)
-	if not (isAdmin(p) or (Live.isActive() and isDJ(p))) then return Shared.to(p, "SkipError", "Admin only!") end -- [FIX L1b] DJ saat live
-	if Live.isActive() and p.UserId ~= Live.djId() then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX M6b]
-	if Live.isFollowing() then return Shared.to(p, "SkipError", "Live: controlled by the DJ on another server") end -- [FIX L2]
+	if not (isAdmin(p) or (Live.isActive() and isDJ(p))) then return Shared.to(p, "SkipError", "Admin only!") end -- DJ saat live
+	if Live.isActive() and p.UserId ~= Live.djId() then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end
+	if Live.isFollowing() then return Shared.to(p, "SkipError", "Live: controlled by the DJ on another server") end
 	Playback.resetVotes()
 	Shared.all("AdminSkipped", p.Name)
 	Playback.skip()
 end
 
 local function voteSkip(p)
-	if skipBlocked(p) then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX L1b] [FIX L2]
-	local okRate, msg = checkRate(p, "VoteSkip", Shared.voteSkipCooldown) -- [FIX M3]
+	if skipBlocked(p) then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end
+	local okRate, msg = checkRate(p, "VoteSkip", Shared.voteSkipCooldown)
 	if not okRate then return Shared.to(p, "SkipError", msg) end
 	Playback.voteSkip(p)
 end
 
-local function setLive(p, on) -- [FIX L1] DJ, jeda 2 dtk
-	if not isDJ(p) then return Shared.to(p, "SettingsError", "DJ only!") end -- [FIX L1b]
+local function setLive(p, on) -- DJ, jeda 2 dtk
+	if not isDJ(p) then return Shared.to(p, "SettingsError", "DJ only!") end
 	if type(on) ~= "boolean" then return end
-	local okRate, msg = checkRate(p, "Live", Shared.liveToggleCooldown, true) -- [FIX R4] [FIX R7]
+	local okRate, msg = checkRate(p, "Live", Shared.liveToggleCooldown, true)
 	if not okRate then return Shared.to(p, "SettingsError", msg) end
 	task.spawn(function()
 		if on then

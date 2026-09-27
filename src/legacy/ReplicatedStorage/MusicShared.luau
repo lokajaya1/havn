@@ -27,7 +27,7 @@ M.addQueueCooldown = 2
 M.favCooldown      = 0.4
 M.nameCacheTTL     = 3600
 M.defaultVolume    = 1.0
--- [FIX R7] Angka setelan yang dulu tersebar di tiap modul (nilainya TIDAK diubah).
+-- Angka setelan yang dulu tersebar di tiap modul (nilainya TIDAK diubah).
 -- Jeda aksi remote per pemain (detik). Admin bebas, kecuali live & state.
 M.voteSkipCooldown    = 1
 M.removeQueueCooldown = 0.5
@@ -78,10 +78,10 @@ M.maxLoadRetry = 2
 M.fadeIn  = 0.55
 M.fadeOut = 0.45
 
--- [FIX L1b] Peran (atribut Role dari UnifiedRankManager) yang boleh jadi DJ siaran
+-- Peran (atribut Role dari UnifiedRankManager) yang boleh jadi DJ siaran
 -- live, selain admin. Tambah nama peran di sini kalau perlu.
 M.liveDjRoles = { "DJGANTENG" }
-M.spatial = { min = 10, max = 500, size = 100, volume = 1.0, mode = "global", autoplay = true } -- [FIX A1] autoplay: antrian kosong → lagu acak
+M.spatial = { min = 10, max = 500, size = 100, volume = 1.0, mode = "global", autoplay = true } -- autoplay: antrian kosong → lagu acak
 
 M.loudness = {
 	enabled        = true,
@@ -105,7 +105,7 @@ function M.assetId(v)
 	return raw and ("rbxassetid://" .. raw) or nil
 end
 
--- ── helper umum ── [FIX R4] ──────────────────────────────────────────────
+-- ── helper umum ───────────────────────────────────────────────
 -- Dulu ada 7 loop "coba 3x" yang ditulis ulang, plus info aset & URL
 -- thumbnail kreator yang disalin di server Library dan client Lists.
 
@@ -150,7 +150,7 @@ function M.productInfo(num)
 	end)
 	return ok and info or nil
 end
--- ── sinkron library global ── [FIX R1] ───────────────────────────────────
+-- ── sinkron library global ────────────────────────────────────
 -- Daftar lengkap dikirim SEKALI per pemain: "SharedLibrary" { ver, full }.
 -- Perubahan berikutnya hanya delta kecil: "LibDelta" { base, ver, set, del }.
 -- Yang dikirim hanya field yang dipakai client (field internal server tidak).

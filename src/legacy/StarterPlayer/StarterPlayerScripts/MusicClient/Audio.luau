@@ -28,7 +28,7 @@ local ancestryConn, fadeConn
 local lastPath = ""
 local volume   = 0.7     -- volume personal player
 local fade     = 1       -- pengali transisi 0..1, TERPISAH dari volume personal
--- [FIX M5] Volume global dari admin (Admin Settings → Global). Yang terdengar =
+-- Volume global dari admin (Admin Settings → Global). Yang terdengar =
 -- pribadi × global. Dulu nilai server tereplikasi ke Sound dan MENIMPA volume
 -- pribadi semua pemain sampai lagu berganti.
 local globalVol = 1
@@ -57,7 +57,7 @@ function Audio.getVolume() return volume end
 
 function Audio.apply()
 	if not current or not current.Parent then return end
-	pcall(function() current.Volume = volume * fade * globalVol end) -- [FIX M5]
+	pcall(function() current.Volume = volume * fade * globalVol end)
 end
 
 function Audio.setVolume(v)
@@ -65,14 +65,13 @@ function Audio.setVolume(v)
 	Audio.apply()
 end
 
--- [FIX M5]
 function Audio.setGlobalVolume(v)
 	if type(v) ~= "number" or v ~= v then return end
 	globalVol = math.clamp(v, 0, 1)
 	Audio.apply()
 end
 
--- [FIX M7] Dipakai penyembuh otomatis di init.client.
+-- Dipakai penyembuh otomatis di init.client.
 function Audio.getFade() return fade end
 function Audio.isFading() return fadeConn ~= nil end
 -- ── fade halus (smoothstep) ───────────────────────────────────────────────
@@ -130,7 +129,7 @@ local function resolvePath(path)
 	return found
 end
 
--- [FIX M5] Server mengubah Sound.Volume (volume global) → nilai itu tereplikasi
+-- Server mengubah Sound.Volume (volume global) → nilai itu tereplikasi
 -- dan menimpa nilai lokal. Begitu terjadi, volume pribadi × global dipasang lagi.
 local function watchVolume()
 	if volConn then volConn:Disconnect(); volConn = nil end
@@ -143,7 +142,7 @@ local function watchVolume()
 end
 local function bindAncestry()
 	if ancestryConn then ancestryConn:Disconnect(); ancestryConn = nil end
-	watchVolume() -- [FIX M5]
+	watchVolume()
 	if not current then return end
 	ancestryConn = current.AncestryChanged:Connect(function()
 		if current and current.Parent then return end
@@ -189,7 +188,7 @@ end
 
 function Audio.emergencySoundId()
 	if not current then return nil end
-	return Shared.rawId(current.SoundId) -- [FIX R6]
+	return Shared.rawId(current.SoundId)
 end
 
 -- ── penempatan salinan lokal ──────────────────────────────────────────────
@@ -270,8 +269,8 @@ function Audio.probe(rawId)
 end
 
 -- ── mode darurat / penyelamat otomatis ────────────────────────────────────
-function Audio.hardResync(data, auto, quiet) -- [FIX M7] quiet: tanpa notifikasi (penyembuh otomatis)
-	local id = data and Shared.rawId(data.Id) -- [FIX R6]
+function Audio.hardResync(data, auto, quiet) -- quiet: tanpa notifikasi (penyembuh otomatis)
+	local id = data and Shared.rawId(data.Id)
 	if not id then
 		if not auto then UI.notify("No song to reload", UI.C.danger, 2) end
 		return false
@@ -342,12 +341,12 @@ function Audio.hardResync(data, auto, quiet) -- [FIX M7] quiet: tanpa notifikasi
 		if current ~= s or not s.Parent then return end
 		local okRead, loaded, len = pcall(function() return s.IsLoaded, s.TimeLength end)
 		if okRead and (loaded == true or (len and len > 0)) then return end
-		if not quiet then UI.notify("Audio unavailable on your device", UI.C.danger, 3) end -- [FIX M7]
+		if not quiet then UI.notify("Audio unavailable on your device", UI.C.danger, 3) end
 		Audio.track(lastPath)
 	end)
 
 	-- selene: allow(empty_if)
-	if quiet then -- [FIX M7]
+	if quiet then
 	elseif auto then
 		UI.notify("Playing locally", UI.C.accent, 2)
 	else
@@ -368,7 +367,7 @@ end
 
 function Audio.cleanup()
 	if ancestryConn then ancestryConn:Disconnect(); ancestryConn = nil end
-	if volConn     then volConn:Disconnect();     volConn = nil end -- [FIX M5]
+	if volConn     then volConn:Disconnect();     volConn = nil end
 	if fadeConn     then fadeConn:Disconnect();     fadeConn = nil end
 	for _, c in ipairs(SoundService:GetChildren()) do
 		if c:IsA("Sound") and c:GetAttribute("LocalResync") then

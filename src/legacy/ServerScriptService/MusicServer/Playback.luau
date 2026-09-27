@@ -37,7 +37,7 @@ local FADE_OUT      = num("fadeOut",       1, 0)
 local MIN_PLAY_TIME = num("minPlayTime",   8, 3)
 local MAX_RETRY     = num("maxLoadRetry",  2, 0)
 
-local PROGRESS_TTL = Shared.progressTTL -- [FIX R7] angka di MusicShared
+local PROGRESS_TTL = Shared.progressTTL -- angka di MusicShared
 local HARD_TIMEOUT = Shared.hardTimeout
 local TICK         = 0.5
 local MAX_DUR      = Shared.maxDuration
@@ -118,7 +118,7 @@ local function clientDuration()
 	for _, len in pairs(repLen) do table.insert(vals, len) end
 	if #vals == 0 then return 0 end
 	table.sort(vals)
-	-- [FIX 2c2] median ATAS: dengan 2 pelapor, satu laporan pendek palsu tidak bisa memaksa skip
+	-- median ATAS: dengan 2 pelapor, satu laporan pendek palsu tidak bisa memaksa skip
 	return vals[math.floor(#vals / 2) + 1]
 end
 
@@ -194,7 +194,7 @@ function P.removeFromQueue(idx, expectId)
 	return table.remove(queue, idx)
 end
 
--- [FIX M6] Pemain keluar → lagu yang ia antrekan (belum diputar) ikut dihapus.
+-- Pemain keluar → lagu yang ia antrekan (belum diputar) ikut dihapus.
 -- Lagu yang SEDANG diputar dibiarkan selesai. Mengembalikan jumlah yang dihapus.
 function P.removeQueueByRequester(userId)
 	local n = 0
@@ -360,7 +360,7 @@ function P.report(player, data)
 	local uid = (typeof(player) == "Instance" and player.UserId) or 0
 	local el  = os.clock() - startClock
 
-	-- [FIX 2c2] abaikan durasi yang jauh lebih pendek dari durasi yang diketahui server
+	-- abaikan durasi yang jauh lebih pendek dari durasi yang diketahui server
 	if type(data.len) == "number" and data.len > 1 and data.len < MAX_DUR
 		and not (serverDur > 1 and data.len < serverDur - 2) then
 		repLen[uid] = data.len
@@ -382,7 +382,7 @@ function P.report(player, data)
 	if data.failed == true then repFail[uid] = true end
 end
 
--- [FIX R4] Satu-satunya cara memulai Sound (dulu disalin di play, retry, follow).
+-- Satu-satunya cara memulai Sound (dulu disalin di play, retry, follow).
 local function startSound(id, offset)
 	return pcall(function()
 		sound:Stop()
@@ -413,14 +413,14 @@ local function replayCurrent(tk)
 	if tk ~= token or not nowPlaying then return end
 	local id = normalizeId(nowPlaying.Id)
 	if not id then return end
-	startSound(id) -- [FIX R4]
+	startSound(id)
 	startClock = os.clock()
 	resumeUsed = 0
 	resetReports()
 	duration, durSource = 0, "?"
 	Shared.all("SongRetry",  { name = nowPlaying.Name or "?", attempt = retryUsed })
 	Shared.all("NowPlaying", nowPlaying)
-	if P.onSongStart then task.spawn(P.onSongStart, nowPlaying) end -- [FIX L1]
+	if P.onSongStart then task.spawn(P.onSongStart, nowPlaying) end
 	warn(("[Music] retry #%d memuat: %s (%s)")
 		:format(retryUsed, tostring(nowPlaying.Name), tostring(nowPlaying.RawId or id)))
 end
@@ -529,7 +529,7 @@ local function onEnded(tk)
 	advance(tk, "Sound.Ended")
 end
 
--- [FIX A1] AUTO PLAY. Antrian kosong → lagu acak dari library global.
+-- AUTO PLAY. Antrian kosong → lagu acak dari library global.
 -- Tidak mengulang RECENT_MAX lagu terakhir (kalau library kecil, aturan ini
 -- dilonggarkan), melewati lagu `unavailable`, dan tidak jalan tanpa pemain.
 -- Lagu pemain selalu didahulukan karena hanya dipakai saat antrian kosong.
@@ -545,7 +545,7 @@ local function remember(id)
 	if #recent > RECENT_MAX then table.remove(recent) end
 end
 
--- [FIX R4] Entri antrian dari lagu library (request pemain & auto play sama bentuknya).
+-- Entri antrian dari lagu library (request pemain & auto play sama bentuknya).
 function P.entry(song, requester, requesterId)
 	return {
 		Name = song.Name, Id = song.Id, RawId = song.RawId or rawOf(song.Id),
@@ -595,7 +595,7 @@ function P.play(song)
 	token     += 1
 	local tk   = token
 	nowPlaying = song
-	remember(song.Id) -- [FIX A1]
+	remember(song.Id)
 	playing    = true
 	skipVotes  = {}
 	startClock = os.clock()
@@ -607,7 +607,7 @@ function P.play(song)
 
 	if endedConn then endedConn:Disconnect(); endedConn = nil end
 
-	local ok = startSound(id) -- [FIX R4]
+	local ok = startSound(id)
 	if not ok then
 		playing = false; task.defer(P.next); return
 	end
@@ -616,7 +616,7 @@ function P.play(song)
 	endedConn = sound.Ended:Connect(function() onEnded(tk) end)
 
 	Shared.all("NowPlaying", song)
-	if P.onSongStart then task.spawn(P.onSongStart, song) end -- [FIX L1] lapor ke siaran live
+	if P.onSongStart then task.spawn(P.onSongStart, song) end -- lapor ke siaran live
 	Shared.all("SkipVoteUpdate", P.votes())
 	P.broadcastIds()
 
@@ -624,7 +624,7 @@ function P.play(song)
 	task.spawn(watchdog, tk, song)
 end
 
--- [FIX L2] MODE IKUT SIARAN. Lagu dari server DJ diputar di posisi detik yang
+-- MODE IKUT SIARAN. Lagu dari server DJ diputar di posisi detik yang
 -- sama. Watchdog/Ended lagu lokal dimatikan (token baru) dan antrian lokal
 -- tidak disentuh, jadi setelah siaran selesai antrian lokal lanjut seperti biasa.
 local following = false
@@ -632,7 +632,7 @@ function P.isFollowing() return following end
 
 function P.follow(song, offset)
 	offset = math.max(0, tonumber(offset) or 0)
-	-- [FIX L3] Lagu & posisi sudah sama (mis. DJ pindah server): jangan putar
+	-- Lagu & posisi sudah sama (mis. DJ pindah server): jangan putar
 	-- ulang, cukup lepas kendali lokal dan perbarui label.
 	local same = playing and nowPlaying and song and nowPlaying.Id == song.Id
 		and math.abs((os.clock() - startClock) - offset) < 2
@@ -662,7 +662,7 @@ function P.follow(song, offset)
 	end
 	nowPlaying, playing = song, true
 	startClock = os.clock() - offset
-	startSound(id, offset) -- [FIX R4]
+	startSound(id, offset)
 	P.applyLoudness()
 	local np = table.clone(song)
 	np.Elapsed = offset
@@ -671,7 +671,7 @@ function P.follow(song, offset)
 	P.broadcastIds()
 end
 
--- [FIX L3] Server ini mengambil alih siaran: lagu yang sedang diikuti diteruskan
+-- Server ini mengambil alih siaran: lagu yang sedang diikuti diteruskan
 -- sebagai lagu lokal (watchdog + Ended aktif lagi), tanpa diputar ulang.
 function P.adopt()
 	if not following then return end
@@ -691,13 +691,13 @@ function P.unfollow()
 	P.next()
 end
 function P.next()
-	if following then return end -- [FIX L2] saat ikut siaran, antrian lokal ditahan
+	if following then return end -- saat ikut siaran, antrian lokal ditahan
 	playing    = false
 	nowPlaying = nil
 	duration, durSource = 0, "?"
 	resetReports()
 
-	-- [FIX M6b] Saat server ini siaran, yang diputar hanya request DJ; request lain
+	-- Saat server ini siaran, yang diputar hanya request DJ; request lain
 	-- tetap di antrian (ditahan) sampai live selesai. Tidak ada → auto play.
 	local song
 	if P.liveDjId then
@@ -707,7 +707,7 @@ function P.next()
 	else
 		song = table.remove(queue, 1)
 	end
-	song = song or pickAuto() -- [FIX A1] antrian kosong → auto play
+	song = song or pickAuto() -- antrian kosong → auto play
 	if song then
 		P.broadcastQueue()
 		P.play(song)
@@ -718,7 +718,7 @@ function P.next()
 		Shared.all("NowPlaying",     { Name = "No song playing", Requester = "" })
 		Shared.all("SkipVoteUpdate", P.votes())
 		Shared.all("SongStopped",    true)
-		if P.onSongStart then task.spawn(P.onSongStart, nil) end -- [FIX L1]
+		if P.onSongStart then task.spawn(P.onSongStart, nil) end
 		P.broadcastIds()
 	end
 end

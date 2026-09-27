@@ -1,4 +1,4 @@
--- MusicServer/LibraryActions  (ModuleScript)  [FIX R5b] dipindah dari init.server
+-- MusicServer/LibraryActions  (ModuleScript)  dipindah dari init.server
 -- Aksi remote untuk library global (admin) dan My Library (semua pemain).
 -- init.server menggabungkan `handlers` ke tabel Actions-nya.
 
@@ -31,7 +31,7 @@ local function addSong(p, data)
 		if not valid        then return Shared.to(p, "SongError", info) end
 		if Library.find(id) then return Shared.to(p, "SongError", "Already added") end
 
-		Library.insert(Library.fromInfo(rawId, info, { -- [FIX R4]
+		Library.insert(Library.fromInfo(rawId, info, {
 			Requester = p.Name, RequesterId = p.UserId, AddedTime = os.time(),
 		}))
 		Library.broadcast()
@@ -62,7 +62,7 @@ local function removeSong(p, songId)
 end
 
 -- ── LIBRARY SAYA (semua player) ───────────────────────────────────────────
--- [FIX R2] My Library hanya dikirim kalau diminta client. Diminta saat masih
+-- My Library hanya dikirim kalau diminta client. Diminta saat masih
 -- dimuat → dikirim SEKALI begitu selesai (dulu terkirim 3-4x saat join).
 local wantMy = {}
 local function sendMyIfWanted(p)
@@ -105,7 +105,7 @@ local function toggleFavorite(p, songId)
 		local _, song = Library.find(id)
 		if not song then return Shared.to(p, "MyLibError", "Song is not in the library") end
 
-		local added, res = Library.myAdd(p, Library.meta(song, { source = "fav", AddedTime = os.time() })) -- [FIX R4]
+		local added, res = Library.myAdd(p, Library.meta(song, { source = "fav", AddedTime = os.time() }))
 		if not added then return Shared.to(p, "MyLibError", res) end
 
 		Library.myBroadcast(p)
@@ -135,7 +135,7 @@ local function addMySong(p, data)
 		local _, exist = Library.find(id)
 		local entry
 		if exist then
-			entry = Library.meta(exist, { source = "own", AddedTime = os.time() }) -- [FIX R4]
+			entry = Library.meta(exist, { source = "own", AddedTime = os.time() })
 		else
 			Shared.to(p, "SongValidating", Shared.loadTimeout)
 			local valid, info = Library.validate(rawId)
@@ -154,7 +154,7 @@ end
 
 local function removeMySong(p, songId)
 	if not songId then return end
-	local okRate, msg = checkRate(p, "RemoveMySong", Shared.favCooldown) -- [FIX M3]
+	local okRate, msg = checkRate(p, "RemoveMySong", Shared.favCooldown)
 	if not okRate then return Shared.to(p, "MyLibError", msg) end
 	task.spawn(function()
 		Library.myLoad(p)
@@ -166,14 +166,14 @@ local function removeMySong(p, songId)
 	end)
 end
 
--- [FIX R7] angka jeda ada di MusicShared
+-- angka jeda ada di MusicShared
 local M = {}
 
 M.handlers = {
 	AddSong          = addSong,
 	RemoveSong       = removeSong,
-	RequestMyLibrary = function(p) if checkRate(p, "MyLib", Shared.myLibCooldown) then requestMyLibrary(p) end end, -- [FIX M3]
-	RequestLibrary   = function(p) if checkRate(p, "Lib", Shared.libCooldown) then Library.broadcast(p) end end, -- [FIX R1] delta terlewat
+	RequestMyLibrary = function(p) if checkRate(p, "MyLib", Shared.myLibCooldown) then requestMyLibrary(p) end end,
+	RequestLibrary   = function(p) if checkRate(p, "Lib", Shared.libCooldown) then Library.broadcast(p) end end, -- delta terlewat
 	ToggleFavorite   = toggleFavorite,
 	AddMySong        = addMySong,
 	RemoveMySong     = removeMySong,
@@ -183,7 +183,7 @@ M.handlers = {
 function M.onJoin(p)
 	task.spawn(function()
 		Library.myLoad(p)
-		sendMyIfWanted(p) -- [FIX R2]
+		sendMyIfWanted(p)
 	end)
 end
 
