@@ -449,6 +449,21 @@ ui.loudnessToggleBtn.MouseButton1Click:Connect(function()
 	paintLoud()
 end)
 
+-- [FIX A1] Auto play On/Off (admin). Status asli datang lewat SpatialSettings.
+local autoOn = Shared.spatial.autoplay ~= false
+local function paintAuto()
+	ui.autoplayBtn.Text             = autoOn and "On" or "Off"
+	ui.autoplayBtn.BackgroundColor3 = autoOn and P.accent or P.panel
+	ui.autoplayBtn.TextColor3       = autoOn and C.onAccent or C.gray
+end
+paintAuto()
+ui.autoplayBtn.MouseButton1Click:Connect(function()
+	autoOn = not autoOn
+	paintAuto()
+	remote:FireServer("SetSpatialSettings", { autoplay = autoOn })
+	notify(autoOn and "Auto play on" or "Auto play off") -- [FIX A1]
+end)
+
 local function numFrom(box, lo, hi)
 	local v = tonumber(box.Text)
 	return v and math.clamp(v, lo, hi) or nil
@@ -656,6 +671,7 @@ H.SpatialSettings = function(data)
 	ui.globalVolSlider.Size = UDim2.new(v, 0, 1, 0)
 	ui.globalVolLabel.Text  = "Global " .. math.floor(v * 100) .. "%"
 	paintMode(data.mode == "global" and "global" or "stage")
+	if data.autoplay ~= nil then autoOn = data.autoplay == true; paintAuto() end -- [FIX A1]
 end
 
 H.LoudnessSync = function(data)

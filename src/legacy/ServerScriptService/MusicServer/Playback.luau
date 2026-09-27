@@ -511,6 +511,45 @@ local function onEnded(tk)
 	advance(tk, "Sound.Ended")
 end
 
+-- [FIX A1] AUTO PLAY. Antrian kosong → lagu acak dari library global.
+-- Tidak mengulang RECENT_MAX lagu terakhir (kalau library kecil, aturan ini
+-- dilonggarkan), melewati lagu `unavailable`, dan tidak jalan tanpa pemain.
+-- Lagu pemain selalu didahulukan karena hanya dipakai saat antrian kosong.
+local RECENT_MAX = 20
+local recent = {}
+
+local function remember(id)
+	if not id then return end
+	for i = #recent, 1, -1 do
+		if recent[i] == id then table.remove(recent, i) end
+	end
+	table.insert(recent, 1, id)
+	if #recent > RECENT_MAX then table.remove(recent) end
+end
+
+local function pickAuto()
+	if not (Shared.spatial and Shared.spatial.autoplay) then return nil end
+	if #Players:GetPlayers() == 0 then return nil end
+	local skip = {}
+	for _, id in ipairs(recent) do skip[id] = true end
+	local fresh, any = {}, {}
+	for _, s in ipairs(Library.all()) do
+		if not s.unavailable and s.Id then
+			table.insert(any, s)
+			if not skip[s.Id] then table.insert(fresh, s) end
+		end
+	end
+	local pool = (#fresh > 0) and fresh or any
+	if #pool == 0 then return nil end
+	local s = pool[math.random(#pool)]
+	return {
+		Name = s.Name, Id = s.Id, RawId = s.RawId or rawOf(s.Id),
+		thumbnailUrl = s.thumbnailUrl or "",
+		creatorType = s.creatorType, AudioCreator = s.AudioCreator,
+		Requester = "Auto play", RequesterId = 0,
+		LibOwner = s.Requester, auto = true,
+	}
+end
 function P.play(song)
 	if not song or not song.Id then
 		playing = false; task.defer(P.next); return
@@ -533,6 +572,7 @@ function P.play(song)
 	token     += 1
 	local tk   = token
 	nowPlaying = song
+	remember(song.Id) -- [FIX A1]
 	playing    = true
 	skipVotes  = {}
 	startClock = os.clock()
@@ -571,7 +611,7 @@ function P.next()
 	duration, durSource = 0, "?"
 	resetReports()
 
-	local song = table.remove(queue, 1)
+	local song = table.remove(queue, 1) or pickAuto() -- [FIX A1] antrian kosong → auto play
 	if song then
 		P.broadcastQueue()
 		P.play(song)
