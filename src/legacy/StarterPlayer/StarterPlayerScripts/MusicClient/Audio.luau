@@ -189,7 +189,7 @@ end
 
 function Audio.emergencySoundId()
 	if not current then return nil end
-	return tostring(current.SoundId):match("%d+")
+	return Shared.rawId(current.SoundId) -- [FIX R6]
 end
 
 -- ── penempatan salinan lokal ──────────────────────────────────────────────
@@ -271,7 +271,7 @@ end
 
 -- ── mode darurat / penyelamat otomatis ────────────────────────────────────
 function Audio.hardResync(data, auto, quiet) -- [FIX M7] quiet: tanpa notifikasi (penyembuh otomatis)
-	local id = data and data.Id and tostring(data.Id):match("%d+")
+	local id = data and Shared.rawId(data.Id) -- [FIX R6]
 	if not id then
 		if not auto then UI.notify("No song to reload", UI.C.danger, 2) end
 		return false

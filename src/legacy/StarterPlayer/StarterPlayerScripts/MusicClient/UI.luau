@@ -75,9 +75,7 @@ function UI.fmtTime(s)
 	return ("%d:%02d"):format(math.floor(s / 60), math.floor(s % 60))
 end
 
-function UI.extractId(id)
-	return id and tostring(id):match("%d+") or nil
-end
+-- [FIX R6] UI.extractId dihapus: pakai Shared.rawId (isinya sama persis).
 
 function UI.clearList(frame)
 	for _, c in ipairs(frame:GetChildren()) do

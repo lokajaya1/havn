@@ -6,7 +6,6 @@
 -- belum ada tidak boleh menjatuhkan seluruh render library.
 
 local Players = game:GetService("Players")
-local Market  = game:GetService("MarketplaceService")
 local RS      = game:GetService("ReplicatedStorage")
 
 local Shared = require(RS:WaitForChild("MusicShared"))
@@ -35,10 +34,8 @@ end
 
 -- ══ THUMBNAIL ═════════════════════════════════════════════════════════════
 local MAX_QUEUE   = 200
-local MARKET_GAP  = 0.15   -- jarak minimal antar panggilan Marketplace API
 local NEG_TTL     = 60     -- kegagalan hanya di-cache sebentar, lalu dicoba lagi
 local tCache, tQueue, tRunning = {}, {}, false
-local lastMarket  = 0
 
 -- Cache sukses disimpan permanen; cache GAGAL kedaluwarsa setelah NEG_TTL.
 -- Dulu kegagalan sementara (HTTP 429/502) tersimpan selamanya sebagai "" dan
@@ -57,34 +54,14 @@ local function cacheSet(rawId, img)
 	tCache[rawId] = { img = img, at = os.clock() }
 end
 
--- Marketplace API bisa gagal walau izinnya sudah benar (throttle/CDN).
--- Karena itu: jaga jarak antar panggilan, lalu ulangi dengan backoff.
-local function fetchInfo(num)
-	for attempt = 1, 3 do
-		local gap = MARKET_GAP - (os.clock() - lastMarket)
-		if gap > 0 then task.wait(gap) end
-		lastMarket = os.clock()
-
-		local ok, info = pcall(Market.GetProductInfo, Market, num, Enum.InfoType.Asset)
-		if ok and info then return info end
-		task.wait(0.4 * attempt)
-	end
-	return nil
-end
-
+-- [FIX R6] Info aset (jaga jarak 0.15 dtk + ulang 3x) & URL thumbnail kreator
+-- memakai helper MusicShared yang sama dengan server.
 local function resolve(rawId)
 	local num = tonumber(rawId)
 	if not num then return "" end
-	local info = fetchInfo(num)
+	local info = Shared.productInfo(num)
 	if not (info and info.Creator) then return "" end
-	local cr   = info.Creator
-	local crId = cr.CreatorTargetId
-	if not crId or crId == 0 then return "" end
-	local ct = tostring(cr.CreatorType)
-	if ct == "Group" or ct == "Enum.CreatorType.Group" or ct == "2" then
-		return "rbxthumb://type=GroupIcon&id=" .. crId .. "&w=150&h=150"
-	end
-	return "rbxthumb://type=AvatarBust&id=" .. crId .. "&w=150&h=150"
+	return Shared.creatorThumb(info.Creator)
 end
 
 local function pump()
@@ -120,7 +97,7 @@ end
 function L.thumbForSong(song, cb)
 	if not cb then return end
 	if song and song.thumbnailUrl and song.thumbnailUrl ~= "" then cb(song.thumbnailUrl); return end
-	L.thumb(song and (song.RawId or UI.extractId(song.Id)), cb)
+	L.thumb(song and (song.RawId or Shared.rawId(song.Id)), cb)
 end
 
 function L.resetThumbs() tCache, tQueue = {}, {} end
@@ -218,11 +195,12 @@ function L.repaintFavBtns()
 	end
 end
 
+-- [FIX R6] ID angka lagu: Shared.rawId (dulu UI.extractId).
 -- ══ ITEM LIBRARY ══════════════════════════════════════════════════════════
 -- mineView = true -> item berasal dari "My Library"
 local function libItem(song, parent, lo, mineView)
 	local item = w.frame({
-		Name = "S_" .. (UI.extractId(song.Id) or tostring(lo)),
+		Name = "S_" .. (Shared.rawId(song.Id) or tostring(lo)),
 		Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = C.bgCard,
 		LayoutOrder = lo, Parent = parent,
 	})
@@ -410,7 +388,7 @@ local function creatorSection(group, parent, lo)
 	w.corner(12).Parent = avatar
 
 	if isIndie then
-		local r1 = songs[1] and (songs[1].RawId or UI.extractId(songs[1].Id))
+		local r1 = songs[1] and (songs[1].RawId or Shared.rawId(songs[1].Id))
 		if r1 then
 			avatar.Image = "rbxthumb://type=Asset&id=" .. r1 .. "&w=150&h=150"
 			avatar.BackgroundTransparency = 1
@@ -423,7 +401,7 @@ local function creatorSection(group, parent, lo)
 		if found ~= "" then
 			avatar.Image = found; avatar.BackgroundTransparency = 1
 		elseif songs[1] then
-			L.thumb(songs[1].RawId or UI.extractId(songs[1].Id), function(img)
+			L.thumb(songs[1].RawId or Shared.rawId(songs[1].Id), function(img)
 				if avatar.Parent and img ~= "" then
 					avatar.Image = img
 					tws(avatar, { BackgroundTransparency = 1 })
