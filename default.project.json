@@ -43,9 +43,6 @@
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "AG-MusicGlobal": {
-        "$path": "src/legacy/ServerScriptService/AG-MusicGlobal.server.luau"
-      },
       "AnimationHandler": {
         "$path": "src/legacy/ServerScriptService/AnimationHandler.server.luau"
       },
@@ -204,12 +201,6 @@
         "DonationVFX": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DonationVFX.client.luau"
         },
-        "EqualizerFrame_Dekstop": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/EqualizerFrame_Dekstop.luau"
-        },
-        "EqualizerFrame_Mobile": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/EqualizerFrame_Mobile.luau"
-        },
         "InteractPlayer": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/InteractPlayer"
         },
@@ -218,12 +209,6 @@
         },
         "Likeeffects": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Likeeffects.client.luau"
-        },
-        "ListQueue_Dekstop": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ListQueue_Dekstop.luau"
-        },
-        "ListQueue_Mobile": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ListQueue_Mobile.luau"
         },
         "MenuSystemInit": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau"
@@ -236,9 +221,6 @@
         },
         "MusicClient": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient"
-        },
-        "Musicprogressreporter": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Musicprogressreporter.client.luau"
         },
         "TitlePlate": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/TitlePlate.client.luau"
