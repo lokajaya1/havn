@@ -57,6 +57,30 @@ function DanceShared.playingDanceTracks(rigPart)
 	return list
 end
 
+-- Id animasi dance (angka sebagai string) → true. Dipakai isDanceTrack.
+local danceIds = {}
+for _, id in pairs(DanceShared.dances) do
+	danceIds[tostring(id)] = true
+end
+
+-- Track ini dance dari DanceAssets? Nama Animation dicek dulu; di client nama
+-- track milik server belum tentu terbawa, jadi id animasi juga dicek.
+function DanceShared.isDanceTrack(track)
+	local animation = track and track.Animation
+	if not animation then return false end
+	if DanceShared.dances[animation.Name] then return true end
+	local id = string.match(animation.AnimationId or "", "%d+")
+	return id ~= nil and danceIds[id] == true
+end
+
+-- WalkSpeed yang benar untuk pemain saat ini (menari / sync = lambat).
+function DanceShared.walkSpeedFor(player)
+	if player and (player:GetAttribute("IsDancing") or player:GetAttribute("IsSyncing")) then
+		return DanceShared.WALKSPEED.dance
+	end
+	return DanceShared.WALKSPEED.default
+end
+
 -- Hentikan semua track dance kecuali `except`.
 function DanceShared.stopDanceTracks(rigPart, except, fade)
 	for _, track in ipairs(DanceShared.playingTracks(rigPart)) do

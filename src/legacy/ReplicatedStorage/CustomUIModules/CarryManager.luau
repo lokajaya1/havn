@@ -12,9 +12,12 @@ local RS         = game:GetService("ReplicatedStorage")
 
 local CarryUI = require(RS:WaitForChild("CustomUIModules"):WaitForChild("CarryUI"))
 
+-- DanceShared membaca DanceAssets langsung; tunggu replikasinya dulu.
+RS:WaitForChild("Assets"):WaitForChild("Animations"):WaitForChild("Dances"):WaitForChild("DanceAssets")
+local DanceShared = require(RS:WaitForChild("Modules"):WaitForChild("DanceShared"))
+
 -- ── Constants ───────────────────────────────────────────────
 
-local DEFAULT_WALKSPEED  = 16
 local DEFAULT_JUMPPOWER  = 50
 local DEFAULT_JUMPHEIGHT = 7.2
 
@@ -57,7 +60,7 @@ end
 local function resetHumanoid(hum)
 	hum.PlatformStand = false
 	hum.AutoRotate    = true
-	hum.WalkSpeed     = DEFAULT_WALKSPEED
+	hum.WalkSpeed     = DanceShared.walkSpeedFor(player) -- menari/sync = 6, lainnya 16
 	hum.JumpPower     = DEFAULT_JUMPPOWER
 	hum.JumpHeight    = DEFAULT_JUMPHEIGHT
 end
@@ -75,8 +78,10 @@ local function startUnfreezeLoop()
 
 	local animator = hum:FindFirstChildOfClass("Animator")
 	if animator then
+		-- Dance tidak ikut dihentikan (di client stop hanya lokal: dance hilang
+		-- di layar sendiri padahal server & pemain lain masih melihatnya).
 		for _, trackObj in ipairs(animator:GetPlayingAnimationTracks()) do
-			trackObj:Stop(0)
+			if not DanceShared.isDanceTrack(trackObj) then trackObj:Stop(0) end
 		end
 	end
 
