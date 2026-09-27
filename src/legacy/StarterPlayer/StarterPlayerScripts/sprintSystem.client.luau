@@ -4,6 +4,23 @@ local Players              = game:GetService("Players")
 local TweenService         = game:GetService("TweenService")
 local ContextActionService = game:GetService("ContextActionService")
 local UserInputService     = game:GetService("UserInputService")
+local ReplicatedStorage    = game:GetService("ReplicatedStorage")
+
+-- Kecepatan dance (menari/sync) diikuti juga di sini; tanpa ini Shift saat
+-- menari membuat 24, lepas → 16, dan kecepatan dance 6 hilang. DanceShared
+-- membaca DanceAssets langsung, jadi tunggu dulu; gagal → sprint tetap jalan.
+local DanceShared
+do
+	local assets  = ReplicatedStorage:WaitForChild("Assets", 15)
+	local anims   = assets and assets:WaitForChild("Animations", 15)
+	local dances  = anims and anims:WaitForChild("Dances", 15)
+	local modules = ReplicatedStorage:WaitForChild("Modules", 15)
+	local module  = dances and dances:WaitForChild("DanceAssets", 15) and modules and modules:WaitForChild("DanceShared", 15)
+	if module then
+		local ok, result = pcall(require, module)
+		if ok then DanceShared = result else warn("[SickHavn] DanceShared gagal di-require:", result) end
+	end
+end
 
 local CONFIG = {
 	WalkSpeed      = 16,
@@ -70,7 +87,12 @@ local function isLocked()
 	return humanoid ~= nil and humanoid:GetAttribute(CONFIG.LockAttribute) == true
 end
 
+local function isDancing()
+	return DanceShared ~= nil and DanceShared.isDancing(player)
+end
+
 local function desiredSpeed()
+	if isDancing() then return DanceShared.WALKSPEED.dance end -- sprint/slow tidak berlaku saat menari
 	if flags.sprint then return CONFIG.SprintSpeed end
 	if flags.slow   then return CONFIG.SlowSpeed   end
 	return CONFIG.WalkSpeed
@@ -90,7 +112,7 @@ local function refresh()
 	end
 
 	if CONFIG.EnableFOV and camera then
-		local fov = baseFOV + (flags.sprint and CONFIG.FOVBoost or 0)
+		local fov = baseFOV + ((flags.sprint and not isDancing()) and CONFIG.FOVBoost or 0)
 		if force or fov ~= currentFOV then
 			currentFOV = fov
 			tweenTo(camera, "FieldOfView", fov)
@@ -285,6 +307,10 @@ end
 
 player.CharacterAdded:Connect(onCharacterAdded)
 if player.Character then onCharacterAdded(player.Character) end
+
+-- Mulai/berhenti menari atau sync → hitung ulang kecepatan (6 ↔ jalan/sprint).
+player:GetAttributeChangedSignal("IsDancing"):Connect(refresh)
+player:GetAttributeChangedSignal("IsSyncing"):Connect(refresh)
 
 ContextActionService:BindAction(SPRINT_ACTION, makeHandler("sprint", CONFIG.SprintToggle),
 	false, CONFIG.SprintKey, CONFIG.SprintPad)
