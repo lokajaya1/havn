@@ -37,6 +37,11 @@ local pendingRequests   = {}
 local pendingModules    = {} -- [target] → ModuleScript yang diminta requester
 local lastAsk           = {} -- [player] → os.clock() AskCarry terakhir
 local ASK_COOLDOWN      = 1
+-- Batas waktu permintaan (sama dengan REQUEST_TIMEOUT client CarryManager + 2
+-- dtk jeda jaringan) & jarak maksimal kedua pemain saat minta dan menerima.
+local REQUEST_TIMEOUT   = 17
+local MAX_CARRY_DIST    = 30 -- stud
+local pendingAt         = {} -- [target] → os.clock() saat permintaan dibuat
 local function isCarryModule(mod)
 	if typeof(mod) ~= "Instance" or not mod:IsA("ModuleScript") then return false end
 	local choices = CarryReplic:FindFirstChild("CarryChoices")
@@ -70,7 +75,19 @@ local function popRelease(plr)
 	return fn
 end
 
-local function setPending(requester, target) pendingRequests[target] = requester end
+local function setPending(requester, target)
+	pendingRequests[target] = requester
+	pendingAt[target] = os.clock()
+end
+
+-- Jarak antar HumanoidRootPart; nil kalau salah satu tidak punya karakter.
+local function distanceBetween(a, b)
+	local ra = a.Character and a.Character:FindFirstChild("HumanoidRootPart")
+	local rb = b.Character and b.Character:FindFirstChild("HumanoidRootPart")
+	if not (ra and rb) then return nil end
+	return (ra.Position - rb.Position).Magnitude
+end
+
 
 local function clearPending(target)
 	local requester = pendingRequests[target]
@@ -101,11 +118,23 @@ end
 
 -- ═══ PLAYER SETUP ═══
 
+local onCarrierDied -- diisi setelah fullStop didefinisikan
+
 local function setupChar(char)
 	if not char:FindFirstChild("Carryble") then
 		local v = Instance.new("BoolValue")
 		v.Name = "Carryble"; v.Value = true; v.Parent = char
 	end
+	-- Salah satu pasangan mati → carry langsung dilepas. Dulu baru saat
+	-- karakternya dihapus (±5 dtk): yang hidup menempel ke ragdoll.
+	task.spawn(function()
+		local hum = char:WaitForChild("Humanoid", 10)
+		if not hum then return end
+		hum.Died:Connect(function()
+			local plr = Players:GetPlayerFromCharacter(char)
+			if plr and onCarrierDied then onCarrierDied(plr) end
+		end)
+	end)
 end
 
 local function onPlayerAdded(plr)
@@ -257,6 +286,12 @@ local function fullStop(plr)
 	end
 end
 
+onCarrierDied = function(plr)
+	if carryPairs[plr] then fullStop(plr) end
+	clearPendingByRequester(plr)
+	if pendingRequests[plr] then clearPending(plr) end
+end
+
 -- ═══ EXECUTE CARRY MODULE ═══
 
 local function executeCarryModule(carryMod, firstPlr, secondPlr)
@@ -314,8 +349,24 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 			local tChar     = target.Character
 			local tCarryble = tChar and tChar:FindFirstChild("Carryble")
 
+			local dist = distanceBetween(plr, target)
+			if not dist or dist > MAX_CARRY_DIST then
+				canAsk.Value = true
+				CarryRemote:FireClient(plr, { cmd = "TooFar", targetPlr = target })
+				return
+			end
+
 			if tCanAsk and tCanAsk.Value and tCarryble and tCarryble.Value and carryble.Value then
 				setPending(plr, target)
+				local stamp = pendingAt[target]
+				-- Target tidak menjawab (client macet/keluar tanpa Decline): lepaskan
+				-- supaya peminta bisa minta lagi.
+				task.delay(REQUEST_TIMEOUT, function()
+					if pendingRequests[target] == plr and pendingAt[target] == stamp then
+						pendingModules[target] = nil
+						clearPending(target)
+					end
+				end)
 				pendingModules[target] = carryMod -- [FIX 2b]
 				tCanAsk.Value = false
 				CarryRemote:FireClient(target, {
@@ -332,6 +383,18 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 			if typeof(firstPlr) ~= "Instance" or not firstPlr:IsA("Player") or firstPlr == plr then return end
 			-- [FIX 2b] hanya boleh menerima permintaan yang benar-benar ada (dulu: carry paksa tanpa persetujuan)
 			if pendingRequests[plr] ~= firstPlr then return end
+			-- Kedaluwarsa atau sudah berjauhan saat diterima → batal.
+			local expired = os.clock() - (pendingAt[plr] or 0) > REQUEST_TIMEOUT
+			local dist = distanceBetween(plr, firstPlr)
+			if expired or not dist or dist > MAX_CARRY_DIST then
+				pendingModules[plr] = nil
+				clearPending(plr)
+				if not expired then
+					CarryRemote:FireClient(plr, { cmd = "TooFar", targetPlr = firstPlr })
+					CarryRemote:FireClient(firstPlr, { cmd = "TooFar", targetPlr = plr })
+				end
+				return
+			end
 			local carryMod = pendingModules[plr]
 			pendingModules[plr] = nil
 			if not isCarryModule(carryMod) then return end
@@ -396,6 +459,7 @@ Players.PlayerRemoving:Connect(function(plr)
 	preCarryWalkSpeed[plr] = nil
 	pendingModules[plr] = nil -- [FIX 2b]
 	lastAsk[plr] = nil
+	pendingAt[plr] = nil
 end)
 
 local function bindRespawn(plr)
