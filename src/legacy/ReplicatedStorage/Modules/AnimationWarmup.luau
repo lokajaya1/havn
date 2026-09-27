@@ -11,6 +11,10 @@ local CONFIG = {
 	BATCH   = 4,    -- animasi yang dipanaskan sekaligus
 	DELAY   = 0.06, -- jeda antar batch supaya frame tidak tersendat
 	TIMEOUT = 2.5,  -- batas tunggu per batch kalau asset gagal/lambat
+	-- Saat game baru mulai banyak asset diminta sekaligus, jadi satu timeout
+	-- belum berarti rusak: asset diantre ulang dan baru dicap gagal setelah
+	-- TRIES kali timeout (±10 dtk, sama dengan BROKEN_CHECK DanceHandler).
+	TRIES   = 4,
 }
 
 local AnimationWarmup = {}
@@ -19,6 +23,7 @@ local queue   = {}
 local cursor  = 1
 local queued  = {}
 local failed  = {}   -- asset yang tidak pernah selesai dimuat: jangan diulang
+local tries   = {}   -- jumlah timeout per asset (lihat CONFIG.TRIES)
 local done    = {}   -- asset yang sudah panas: cache asset tetap ada, jangan diulang
 local running = false
 local animator
@@ -103,10 +108,18 @@ local function drain()
 		end
 
 		for _, entry in ipairs(batch) do
-			if entry.track.Length > 0 then done[entry.id] = true end
-			if entry.track.Length == 0 and not failed[entry.id] then
-				failed[entry.id] = true
-				warn("[AnimationWarmup] asset gagal dimuat, dilewati: " .. tostring(entry.id))
+			local id = entry.id
+			if entry.track.Length > 0 then
+				done[id], tries[id], failed[id] = true, nil, nil
+			elseif not failed[id] then
+				tries[id] = (tries[id] or 0) + 1
+				if tries[id] >= CONFIG.TRIES then
+					failed[id], tries[id] = true, nil
+					warn("[AnimationWarmup] asset gagal dimuat, dilewati: " .. tostring(id))
+				elseif not queued[id] then
+					queued[id] = true
+					queue[#queue + 1] = id -- coba lagi di belakang antrean
+				end
 			end
 			finish(entry.track)
 		end
@@ -120,9 +133,10 @@ end
 
 -- ids: array asset id (angka atau string).
 -- urgent: taruh di depan antrean, dipakai saat pemain benar-benar menekan dance.
+-- Asset yang sudah dicap gagal tetap dicoba sekali lagi kalau urgent.
 function AnimationWarmup.add(ids, urgent)
 	for _, id in ipairs(ids) do
-		if id ~= nil and not queued[id] and not failed[id] and not done[id] then
+		if id ~= nil and not queued[id] and (urgent or not failed[id]) and not done[id] then
 			queued[id] = true
 			if urgent then
 				table.insert(queue, cursor, id)
