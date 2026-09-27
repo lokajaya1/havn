@@ -81,15 +81,19 @@ function DanceShared.walkSpeedFor(player)
 	return DanceShared.WALKSPEED.default
 end
 
--- Selama di-carry pose gendong harus menang. Dance TIDAK dihentikan (fase &
+-- Yang DIGENDONG: pose gendong harus menang. Dance TIDAK dihentikan (fase &
 -- sync tetap jalan), hanya bobotnya diturunkan: prioritas sama (Action4)
 -- dicampur menurut bobot, jadi 0,01 ≈ tak terlihat. Terbukti tereplikasi
 -- ke client (uji Studio 2026-09-28).
+-- Yang MENGGENDONG tetap menari penuh (gendong sambil joget, keputusan user).
+-- Atribut "Carried" dipasang CarryWeld pada yang digendong; InCarry ikut
+-- dicek supaya atribut yang tertinggal tidak menyembunyikan dance.
 DanceShared.CARRY_WEIGHT = 0.01
 DanceShared.WEIGHT_FADE  = 0.2
 
 function DanceShared.danceWeightFor(player)
-	return (player and player:GetAttribute("InCarry") == true) and DanceShared.CARRY_WEIGHT or 1
+	local carried = player and player:GetAttribute("InCarry") == true and player:GetAttribute("Carried") == true
+	return carried and DanceShared.CARRY_WEIGHT or 1
 end
 
 -- Track dance masih "hidup": sedang main dan tidak sedang memudar karena

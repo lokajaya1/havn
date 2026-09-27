@@ -161,6 +161,7 @@ local carryModule = function(
 	offset = offset or CFrame.new(0, 7, 0)
 
 	rHum.PlatformStand = true
+	recipient:SetAttribute("Carried", true) -- dance yang digendong disembunyikan (DanceShared)
 	rTorso.Anchored = false
 	recipient.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable
 
@@ -189,6 +190,7 @@ local carryModule = function(
 	local function releaseCarry()
 		if released then return end
 		released = true
+		pcall(function() recipient:SetAttribute("Carried", nil) end)
 
 		for _, c in ipairs(conns) do c:Disconnect() end
 		table.clear(conns)

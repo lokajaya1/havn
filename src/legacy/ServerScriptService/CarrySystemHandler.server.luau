@@ -232,6 +232,9 @@ local function fullStop(plr)
 
 	plr:SetAttribute("InCarry", false)
 	if partner then partner:SetAttribute("InCarry", false) end
+	-- Jaga-jaga: atribut dari CarryWeld tidak boleh tertinggal (mis. respawn).
+	plr:SetAttribute("Carried", nil)
+	if partner then partner:SetAttribute("Carried", nil) end
 
 	if releaseFn then
 		local ok, err = pcall(releaseFn)
