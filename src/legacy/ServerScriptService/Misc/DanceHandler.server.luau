@@ -19,7 +19,7 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService  = game:GetService("DataStoreService")
 
-local SmoothDanceHelper = require(ReplicatedStorage.Modules.SmoothDanceHelper)
+local DancePlayer       = require(script.Parent.DancePlayer)
 local DanceShared       = require(ReplicatedStorage.Modules.DanceShared)
 
 -- Warm-up bersifat opsional: kalau modulnya belum dipasang, dance tetap jalan
@@ -113,6 +113,7 @@ local function getState(player)
 		s = {
 			userId     = userId,
 			rig        = nil,   -- { humanoid, animator, character }
+			slot       = DancePlayer.newSlot(), -- track yang sedang diputar
 			tracks     = {},    -- danceName -> { track, used }
 			trackCount = 0,
 			clock      = 0,
@@ -315,7 +316,7 @@ end
 -- PLAY / STOP
 -- ═══════════════════════════════════════════════════════════
 
--- Jalur langsung lewat Animator; dipakai sebagai cadangan kalau helper gagal.
+-- Jalur langsung lewat Animator; dipakai sebagai cadangan kalau DancePlayer gagal.
 local function playDirect(player, danceName, speed, fadeIn)
 	local humanoid = getRig(player)
 	if not humanoid then return false end
@@ -350,21 +351,21 @@ local function playDance(player, danceName, speed, seq)
 	-- Dance yang sama dan masih hidup: cukup ubah kecepatannya.
 	if s.dance == danceName then
 		if isDanceAlive(humanoid, danceName) then
-			local called, changed = pcall(SmoothDanceHelper.setSpeed, player, speed, CONFIG.SPEED_TRANSITION)
+			local called, changed = pcall(DancePlayer.setSpeed, s.slot, speed, CONFIG.SPEED_TRANSITION)
 			if called and changed then return true end
 		end
 		s.dance = nil
 	end
 
-	-- Panaskan dulu, jadi helper tidak pernah memutar track dengan Length 0.
+	-- Panaskan dulu, jadi DancePlayer tidak pernah memutar track dengan Length 0.
 	ensureTrack(player, danceName)
 	if seq and (states[player.UserId] ~= s or s.requestSeq ~= seq) then return false end
 
-	local called, ok = pcall(SmoothDanceHelper.playDance, player, danceName, {
-		fadeIn    = CONFIG.FADE_IN,
-		fadeOut   = CONFIG.FADE_OUT,
-		speed     = speed,
-		crossFade = true,
+	-- Track yang sama dengan yang baru dipanaskan (cache LRU): satu track per dance.
+	local called, ok = pcall(DancePlayer.play, s.slot, getTrack(player, danceName), {
+		fadeIn  = CONFIG.FADE_IN,
+		fadeOut = CONFIG.FADE_OUT,
+		speed   = speed,
 	})
 	if not (called and ok) then
 		ok = playDirect(player, danceName, speed, CONFIG.FADE_IN)
@@ -388,7 +389,7 @@ local function stopDance(player)
 	local humanoid = getRig(player)
 	if not humanoid then return end
 
-	local called, ok = pcall(SmoothDanceHelper.stopDance, player, CONFIG.STOP_FADE)
+	local called, ok = pcall(DancePlayer.stop, s.slot, CONFIG.STOP_FADE)
 	if not (called and ok) then
 		stopDanceTracks(humanoid, nil, CONFIG.STOP_FADE)
 	end
@@ -415,8 +416,8 @@ local function reassertDance(player)
 	local previous = findTrack(humanoid, danceName)
 	local phase    = previous and previous.TimePosition or nil
 
-	-- Reset state internal helper dulu; helper bisa mengira dance masih main.
-	pcall(SmoothDanceHelper.stopDance, player, 0)
+	-- Reset slot dulu; slot bisa mengira dance masih main.
+	pcall(DancePlayer.stop, s.slot, 0)
 	s.dance = nil
 
 	local ok = playDance(player, danceName, speed)
@@ -772,9 +773,6 @@ local function warmUpPlayer(player)
 	local _, animator = getRig(player)
 	if not animator then return end
 
-	pcall(SmoothDanceHelper.initializePlayer, player)
-	pcall(SmoothDanceHelper.preloadPopularAnimations, player, CONFIG.POPULAR_DANCES)
-
 	for _, danceName in ipairs(CONFIG.POPULAR_DANCES) do
 		if DANCES[danceName] then
 			getTrack(player, danceName)
@@ -790,6 +788,7 @@ local function onCharacterAdded(player, character)
 	s.rig         = nil
 	s.dance       = nil
 	s.watchToken += 1  -- matikan watchdog carry dari karakter lama
+	DancePlayer.reset(s.slot)
 	clearTracks(s)
 	player:SetAttribute("IsDancing", false)
 
@@ -840,10 +839,10 @@ end
 
 Players.PlayerRemoving:Connect(function(player)
 	local userId = player.UserId
-	pcall(SmoothDanceHelper.cleanupPlayer, player)
+	local s = states[userId]
+	if s then DancePlayer.reset(s.slot) end
 	flushFavorites(userId, true)
 
-	local s = states[userId]
 	if s then clearTracks(s) end
 	states[userId] = nil
 end)
