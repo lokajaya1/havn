@@ -20,7 +20,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService  = game:GetService("DataStoreService")
 
 local SmoothDanceHelper = require(ReplicatedStorage.Modules.SmoothDanceHelper)
-local DanceAssets       = require(ReplicatedStorage.Assets.Animations.Dances.DanceAssets)
+local DanceShared       = require(ReplicatedStorage.Modules.DanceShared)
 
 -- Warm-up bersifat opsional: kalau modulnya belum dipasang, dance tetap jalan
 -- (hanya kehilangan pemanasan asset), bukan mematikan seluruh handler.
@@ -40,11 +40,11 @@ do
 	end
 end
 
-local DANCES = DanceAssets.dances
+local DANCES = DanceShared.dances
 
 local CONFIG = {
-	DANCE_WALKSPEED   = 6,
-	DEFAULT_WALKSPEED = 16,
+	DANCE_WALKSPEED   = DanceShared.WALKSPEED.dance,
+	DEFAULT_WALKSPEED = DanceShared.WALKSPEED.default,
 
 	FADE_IN          = 0.12,
 	FADE_OUT         = 0.18,
@@ -211,16 +211,8 @@ local function getTrack(player, danceName)
 		end
 	end
 
-	local animation       = Instance.new("Animation")
-	animation.Name        = danceName
-	animation.AnimationId = "rbxassetid://" .. animationId
-
-	local ok, track = pcall(function() return animator:LoadAnimation(animation) end)
-	animation:Destroy()
-	if not ok or not track then return nil end
-
-	track.Priority = Enum.AnimationPriority.Action4
-	track.Looped   = true
+	local track = DanceShared.loadTrack(animator, danceName)
+	if not track then return nil end
 
 	s.tracks[danceName] = { track = track, used = s.clock }
 	s.trackCount += 1
@@ -271,7 +263,7 @@ end
 -- ═══════════════════════════════════════════════════════════
 
 local function findTrack(humanoid, danceName)
-	for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+	for _, track in ipairs(DanceShared.playingTracks(humanoid)) do
 		local animation = track.Animation
 		if animation and animation.Name == danceName then return track end
 	end
@@ -279,12 +271,7 @@ local function findTrack(humanoid, danceName)
 end
 
 local function stopDanceTracks(humanoid, except, fade)
-	for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-		local animation = track.Animation
-		if track ~= except and animation and DANCES[animation.Name] then
-			pcall(function() track:Stop(fade) end)
-		end
-	end
+	DanceShared.stopDanceTracks(humanoid, except, fade)
 end
 
 local function isDanceAlive(humanoid, danceName)
@@ -706,17 +693,8 @@ local function takeToken(s, key, burst, refill)
 	return true
 end
 
-local function getRemote(name)
-	local remote = ReplicatedStorage:FindFirstChild(name)
-	if remote then return remote end
-	remote        = Instance.new("RemoteEvent")
-	remote.Name   = name
-	remote.Parent = ReplicatedStorage
-	return remote
-end
-
-local danceRemote     = getRemote("DanceRequest")
-local favoritesRemote = getRemote("FavoritesRemote")
+local danceRemote     = DanceShared.remote("DanceRequest")
+local favoritesRemote = DanceShared.remote("FavoritesRemote")
 
 -- Pemain yang sudah keluar tidak dikirimi (FireClient ke pemain yang pergi = error).
 sendFavorites = function(player, kind, list)
