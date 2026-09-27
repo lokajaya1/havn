@@ -17,7 +17,6 @@ local Shared   = require(RS:WaitForChild("MusicShared"))
 local Library  = require(script:WaitForChild("Library"))
 local Playback = require(script:WaitForChild("Playback"))
 local Live     = require(script:WaitForChild("Live")) -- [FIX L1] siaran live
-local liveCooldown = {}
 
 local VolDS = DSS:GetDataStore("MusicVolume")
 
@@ -64,8 +63,10 @@ end
 -- ═══ RATE LIMIT ═══════════════════════════════════════════════════════════
 local rateHits = {}
 
-local function checkRate(p, action, cooldown)
-	if isAdmin(p) then return true end
+-- [FIX R4] Satu pembatas untuk semua aksi. everyone = true: admin juga dibatasi
+-- (dulu SetLive & RequestState punya tabel jeda sendiri).
+local function checkRate(p, action, cooldown, everyone)
+	if isAdmin(p) and not everyone then return true end
 	local key  = p.UserId .. "_" .. action
 	local now  = os.clock()
 	local last = rateHits[key]
@@ -135,13 +136,8 @@ local volTimers  = {}
 -- DataStore bisa gagal sesaat walau API Services aktif. Diulang dulu sebelum
 -- jatuh ke nilai bawaan, supaya setelan volume pemain tidak "hilang" sendiri.
 local function loadVol(p)
-	for attempt = 1, 3 do
-		local ok, v = pcall(VolDS.GetAsync, VolDS, "Vol_" .. p.UserId)
-		if ok then
-			return (type(v) == "number") and math.clamp(v, 0, 1) or 0.7
-		end
-		task.wait(0.5 * attempt)
-	end
+	local ok, v = Shared.retry(3, function(i) return 0.5 * i end, VolDS.GetAsync, VolDS, "Vol_" .. p.UserId) -- [FIX R4]
+	if ok and type(v) == "number" then return math.clamp(v, 0, 1) end
 	return 0.7
 end
 
@@ -151,12 +147,7 @@ local pendingVol = 0
 
 local function writeVol(uid, vol)
 	pendingVol += 1
-	local ok = false
-	for i = 1, 3 do
-		ok = pcall(VolDS.SetAsync, VolDS, "Vol_" .. uid, vol)
-		if ok then break end
-		if i < 3 then task.wait(i) end
-	end
+	local ok = Shared.retry(3, function(i) return i end, VolDS.SetAsync, VolDS, "Vol_" .. uid, vol) -- [FIX R4]
 	pendingVol -= 1
 	return ok
 end
@@ -192,7 +183,12 @@ end
 -- Satu RequestState mengirim seluruh library + antrian + state ke satu pemain.
 -- Dibatasi supaya tombol yang ditekan berkali-kali (atau paket ulang) tidak
 -- memicu banjir data.
-local lastState = {}
+-- [FIX R4] Peran + batas antrian, dikirim saat RequestState dan saat atribut peran berubah.
+local function sendRole(p)
+	Shared.to(p, "IsAdmin",    isAdmin(p))
+	Shared.to(p, "IsDJ",       isDJ(p)) -- [FIX L1b]
+	Shared.to(p, "QueueLimit", { current = Playback.queueSize(), max = Shared.maxGlobalQueue, myLimit = queueLimit(p) })
+end
 -- [FIX R2] Permintaan yang datang sebelum PlayerAdded diproses → dijawab
 -- begitu data pemain siap (dulu dibuang, lalu ditambal push buta 0.5 & 3 dtk).
 local pendingState = {}
@@ -200,9 +196,7 @@ local pendingState = {}
 local function requestState(p, data)
 	local d = playerData[p]
 	if not d then pendingState[p] = true; return end
-	local now = os.clock()
-	if lastState[p] and (now - lastState[p]) < 1.5 then return end
-	lastState[p] = now
+	if not checkRate(p, "State", 1.5, true) then return end
 	task.spawn(function()
 		Shared.to(p, "SoundLocation", Playback.path())
 		-- [FIX R2] tombol reload hanya butuh status lagu, bukan library 130 KB;
@@ -210,9 +204,7 @@ local function requestState(p, data)
 		if data ~= "reload" then Library.broadcast(p) end
 		Shared.to(p, "QueueUpdate",  Playback.queue())
 		Shared.to(p, "VolumeUpdate", d.volume or 0.7)
-		Shared.to(p, "IsAdmin",      isAdmin(p))
-		Shared.to(p, "IsDJ",         isDJ(p)) -- [FIX L1b]
-		Shared.to(p, "QueueLimit",   { current = Playback.queueSize(), max = Shared.maxGlobalQueue, myLimit = queueLimit(p) })
+		sendRole(p)
 		-- Setelan ruang dikirim ke SEMUA pemain: client memakainya untuk
 		-- menempatkan salinan lokal saat audio server gagal dimuat.
 		Shared.to(p, "SpatialSettings", table.clone(Shared.spatial))
@@ -253,14 +245,9 @@ local function addSong(p, data)
 		if not valid        then return Shared.to(p, "SongError", info) end
 		if Library.find(id) then return Shared.to(p, "SongError", "Already added") end
 
-		Library.insert({
-			Id = id, RawId = rawId,
-			Name = info.name, AudioCreator = info.creator,
-			creatorType = info.creatorType, creatorId = info.creatorId,
-			thumbnailUrl = info.thumbnailUrl,
-			Requester = p.Name, RequesterId = p.UserId,
-			AddedTime = os.time(),
-		})
+		Library.insert(Library.fromInfo(rawId, info, { -- [FIX R4]
+			Requester = p.Name, RequesterId = p.UserId, AddedTime = os.time(),
+		}))
 		Library.broadcast()
 		Library.save()
 		Shared.to(p, "SongAdded", info.name)
@@ -332,12 +319,7 @@ local function toggleFavorite(p, songId)
 		local _, song = Library.find(id)
 		if not song then return Shared.to(p, "MyLibError", "Song is not in the library") end
 
-		local added, res = Library.myAdd(p, {
-			Id = song.Id, RawId = song.RawId, Name = song.Name,
-			AudioCreator = song.AudioCreator, creatorType = song.creatorType,
-			creatorId = song.creatorId, thumbnailUrl = song.thumbnailUrl,
-			source = "fav", AddedTime = os.time(),
-		})
+		local added, res = Library.myAdd(p, Library.meta(song, { source = "fav", AddedTime = os.time() })) -- [FIX R4]
 		if not added then return Shared.to(p, "MyLibError", res) end
 
 		Library.myBroadcast(p)
@@ -367,24 +349,13 @@ local function addMySong(p, data)
 		local _, exist = Library.find(id)
 		local entry
 		if exist then
-			entry = {
-				Id = exist.Id, RawId = exist.RawId, Name = exist.Name,
-				AudioCreator = exist.AudioCreator, creatorType = exist.creatorType,
-				creatorId = exist.creatorId, thumbnailUrl = exist.thumbnailUrl,
-				source = "own", AddedTime = os.time(),
-			}
+			entry = Library.meta(exist, { source = "own", AddedTime = os.time() }) -- [FIX R4]
 		else
 			Shared.to(p, "SongValidating", Shared.loadTimeout)
 			local valid, info = Library.validate(rawId)
 			if not valid then return Shared.to(p, "MyLibError", info) end
 			if not p.Parent then return end
-			entry = {
-				Id = id, RawId = rawId,
-				Name = info.name, AudioCreator = info.creator,
-				creatorType = info.creatorType, creatorId = info.creatorId,
-				thumbnailUrl = info.thumbnailUrl,
-				source = "own", AddedTime = os.time(),
-			}
+			entry = Library.fromInfo(rawId, info, { source = "own", AddedTime = os.time() })
 		end
 
 		local added, res = Library.myAdd(p, entry)
@@ -445,14 +416,7 @@ local function addToQueue(p, songId)
 			("Your queue limit is %d (currently %d)"):format(limit, myCount))
 	end
 
-	local entry = {
-		Name = song.Name, Id = song.Id, RawId = song.RawId or Shared.rawId(song.Id),
-		thumbnailUrl = song.thumbnailUrl or "",
-		creatorType = song.creatorType,
-		AudioCreator = song.AudioCreator,
-		Requester = p.Name, RequesterId = p.UserId,
-		LibOwner = song.Requester,
-	}
+	local entry = Playback.entry(song, p.Name, p.UserId) -- [FIX R4]
 
 	local held = Playback.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId()) -- [FIX M6b]
 	if not Playback.isPlaying() and not held then -- [FIX L2] saat ikut siaran: masuk antrian lokal
@@ -575,9 +539,8 @@ local Actions = {
 	SetLive            = function(p, on) -- [FIX L1] admin, jeda 2 dtk
 		if not isDJ(p) then return Shared.to(p, "SettingsError", "DJ only!") end -- [FIX L1b]
 		if type(on) ~= "boolean" then return end
-		local now = os.clock()
-		if liveCooldown[p] and now - liveCooldown[p] < 2 then return Shared.to(p, "SettingsError", "Wait 2s") end
-		liveCooldown[p] = now
+		local okRate, msg = checkRate(p, "Live", 2, true) -- [FIX R4]
+		if not okRate then return Shared.to(p, "SettingsError", msg) end
 		task.spawn(function()
 			if on then
 				local ok, err = Live.start(p, Playback.current(), Playback.elapsed())
@@ -635,9 +598,7 @@ local function initPlayer(p)
 		local d = playerData[p]
 		if not p.Parent or not d then return end
 		d.queueLimit = queueLimit(p)
-		Shared.to(p, "IsAdmin",    isAdmin(p))
-		Shared.to(p, "IsDJ",       isDJ(p)) -- [FIX L1b]
-		Shared.to(p, "QueueLimit", { current = Playback.queueSize(), max = Shared.maxGlobalQueue, myLimit = d.queueLimit })
+		sendRole(p)
 		if isAdmin(p) then Shared.to(p, "SpatialSettings", table.clone(Shared.spatial)) end
 	end
 	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass", "Role" }) do -- [FIX L1b] Role: peran DJ
@@ -656,8 +617,6 @@ local function cleanupPlayer(p)
 		Playback.broadcastIds()
 	end
 	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
-	liveCooldown[p] = nil
-	lastState[p] = nil
 	pendingState[p], wantMy[p] = nil, nil -- [FIX R2]
 	reportBucket[p] = nil -- [FIX M3]
 
@@ -704,54 +663,6 @@ end
 Players.PlayerAdded:Connect(function(p)
 	task.delay(4, tryTakeover, p)
 	task.delay(10, tryTakeover, p)
-end)
-
--- ═══ BULK IMPORT ══════════════════════════════════════════════════════════
--- Tempel ID di bawah, jalankan server SEKALI. Idempotent: ID yang sudah ada
--- dilewati, jadi blok ini boleh dibiarkan selamanya.
-local BULK_IDS = {
-	-- "1234567890",
-}
-local BULK_OWNER_ID   = 0            -- isi UserId-mu supaya tombol × muncul
-local BULK_OWNER_NAME = "BulkImport"
-
-task.spawn(function()
-	local todo = {}
-	for _, raw in ipairs(BULK_IDS) do
-		local rawId = Shared.rawId(raw)
-		if rawId then table.insert(todo, rawId) end
-	end
-	if #todo == 0 then return end
-
-	task.wait(5) -- biar library selesai load
-	local added, skipped, failed = 0, 0, 0
-	for _, rawId in ipairs(todo) do
-		local id = "rbxassetid://" .. rawId
-		if Library.find(id) then
-			skipped += 1
-		elseif Library.isFull() then
-			warn("[BulkImport] Library penuh, berhenti."); break
-		else
-			local valid, info = Library.validate(rawId)
-			if valid then
-				Library.insert({
-					Id = id, RawId = rawId,
-					Name = info.name, AudioCreator = info.creator,
-					creatorType = info.creatorType, creatorId = info.creatorId,
-					thumbnailUrl = info.thumbnailUrl,
-					Requester = BULK_OWNER_NAME, RequesterId = BULK_OWNER_ID,
-					AddedTime = os.time(),
-				})
-				added += 1
-			else
-				failed += 1
-				warn("[BulkImport] Gagal:", rawId, "-", tostring(info))
-			end
-			task.wait(0.5) -- throttle Market API
-		end
-	end
-	if added > 0 then Library.broadcast(); Library.saveNow() end
-	print(("[BulkImport] Selesai — ditambah:%d dilewati:%d gagal:%d"):format(added, skipped, failed))
 end)
 
 print("✅ MusicServer ready")

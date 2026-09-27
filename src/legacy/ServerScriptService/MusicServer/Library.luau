@@ -10,7 +10,6 @@
 local Players = game:GetService("Players")
 local RS      = game:GetService("ReplicatedStorage")
 local DSS     = game:GetService("DataStoreService")
-local Market  = game:GetService("MarketplaceService")
 
 local Shared   = require(RS:WaitForChild("MusicShared"))
 local DS       = DSS:GetDataStore("MusicLibrary")
@@ -29,35 +28,7 @@ function Library.isFull() return #list >= Shared.maxSharedLib end
 -- ── info asset (cache) ────────────────────────────────────────────────────
 local cache = {}
 
-local function thumbUrl(creator)
-	if not creator then return "" end
-	local id = creator.CreatorTargetId
-	if not id or id == 0 then return "" end
-	local ct = tostring(creator.CreatorType)
-	if ct == "Group" or ct == "Enum.CreatorType.Group" or ct == "2" then
-		return "rbxthumb://type=GroupIcon&id=" .. id .. "&w=150&h=150"
-	end
-	return "rbxthumb://type=AvatarBust&id=" .. id .. "&w=150&h=150"
-end
-
--- Marketplace API bisa gagal walau izin asetnya sudah benar (throttle server,
--- HTTP 429/502). Satu kegagalan sementara TIDAK boleh membuat lagu dianggap
--- tidak valid, jadi setiap panggilan dijaga jaraknya lalu diulang.
-local MARKET_GAP = 0.12
-local lastMarket = 0
-
-local function fetchInfo(num)
-	for attempt = 1, 3 do
-		local gap = MARKET_GAP - (os.clock() - lastMarket)
-		if gap > 0 then task.wait(gap) end
-		lastMarket = os.clock()
-
-		local ok, info = pcall(Market.GetProductInfo, Market, num, Enum.InfoType.Asset)
-		if ok and info then return info end
-		task.wait(0.4 * attempt)
-	end
-	return nil
-end
+-- [FIX R4] info aset (jaga jarak + ulang) & URL thumbnail ada di MusicShared.
 
 function Library.info(rawId)
 	local num = tonumber(rawId)
@@ -66,19 +37,18 @@ function Library.info(rawId)
 	local c = cache[num]
 	if c and (os.time() - c.ts) < Shared.nameCacheTTL then return c end
 
-	local info = fetchInfo(num)
+	local info = Shared.productInfo(num)
 	if not info then return nil end
 
 	local cr    = info.Creator
-	local ct    = cr and tostring(cr.CreatorType) or ""
-	local isGrp = ct == "Group" or ct == "Enum.CreatorType.Group" or ct == "2"
+	local isGrp = Shared.isGroupCreator(cr)
 
 	local entry = {
 		name         = info.Name or ("Audio " .. tostring(rawId)),
 		creator      = (cr and cr.Name) or "Unknown",
 		creatorType  = isGrp and "Group" or "User",
 		creatorId    = (cr and cr.CreatorTargetId) or 0,
-		thumbnailUrl = thumbUrl(cr),
+		thumbnailUrl = Shared.creatorThumb(cr),
 		typeId       = info.AssetTypeId,
 		ts           = os.time(),
 	}
@@ -218,16 +188,11 @@ local function writeNow()
 		local snap = snapshotAll()
 		local adds, dels = addedIds, removedIds
 		addedIds, removedIds = {}, {}
-		local ok, merged
-		for i = 1, 3 do
-			ok, merged = pcall(function()
-				return DS:UpdateAsync("GlobalLib", function(old)
-					return mergeInto(old, snap, adds, dels)
-				end)
+		local ok, merged = Shared.retry(3, 1, function() -- [FIX R4]
+			return DS:UpdateAsync("GlobalLib", function(old)
+				return mergeInto(old, snap, adds, dels)
 			end)
-			if ok then break end
-			if i < 3 then task.wait(1) end
-		end
+		end)
 		saveRunning = false
 		if ok then
 			if type(merged) == "table" then adopt(merged) end
@@ -257,26 +222,23 @@ function Library.saveNow()
 end
 
 function Library.load()
-	for i = 1, 3 do
-		local ok, data = pcall(DS.GetAsync, DS, "GlobalLib")
-		if ok then
-			local clean, seen = {}, {}
-			if type(data) == "table" then
-				for _, s in ipairs(data) do
-					if type(s) == "table" and s.Id and s.Requester and not seen[s.Id] then
-						seen[s.Id]    = true
-						s.unavailable = nil   -- status runtime, jangan dipersist
-						s.failCount   = nil
-						s.RawId       = s.RawId or Shared.rawId(s.Id)
-						table.insert(clean, s)
-					end
+	local ok, data = Shared.retry(3, function(i) return 0.5 * i end, DS.GetAsync, DS, "GlobalLib") -- [FIX R4]
+	if ok then
+		local clean, seen = {}, {}
+		if type(data) == "table" then
+			for _, s in ipairs(data) do
+				if type(s) == "table" and s.Id and s.Requester and not seen[s.Id] then
+					seen[s.Id]    = true
+					s.unavailable = nil   -- status runtime, jangan dipersist
+					s.failCount   = nil
+					s.RawId       = s.RawId or Shared.rawId(s.Id)
+					table.insert(clean, s)
 				end
 			end
-			list = clean
-			Library.primeSync() -- [FIX R1] semua client akan dapat daftar ini lewat kiriman penuh
-			return true
 		end
-		if i < 3 then task.wait(0.5 * i) end
+		list = clean
+		Library.primeSync() -- [FIX R1] semua client akan dapat daftar ini lewat kiriman penuh
+		return true
 	end
 	-- [FIX M1] Gagal dimuat: daftar kosong SEMENTARA. Aman, karena tulis selalu
 	-- digabung dengan nilai lama. Dimuat ulang di latar sampai berhasil.
@@ -285,9 +247,9 @@ function Library.load()
 	task.spawn(function()
 		for _ = 1, 20 do
 			task.wait(30)
-			local ok, data = pcall(DS.GetAsync, DS, "GlobalLib")
-			if ok then
-				adopt(type(data) == "table" and data or {})
+			local okLate, late = pcall(DS.GetAsync, DS, "GlobalLib")
+			if okLate then
+				adopt(type(late) == "table" and late or {})
 				print("[Music] library global termuat ulang:", #list, "lagu")
 				return
 			end
@@ -454,12 +416,7 @@ function Library.myLoad(p)
 	end
 	s.loading = true
 
-	local ok, data
-	for _ = 1, 3 do
-		ok, data = pcall(FavDS.GetAsync, FavDS, "MyLib_" .. uid)
-		if ok then break end
-		task.wait(0.5)
-	end
+	local ok, data = Shared.retry(3, 0.5, FavDS.GetAsync, FavDS, "MyLib_" .. uid) -- [FIX R4]
 
 	local out, seen = {}, {}
 	if ok and type(data) == "table" then
@@ -488,30 +445,25 @@ local function myWrite(uid)
 	for _, song in ipairs(s.list) do table.insert(snap, clean(song)) end
 	local merge = s.failed
 	myPending += 1
-	local ok, res
-	for _ = 1, 3 do
-		ok, res = pcall(function()
-			return FavDS:UpdateAsync("MyLib_" .. uid, function(old)
-				if not merge then return snap end
-				-- [FIX 2c2] library lama belum pernah termuat → gabung (lama + baru), jangan timpa
-				local out, seen = {}, {}
-				if type(old) == "table" then
-					for _, song in ipairs(old) do
-						if type(song) == "table" and song.Id and not seen[tostring(song.Id)] then
-							seen[tostring(song.Id)] = true
-							table.insert(out, clean(song))
-						end
+	local ok, res = Shared.retry(3, 1, function() -- [FIX R4]
+		return FavDS:UpdateAsync("MyLib_" .. uid, function(old)
+			if not merge then return snap end
+			-- [FIX 2c2] library lama belum pernah termuat → gabung (lama + baru), jangan timpa
+			local out, seen = {}, {}
+			if type(old) == "table" then
+				for _, song in ipairs(old) do
+					if type(song) == "table" and song.Id and not seen[tostring(song.Id)] then
+						seen[tostring(song.Id)] = true
+						table.insert(out, clean(song))
 					end
 				end
-				for _, song in ipairs(snap) do
-					if not seen[song.Id] then seen[song.Id] = true; table.insert(out, song) end
-				end
-				return out
-			end)
+			end
+			for _, song in ipairs(snap) do
+				if not seen[song.Id] then seen[song.Id] = true; table.insert(out, song) end
+			end
+			return out
 		end)
-		if ok then break end
-		task.wait(1)
-	end
+	end)
 	myPending -= 1
 	if not ok then
 		s.dirty = true -- [FIX M2] jangan dibuang diam-diam: ikut ditulis saat keluar / shutdown
@@ -589,6 +541,26 @@ function Library.myRemove(p, songId)
 	return Library.myRemoveAt(p, idx)
 end
 
+-- [FIX R4] Pembuat entri lagu (dulu disusun manual di 5 tempat).
+--   meta(src, extra)            : salin metadata lagu yang sudah ada + field tambahan
+--   fromInfo(rawId, info, extra): entri baru dari hasil Library.info / validate
+local META = { "Id", "RawId", "Name", "AudioCreator", "creatorType", "creatorId", "thumbnailUrl" }
+
+function Library.meta(src, extra)
+	local e = {}
+	for _, k in ipairs(META) do e[k] = src[k] end
+	for k, v in pairs(extra or {}) do e[k] = v end
+	return e
+end
+
+function Library.fromInfo(rawId, info, extra)
+	return Library.meta({
+		Id = "rbxassetid://" .. rawId, RawId = rawId,
+		Name = info.name, AudioCreator = info.creator,
+		creatorType = info.creatorType, creatorId = info.creatorId,
+		thumbnailUrl = info.thumbnailUrl,
+	}, extra)
+end
 function Library.myBroadcast(p)
 	if typeof(p) ~= "Instance" or not p.Parent then return end
 	Shared.to(p, "MyLibrary", slot(p.UserId).list)
