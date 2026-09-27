@@ -80,8 +80,42 @@ local function changed()
 	for _, fn in ipairs(listeners) do task.spawn(fn, st) end
 end
 
-function Live.state()
-	return { active = active, dj = djName, here = active }
+-- [FIX L2] SISI PENDENGAR. Server yang tidak siaran membaca status di MemoryStore
+-- (saat ada pesan + tiap POLL detik). Ada siaran milik server lain → ikut;
+-- status hilang (DJ berhenti / lease habis) → kembali ke musik server ini.
+local POLL = 10
+local following, followKey, followDj = false, nil, nil
+local followFns = {}   -- fn(state) ikut lagu siaran | fn(nil) berhenti ikut
+
+function Live.isFollowing() return following end
+function Live.onFollow(fn) table.insert(followFns, fn) end
+
+local function syncFollower()
+	if active then return end
+	local ok, st = pcall(map.GetAsync, map, KEY)
+	if not ok then return end
+	if type(st) == "table" and st.jobId ~= jobId then
+		local key = tostring(st.jobId) .. ":" .. tostring(st.ver)
+		if key == followKey then return end
+		followKey = key
+		local first = not following
+		following, followDj = true, st.dj
+		local lag = st.startedAtMs and (nowMs() - st.startedAtMs) or 0
+		print(("[Live] ikut siaran DJ %s | lagu %s | mulai di detik %.1f")
+			:format(tostring(st.dj), tostring(st.song and st.song.Name), lag / 1000))
+		for _, fn in ipairs(followFns) do task.spawn(fn, st) end
+		if first then changed() end
+	elseif following then
+		following, followKey, followDj = false, nil, nil
+		print("[Live] siaran selesai, kembali ke musik server ini")
+		for _, fn in ipairs(followFns) do task.spawn(fn, nil) end
+		changed()
+	end
+end
+Live.syncNow = syncFollower
+
+function Live.state() -- [FIX L2] + following
+	return { active = active, dj = active and djName or followDj, here = active, following = following }
 end
 
 function Live.isActive() return active end
@@ -187,9 +221,19 @@ task.spawn(function()
 			print(("[Live] pesan '%s' dari server %s (DJ %s) | selisih jam+latensi %d ms")
 				:format(tostring(d.type), string.sub(tostring(d.jobId), 1, 8), tostring(d.dj), lag))
 			for _, fn in ipairs(remoteFns) do task.spawn(fn, d) end
+			task.spawn(syncFollower) -- [FIX L2]
 		end)
 	end)
 	if not ok then warn("[Live] SubscribeAsync gagal:", err) end
+end)
+
+-- [FIX L2] Cadangan pesan yang hilang + server baru yang lahir di tengah siaran.
+task.spawn(function()
+	task.wait(3)
+	while true do
+		syncFollower()
+		task.wait(POLL)
+	end
 end)
 
 return Live

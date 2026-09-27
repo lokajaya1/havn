@@ -607,7 +607,53 @@ function P.play(song)
 	task.spawn(watchdog, tk, song)
 end
 
+-- [FIX L2] MODE IKUT SIARAN. Lagu dari server DJ diputar di posisi detik yang
+-- sama. Watchdog/Ended lagu lokal dimatikan (token baru) dan antrian lokal
+-- tidak disentuh, jadi setelah siaran selesai antrian lokal lanjut seperti biasa.
+local following = false
+function P.isFollowing() return following end
+
+function P.follow(song, offset)
+	following = true
+	token += 1
+	if endedConn then endedConn:Disconnect(); endedConn = nil end
+	skipVotes = {}
+	resetReports()
+	duration, durSource = 0, "?"
+	if not sound or not sound.Parent then P.init() end
+	offset = math.max(0, tonumber(offset) or 0)
+	local id = song and normalizeId(song.Id)
+	if not id then
+		playing, nowPlaying = false, nil
+		pcall(function() sound:Stop() end)
+		Shared.all("NowPlaying", { Name = "LIVE - waiting for the DJ", Requester = "" })
+		P.broadcastIds()
+		return
+	end
+	nowPlaying, playing = song, true
+	startClock = os.clock() - offset
+	pcall(function()
+		sound:Stop()
+		sound.SoundId      = id
+		sound.TimePosition = offset
+		sound:Play()
+	end)
+	P.applyLoudness()
+	local np = table.clone(song)
+	np.Elapsed = offset
+	Shared.all("NowPlaying", np)
+	Shared.all("SkipVoteUpdate", P.votes())
+	P.broadcastIds()
+end
+
+function P.unfollow()
+	if not following then return end
+	following = false
+	playing = false
+	P.next()
+end
 function P.next()
+	if following then return end -- [FIX L2] saat ikut siaran, antrian lokal ditahan
 	playing    = false
 	nowPlaying = nil
 	duration, durSource = 0, "?"
