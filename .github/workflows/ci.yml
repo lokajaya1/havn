@@ -30,5 +30,8 @@ jobs:
       - name: Lint (selene)
         run: lune run tools/checks/lint
 
+      - name: Daftar dance (DanceAssets)
+        run: lune run tools/checks/dances
+
       - name: rojo build
         run: rojo build default.project.json -o ci-build.rbxl

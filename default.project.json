@@ -4,6 +4,18 @@
     "$className": "DataModel",
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
+      "Assets": {
+        "$className": "Folder",
+        "Animations": {
+          "$className": "Folder",
+          "Dances": {
+            "$className": "Folder",
+            "DanceAssets": {
+              "$path": "src/legacy/ReplicatedStorage/Assets/Animations/Dances/DanceAssets.luau"
+            }
+          }
+        }
+      },
       "CarryReplic": {
         "$className": "Folder",
         "CarryRemotes": {
