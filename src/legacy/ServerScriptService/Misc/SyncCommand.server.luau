@@ -2,11 +2,11 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService        = game:GetService("RunService")
 
-local DanceAssets = require(ReplicatedStorage.Assets.Animations.Dances.DanceAssets)
+local DanceShared = require(ReplicatedStorage.Modules.DanceShared)
 
-local SYNC_WALKSPEED    = 6
-local DANCE_WALKSPEED   = 6
-local DEFAULT_WALKSPEED = 16
+local SYNC_WALKSPEED    = DanceShared.WALKSPEED.dance
+local DANCE_WALKSPEED   = DanceShared.WALKSPEED.dance
+local DEFAULT_WALKSPEED = DanceShared.WALKSPEED.default
 local FADE_IN           = 0.20
 local FADE_OUT          = 0.20
 local STOP_FADE         = 0.35
@@ -19,29 +19,14 @@ local CARRY_WATCH_INTERVAL = 0.2 -- watchdog jaga mirror hidup selama follower d
 local START_STOP_GAP    = 0.5  -- jeda start/stop sync (remote maupun chat)
 local STATUS_GAP        = 1    -- jeda getSyncStatus
 
-local function getOrCreate(name)
-	local r = ReplicatedStorage:FindFirstChild(name)
-	if r then return r end
-	r        = Instance.new("RemoteEvent")
-	r.Name   = name
-	r.Parent = ReplicatedStorage
-	return r
-end
-
-local SyncRemote = getOrCreate("SyncRemote")
+local SyncRemote = DanceShared.remote("SyncRemote")
 
 local syncData = {}
 
+-- Animator dulu, lalu Humanoid (urutan lama dipertahankan untuk pemanggil).
 local function getAnimator(player)
-	local char = player.Character
-	if not char then return nil, nil end
-	local h = char:FindFirstChild("Humanoid")
-	if not h then return nil, nil end
-	return h:FindFirstChild("Animator"), h
-end
-
-local function isDanceAnim(name)
-	return name ~= nil and DanceAssets.dances[name] ~= nil
+	local humanoid, animator = DanceShared.getRig(player)
+	return animator, humanoid
 end
 
 local function getCurrentSyncDance(userId)
@@ -89,12 +74,7 @@ local function stopOwnDanceTracks(follower)
 	local _, humanoid = getAnimator(follower)
 	if not humanoid then return end
 
-	for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-		if track.Animation and isDanceAnim(track.Animation.Name) then
-			pcall(function() track:Stop(STOP_FADE) end)
-		end
-	end
-
+	DanceShared.stopDanceTracks(humanoid, nil, STOP_FADE)
 	follower:SetAttribute("IsDancing", false)
 end
 
@@ -210,14 +190,11 @@ local mirrorTrack
 mirrorTrack = function(follower, targetTrack, isInitial)
 	if not (targetTrack and targetTrack.Animation) then return end
 	local animName = targetTrack.Animation.Name
-	if not isDanceAnim(animName) then return end
+	if not DanceShared.isDanceName(animName) then return end
 
 	local userId = follower.UserId
 	local data   = syncData[userId]
 	if not data then return end
-
-	local animId = DanceAssets.dances[animName]
-	if not animId then return end
 
 	local animator = getAnimator(follower)
 	if not animator then return end
@@ -229,17 +206,8 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 
 	local oldTrack = data.tracks[animName]
 
-	local anim       = Instance.new("Animation")
-	anim.Name        = animName
-	anim.AnimationId = "rbxassetid://" .. animId
-
-	local ok, newTrack = pcall(function() return animator:LoadAnimation(anim) end)
-	anim:Destroy()
-
-	if not ok or not newTrack then return end
-
-	newTrack.Priority = Enum.AnimationPriority.Action4
-	newTrack.Looped   = true
+	local newTrack = DanceShared.loadTrack(animator, animName)
+	if not newTrack then return end
 
 	local fIn  = isInitial and 0 or FADE_IN
 	local fOut = isInitial and 0 or FADE_OUT
@@ -291,11 +259,10 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 
 			local targetAnimator = getAnimator(d2.targetPlayer)
 			if targetAnimator then
-				for _, t in ipairs(targetAnimator:GetPlayingAnimationTracks()) do
-					if t.IsPlaying and isDanceAnim(t.Animation and t.Animation.Name) then
-						mirrorTrack(followerRef, t, true)
-						return
-					end
+				local playing = DanceShared.playingDanceTracks(targetAnimator)
+				if playing[1] then
+					mirrorTrack(followerRef, playing[1], true)
+					return
 				end
 			end
 
@@ -319,14 +286,12 @@ local function ensureMirrorAlive(follower)
 	if not targetAnimator then return false end
 
 	local leadDancing = false
-	for _, track in ipairs(targetAnimator:GetPlayingAnimationTracks()) do
-		if track.IsPlaying and isDanceAnim(track.Animation and track.Animation.Name) then
-			leadDancing = true
-			local name     = track.Animation.Name
-			local existing = data.tracks[name]
-			if not (existing and existing.IsPlaying and existing.WeightTarget >= 0.5) then
-				mirrorTrack(follower, track, false)
-			end
+	for _, track in ipairs(DanceShared.playingDanceTracks(targetAnimator)) do
+		leadDancing = true
+		local name     = track.Animation.Name
+		local existing = data.tracks[name]
+		if not (existing and existing.IsPlaying and existing.WeightTarget >= 0.5) then
+			mirrorTrack(follower, track, false)
 		end
 	end
 	return leadDancing
@@ -376,12 +341,10 @@ startSync = function(follower, targetPlayer)
 	setFollowerWalkSpeed(follower, SYNC_WALKSPEED)
 
 	local currentDanceName = nil
-	for _, track in ipairs(targetAnimator:GetPlayingAnimationTracks()) do
-		if track.IsPlaying and isDanceAnim(track.Animation and track.Animation.Name) then
-			mirrorTrack(follower, track, true)
-			if not currentDanceName then
-				currentDanceName = track.Animation.Name
-			end
+	for _, track in ipairs(DanceShared.playingDanceTracks(targetAnimator)) do
+		mirrorTrack(follower, track, true)
+		if not currentDanceName then
+			currentDanceName = track.Animation.Name
 		end
 	end
 
@@ -434,10 +397,8 @@ task.spawn(function()
 			if not targetAnimator then continue end
 
 			local targetMap = {}
-			for _, t in ipairs(targetAnimator:GetPlayingAnimationTracks()) do
-				if t.IsPlaying and t.Animation and isDanceAnim(t.Animation.Name) then
-					targetMap[t.Animation.Name] = t
-				end
+			for _, t in ipairs(DanceShared.playingDanceTracks(targetAnimator)) do
+				targetMap[t.Animation.Name] = t
 			end
 
 			for animName, followerTrack in pairs(data.tracks) do
