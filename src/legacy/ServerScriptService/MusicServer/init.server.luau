@@ -574,6 +574,7 @@ local Actions = {
 	end,
 
 	RequestMyLibrary   = function(p) if checkRate(p, "MyLib", 1) then requestMyLibrary(p) end end, -- [FIX M3]
+	RequestLibrary     = function(p) if checkRate(p, "Lib", 2) then Library.broadcast(p) end end, -- [FIX R1] delta terlewat
 	ToggleFavorite     = toggleFavorite,
 	AddMySong          = addMySong,
 	RemoveMySong       = removeMySong,

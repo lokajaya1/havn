@@ -657,8 +657,22 @@ end
 
 H.SongRetry = function() notify("Reloading song") end
 
+-- [FIX R1] Daftar lengkap (saat join / diminta) membawa nomor versi.
 H.SharedLibrary = function(data)
-	S.sharedLib = data or {}
+	if type(data) ~= "table" then return end
+	S.sharedLib = data.full or data
+	S.libVer = data.ver
+	if S.libView == "all" then refreshLib() end
+end
+
+-- [FIX R1] Perubahan kecil library. Belum punya daftar lengkap → abaikan (menyusul).
+-- Versi melompat (ada delta terlewat) → tetap diterapkan, lalu minta daftar lengkap.
+H.LibDelta = function(d)
+	if type(d) ~= "table" or type(d.ver) ~= "number" or type(S.libVer) ~= "number" then return end
+	if d.ver <= S.libVer then return end
+	if d.base ~= S.libVer then remote:FireServer("RequestLibrary") end
+	Shared.libApply(S.sharedLib, d)
+	S.libVer = d.ver
 	if S.libView == "all" then refreshLib() end
 end
 

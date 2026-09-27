@@ -72,6 +72,50 @@ function M.assetId(v)
 	return raw and ("rbxassetid://" .. raw) or nil
 end
 
+-- ── sinkron library global ── [FIX R1] ───────────────────────────────────
+-- Daftar lengkap dikirim SEKALI per pemain: "SharedLibrary" { ver, full }.
+-- Perubahan berikutnya hanya delta kecil: "LibDelta" { base, ver, set, del }.
+-- Yang dikirim hanya field yang dipakai client (field internal server tidak).
+M.libFields = {
+	"Id", "RawId", "Name", "AudioCreator", "creatorType", "thumbnailUrl",
+	"Requester", "RequesterId", "AddedTime", "unavailable",
+}
+
+function M.libSlim(s)
+	local o = {}
+	for _, k in ipairs(M.libFields) do o[k] = s[k] end
+	return o
+end
+
+-- Terapkan delta ke daftar (in place). Idempotent: `set` = tambah/ganti per Id,
+-- `del` = hapus per Id. Aman diterapkan ulang di atas daftar yang lebih baru.
+function M.libApply(list, d)
+	local at = {}
+	for i, s in ipairs(list) do at[s.Id] = i end
+	for _, o in ipairs(d.set or {}) do
+		local i = at[o.Id]
+		if i then
+			list[i] = o
+		else
+			table.insert(list, o)
+			at[o.Id] = #list
+		end
+	end
+	if d.del and #d.del > 0 then
+		local gone = {}
+		for _, id in ipairs(d.del) do gone[id] = true end
+		local n, total = 0, #list
+		for i = 1, total do
+			local s = list[i]
+			if not gone[s.Id] then
+				n += 1
+				list[n] = s
+			end
+		end
+		for i = total, n + 1, -1 do list[i] = nil end
+	end
+	return list
+end
 -- ── rantai loudness ───────────────────────────────────────────────────────
 -- Idempotent: aman dipanggil berkali-kali, tidak bikin SoundEffect dobel.
 local function ensure(sound, className, name)
