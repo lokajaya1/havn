@@ -210,9 +210,12 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 	local fOut = isInitial and 0 or FADE_OUT
 
 	newTrack:Play(fIn, 1.0, targetTrack.Speed)
-	if follower:GetAttribute("InCarry") then
-		pcall(function() newTrack:AdjustWeight(DanceShared.CARRY_WEIGHT, 0) end)
+	-- Follower digendong → bobot kecil; follower menggendong → Action3.
+	local weight = DanceShared.danceWeightFor(follower)
+	if weight ~= 1 then
+		pcall(function() newTrack:AdjustWeight(weight, 0) end)
 	end
+	newTrack.Priority = DanceShared.dancePriorityFor(follower)
 	if oldTrack and oldTrack.IsPlaying then
 		oldTrack:Stop(fOut)
 	end

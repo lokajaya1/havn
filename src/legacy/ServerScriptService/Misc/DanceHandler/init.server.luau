@@ -196,10 +196,15 @@ local function onPlayerAdded(player)
 		task.spawn(onCharacterAdded, player, player.Character)
 	end
 
-	player:GetAttributeChangedSignal("InCarry"):Connect(function()
-		-- Pose gendong menang selama carry; dance (sendiri atau mirror sync)
-		-- kembali penuh saat dilepas.
+	-- Yang digendong: pose gendong menang; dance (sendiri atau mirror sync)
+	-- kembali penuh saat dilepas. Yang menggendong tetap menari.
+	local function applyCarryWeight()
 		DanceShared.applyDanceWeight(player, DanceShared.WEIGHT_FADE)
+	end
+	player:GetAttributeChangedSignal("Carried"):Connect(applyCarryWeight)
+
+	player:GetAttributeChangedSignal("InCarry"):Connect(function()
+		applyCarryWeight()
 		if player:GetAttribute("IsSyncing") then return end
 		startWatch(player, player:GetAttribute("InCarry") == true)
 	end)
