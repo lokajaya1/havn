@@ -320,8 +320,12 @@ startSync = function(follower, targetPlayer)
 	local targetChar = targetPlayer.Character
 	if not targetChar then return false end
 
-	local targetAnimator = getAnimator(targetPlayer)
+	local targetAnimator, targetHumanoid = getAnimator(targetPlayer)
 	if not targetAnimator then return false end
+	-- Lead atau follower yang sedang mati (ragdoll) tidak bisa di-sync.
+	if targetHumanoid and targetHumanoid.Health <= 0 then return false end
+	local _, followerHumanoid = getAnimator(follower)
+	if followerHumanoid and followerHumanoid.Health <= 0 then return false end
 
 	stopOwnDanceTracks(follower)
 
@@ -368,6 +372,19 @@ startSync = function(follower, targetPlayer)
 		end
 	end)
 	table.insert(syncData[userId].connections, charConn)
+
+	-- Lead mati → sync langsung putus. Kalau menunggu karakternya dihapus
+	-- (±5 dtk ragdoll), follower terus me-mirror track lead yang berhenti/jalan
+	-- lagi dan terlihat kejang.
+	if targetHumanoid then
+		local diedConn = targetHumanoid.Died:Connect(function()
+			local d = syncData[userId]
+			if d and d.targetPlayer == targetPlayer then
+				stopSync(follower, "targetInvalid")
+			end
+		end)
+		table.insert(syncData[userId].connections, diedConn)
+	end
 
 	notifyClient(follower, true, targetPlayer.Name, nil, currentDanceName)
 
@@ -503,11 +520,24 @@ local function onPlayerAdded(player)
 		handleChatCommand(player, msg)
 	end)
 
-	player.CharacterAdded:Connect(function()
+	-- Follower mati → sync putus saat itu juga (badan ragdoll tidak ikut di-sync).
+	local function watchDeath(character)
+		local humanoid = character:WaitForChild("Humanoid", 10)
+		if not humanoid or player.Character ~= character then return end
+		humanoid.Died:Connect(function()
+			if syncData[player.UserId] then
+				stopSync(player, "followerDied")
+			end
+		end)
+	end
+
+	player.CharacterAdded:Connect(function(character)
 		if syncData[player.UserId] then
 			stopSync(player, "followerRespawned")
 		end
+		task.spawn(watchDeath, character)
 	end)
+	if player.Character then task.spawn(watchDeath, player.Character) end
 
 	-- ═══════════════════════════════════════════════════════════
 	-- CARRY x SYNC (FIX BUG SYNC-STOP)
