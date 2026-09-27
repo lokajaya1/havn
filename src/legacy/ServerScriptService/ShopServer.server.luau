@@ -56,6 +56,27 @@ local function throttled(player, name, cooldown)
 	return false
 end
 
+-- RemoteFunction dengan jeda: panggilan terlalu cepat dapat hasil terakhir (bukan hitung ulang)
+local LastResult = {} -- [player] → { [key] = hasil terakhir }
+local function limitedInvoke(player, key, cooldown, fallback, fn)
+	if throttled(player, key, cooldown) then
+		local r = LastResult[player]
+		if r and r[key] ~= nil then return r[key] end
+		return fallback
+	end
+	local res = fn()
+	LastResult[player] = LastResult[player] or {}
+	LastResult[player][key] = res
+	return res
+end
+
+-- userId dari client: bilangan bulat positif (tolak NaN, pecahan, teks)
+local function validUserId(v)
+	v = tonumber(v)
+	if not v or v ~= v or v <= 0 or v % 1 ~= 0 or v >= 2 ^ 53 then return nil end
+	return v
+end
+
 local INTENT_TTL  = 300
 local MAX_RETRIES = Config.dataStore.retryAttempts
 local RETRY_BASE  = Config.dataStore.retryCooldown
@@ -115,7 +136,8 @@ local function isAdminRank(player)
 	local uid = player.UserId
 	if RankCache[uid] ~= nil then return RankCache[uid] end
 	local ok, rank = pcall(player.GetRankInGroup, player, Config.group.id)
-	local result   = ok and type(rank) == "number" and rank >= Config.group.adminRankMin
+	if not ok or type(rank) ~= "number" then return false end -- error API: jangan dicache, coba lagi nanti
+	local result   = rank >= Config.group.adminRankMin
 	RankCache[uid] = result
 	return result
 end
@@ -431,7 +453,7 @@ end
 
 -- ── Gift validation (paid path) ────────────────────────────────
 local function validateGift(sender, recipientId, passName)
-	recipientId = tonumber(recipientId)
+	recipientId = validUserId(recipientId)
 	if not recipientId or type(passName) ~= "string" then return false end
 	local pass = Config.getGamepassByName(passName)
 	if not pass or pass.giftProduct == 0 then return false end
@@ -539,41 +561,48 @@ end
 
 -- Single ownership check (backward compat)
 R.CheckOwnership.OnServerInvoke = function(player, passName)
-	if type(passName) ~= "string" then return false end
-	-- Admin rank = semua pass dianggap owned
-	if isAdminRank(player) then return true end
-	return hasPass(player.UserId, passName, false)
+	if type(passName) ~= "string" or not Config.getGamepassByName(passName) then return false end
+	return limitedInvoke(player, "CheckOwnership|" .. passName, 0.5, false, function()
+		-- Admin rank = semua pass dianggap owned
+		if isAdminRank(player) then return true end
+		return hasPass(player.UserId, passName, false)
+	end)
 end
 
 -- BATCH: 1 call untuk semua pass + flag isAdmin
 -- Menggantikan N sequential CheckOwnership calls di client
 R.GetAllOwnership.OnServerInvoke = function(player)
-	local admin  = isAdminRank(player)
-	local result = { _isAdmin = admin }
-	for _, pass in ipairs(Config.gamepasses) do
-		-- Admin = semua true; lainnya baca cache memory (sudah loaded di PlayerAdded)
-		result[pass.name] = admin or hasPass(player.UserId, pass.name, false)
-	end
-	return result
+	return limitedInvoke(player, "GetAllOwnership", 0.5, nil, function()
+		local admin  = isAdminRank(player)
+		local result = { _isAdmin = admin }
+		for _, pass in ipairs(Config.gamepasses) do
+			-- Admin = semua true; lainnya baca cache memory (sudah loaded di PlayerAdded)
+			result[pass.name] = admin or hasPass(player.UserId, pass.name, false)
+		end
+		return result
+	end)
 end
 
 -- Daftar player online untuk modal gift
 R.GetOnlinePlayers.OnServerInvoke = function(player, passName)
 	if not player then return {} end
-	local list   = {}
-	local isPass = type(passName) == "string"
-	for _, other in ipairs(Players:GetPlayers()) do
-		if other ~= player then
-			table.insert(list, {
-				UserId      = other.UserId,
-				Name        = other.Name,
-				DisplayName = other.DisplayName,
-				-- Gunakan memory cache saja (cukup untuk daftar online, lebih cepat)
-				OwnsPass    = isPass and hasPass(other.UserId, passName, false) or false,
-			})
+	if type(passName) ~= "string" or not Config.getGamepassByName(passName) then passName = nil end
+	return limitedInvoke(player, "GetOnlinePlayers|" .. tostring(passName), 0.5, {}, function()
+		local list   = {}
+		local isPass = passName ~= nil
+		for _, other in ipairs(Players:GetPlayers()) do
+			if other ~= player then
+				table.insert(list, {
+					UserId      = other.UserId,
+					Name        = other.Name,
+					DisplayName = other.DisplayName,
+					-- Gunakan memory cache saja (cukup untuk daftar online, lebih cepat)
+					OwnsPass    = isPass and hasPass(other.UserId, passName, false) or false,
+				})
+			end
 		end
-	end
-	return list
+		return list
+	end)
 end
 
 R.CheckPlayerOwnership.OnServerInvoke = function(player, targetId, passName)
@@ -599,7 +628,7 @@ R.InitiateGift.OnServerEvent:Connect(function(player, recipientId, passName)
 	end
 	if throttled(player, "InitiateGift", 2) then return end -- [FIX 2a] anti-spam
 	if not validateGift(player, recipientId, passName) then return end
-	recipientId = tonumber(recipientId)
+	recipientId = validUserId(recipientId)
 	setIntent(player, recipientId, passName)
 
 	local pass       = Config.getGamepassByName(passName)
@@ -623,12 +652,13 @@ end)
 
 -- FREE gift: hanya untuk rank >= adminRankMin
 R.AdminGiftItem.OnServerEvent:Connect(function(player, recipientId, passName)
+	if throttled(player, "AdminGiftItem", 0.5) then return end -- juga membatasi warn di bawah
 	-- Security: validasi rank server-side, tidak percaya client
 	if not isAdminRank(player) then
 		warn(("[ShopServer] AdminGift ditolak (rank tidak cukup): %s"):format(player.Name))
 		return
 	end
-	recipientId = tonumber(recipientId)
+	recipientId = validUserId(recipientId)
 	if not recipientId or type(passName) ~= "string" then return end
 	processAdminGift(player, recipientId, passName)
 end)
@@ -756,6 +786,7 @@ Players.PlayerRemoving:Connect(function(player)
 	RankCache[uid] = nil   -- bersihkan rank cache saat player keluar
 	LoadFailed[uid] = nil
 	LastCall[player] = nil
+	LastResult[player] = nil
 	PendingWant[uid] = nil
 	Dirty[uid] = nil
 end)

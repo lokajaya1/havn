@@ -48,7 +48,8 @@ local function ownsGamepass(player, passId, passName)
 end
 
 local function getGroupRank(player)
-	if not player:IsInGroup(GROUP_ID) then return 0 end
+	local okMember, isMember = pcall(player.IsInGroup, player, GROUP_ID) -- error API → anggap bukan member
+	if not okMember or not isMember then return 0 end
 	local ok, rank = pcall(player.GetRankInGroup, player, GROUP_ID)
 	return ok and rank or 0
 end

@@ -594,19 +594,6 @@ local function onPassPurchased(player)
 	syncAccess(player, true)
 end
 
-task.delay(2, function()
-	local shopRemotes = RS:FindFirstChild("ShopRemotes")
-	local ownUpd = shopRemotes and shopRemotes:FindFirstChild("OwnershipUpdated")
-	local target = ownUpd or RS:FindFirstChild("OwnershipUpdated")
-	if target and target:IsA("RemoteEvent") then
-		target.OnServerEvent:Connect(function(player, passName, owned)
-			if passName == PASS_NAME and owned then
-				onPassPurchased(player)
-			end
-		end)
-	end
-end)
-
 MarketplaceSvc.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
 	if passId ~= COMMANDS_PASS or not purchased then return end
 	onPassPurchased(player)
