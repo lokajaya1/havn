@@ -382,6 +382,15 @@ function P.report(player, data)
 	if data.failed == true then repFail[uid] = true end
 end
 
+-- [FIX R4] Satu-satunya cara memulai Sound (dulu disalin di play, retry, follow).
+local function startSound(id, offset)
+	return pcall(function()
+		sound:Stop()
+		sound.SoundId      = id
+		sound.TimePosition = offset or 0
+		sound:Play()
+	end)
+end
 local function tryResume(el)
 	if resumeUsed >= 2 then return end
 	resumeUsed += 1
@@ -404,12 +413,7 @@ local function replayCurrent(tk)
 	if tk ~= token or not nowPlaying then return end
 	local id = normalizeId(nowPlaying.Id)
 	if not id then return end
-	pcall(function()
-		sound:Stop()
-		sound.TimePosition = 0
-		sound.SoundId      = id
-		sound:Play()
-	end)
+	startSound(id) -- [FIX R4]
 	startClock = os.clock()
 	resumeUsed = 0
 	resetReports()
@@ -541,6 +545,16 @@ local function remember(id)
 	if #recent > RECENT_MAX then table.remove(recent) end
 end
 
+-- [FIX R4] Entri antrian dari lagu library (request pemain & auto play sama bentuknya).
+function P.entry(song, requester, requesterId)
+	return {
+		Name = song.Name, Id = song.Id, RawId = song.RawId or rawOf(song.Id),
+		thumbnailUrl = song.thumbnailUrl or "",
+		creatorType = song.creatorType, AudioCreator = song.AudioCreator,
+		Requester = requester, RequesterId = requesterId,
+		LibOwner = song.Requester,
+	}
+end
 local function pickAuto()
 	if not (Shared.spatial and Shared.spatial.autoplay) then return nil end
 	if #Players:GetPlayers() == 0 then return nil end
@@ -555,14 +569,9 @@ local function pickAuto()
 	end
 	local pool = (#fresh > 0) and fresh or any
 	if #pool == 0 then return nil end
-	local s = pool[math.random(#pool)]
-	return {
-		Name = s.Name, Id = s.Id, RawId = s.RawId or rawOf(s.Id),
-		thumbnailUrl = s.thumbnailUrl or "",
-		creatorType = s.creatorType, AudioCreator = s.AudioCreator,
-		Requester = "Auto play", RequesterId = 0,
-		LibOwner = s.Requester, auto = true,
-	}
+	local e = P.entry(pool[math.random(#pool)], "Auto play", 0)
+	e.auto = true
+	return e
 end
 function P.play(song)
 	if not song or not song.Id then
@@ -598,12 +607,7 @@ function P.play(song)
 
 	if endedConn then endedConn:Disconnect(); endedConn = nil end
 
-	local ok = pcall(function()
-		sound:Stop()
-		sound.TimePosition = 0
-		sound.SoundId      = id
-		sound:Play()
-	end)
+	local ok = startSound(id) -- [FIX R4]
 	if not ok then
 		playing = false; task.defer(P.next); return
 	end
@@ -658,12 +662,7 @@ function P.follow(song, offset)
 	end
 	nowPlaying, playing = song, true
 	startClock = os.clock() - offset
-	pcall(function()
-		sound:Stop()
-		sound.SoundId      = id
-		sound.TimePosition = offset
-		sound:Play()
-	end)
+	startSound(id, offset) -- [FIX R4]
 	P.applyLoudness()
 	local np = table.clone(song)
 	np.Elapsed = offset

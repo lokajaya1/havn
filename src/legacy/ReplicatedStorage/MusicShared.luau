@@ -8,6 +8,7 @@
 local Players    = game:GetService("Players")
 local RS         = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Market     = game:GetService("MarketplaceService")
 
 local M = {}
 
@@ -72,6 +73,51 @@ function M.assetId(v)
 	return raw and ("rbxassetid://" .. raw) or nil
 end
 
+-- ── helper umum ── [FIX R4] ──────────────────────────────────────────────
+-- Dulu ada 7 loop "coba 3x" yang ditulis ulang, plus info aset & URL
+-- thumbnail kreator yang disalin di server Library dan client Lists.
+
+-- Jalankan fn(...) dalam pcall sampai berhasil, maks `times` kali. Jeda antar
+-- percobaan: angka detik, atau fungsi(i) -> detik. Hasil: ok, nilai (atau error).
+function M.retry(times, delay, fn, ...)
+	local ok, res
+	for i = 1, times do
+		ok, res = pcall(fn, ...)
+		if ok then return true, res end
+		if i < times then task.wait(type(delay) == "function" and delay(i) or delay) end
+	end
+	return false, res
+end
+
+function M.isGroupCreator(creator)
+	local ct = creator and tostring(creator.CreatorType) or ""
+	return ct == "Group" or ct == "Enum.CreatorType.Group" or ct == "2"
+end
+
+function M.creatorThumb(creator)
+	local id = creator and creator.CreatorTargetId
+	if not id or id == 0 then return "" end
+	local kind = M.isGroupCreator(creator) and "GroupIcon" or "AvatarBust"
+	return "rbxthumb://type=" .. kind .. "&id=" .. id .. "&w=150&h=150"
+end
+
+-- Marketplace API bisa gagal walau izin asetnya benar (throttle, HTTP 429/502):
+-- jarak antar panggilan dijaga lalu diulang. Satu kegagalan sementara tidak
+-- boleh membuat lagu dianggap tidak valid.
+M.marketGap = RunService:IsServer() and 0.12 or 0.15
+local lastMarket = 0
+
+function M.productInfo(num)
+	local ok, info = M.retry(3, function(i) return 0.4 * i end, function()
+		local gap = M.marketGap - (os.clock() - lastMarket)
+		if gap > 0 then task.wait(gap) end
+		lastMarket = os.clock()
+		local res = Market:GetProductInfo(num, Enum.InfoType.Asset)
+		if not res then error("info aset kosong") end
+		return res
+	end)
+	return ok and info or nil
+end
 -- ── sinkron library global ── [FIX R1] ───────────────────────────────────
 -- Daftar lengkap dikirim SEKALI per pemain: "SharedLibrary" { ver, full }.
 -- Perubahan berikutnya hanya delta kecil: "LibDelta" { base, ver, set, del }.
