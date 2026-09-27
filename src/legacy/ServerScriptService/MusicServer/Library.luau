@@ -273,6 +273,7 @@ function Library.load()
 				end
 			end
 			list = clean
+			Library.primeSync() -- [FIX R1] semua client akan dapat daftar ini lewat kiriman penuh
 			return true
 		end
 		if i < 3 then task.wait(0.5 * i) end
@@ -294,20 +295,60 @@ function Library.load()
 	end)
 	return false
 end
--- Library bisa berisi ratusan lagu, dan satu aksi admin memicu beberapa
--- broadcast beruntun. Semua digabung jadi SATU kiriman per 0.4 detik supaya
--- tidak membanjiri jaringan tiap client.
+-- [FIX R1] Dulu SELURUH library (±565 lagu ≈ 150-200 KB) dikirim ulang ke
+-- SEMUA pemain tiap ada perubahan. Sekarang:
+--   broadcast(p) → daftar lengkap ke satu pemain (join / diminta), + versi;
+--   broadcast()  → hanya lagu yang berubah sejak kiriman terakhir, ke semua.
+-- Perubahan beruntun tetap digabung jadi satu kiriman per 0.4 dtk.
 local bcTimer
+local libVer = 0
+local sentSig = {} -- [Id] = tanda isi lagu yang terakhir dikirim ke semua pemain
+
+local function sig(o)
+	local parts = {}
+	for i, k in ipairs(Shared.libFields) do parts[i] = tostring(o[k]) end
+	return table.concat(parts, "|")
+end
+
+-- Daftar sekarang dianggap sudah dimiliki semua client (dipanggil setelah load).
+function Library.primeSync()
+	sentSig = {}
+	for _, s in ipairs(list) do sentSig[s.Id] = sig(Shared.libSlim(s)) end
+end
+
+local function sendDelta()
+	local set, del, seen = {}, {}, {}
+	for _, s in ipairs(list) do
+		seen[s.Id] = true
+		local o = Shared.libSlim(s)
+		local g = sig(o)
+		if sentSig[s.Id] ~= g then
+			sentSig[s.Id] = g
+			table.insert(set, o)
+		end
+	end
+	for id in pairs(sentSig) do
+		if not seen[id] then
+			sentSig[id] = nil
+			table.insert(del, id)
+		end
+	end
+	if #set == 0 and #del == 0 then return end
+	libVer += 1
+	Shared.all("LibDelta", { base = libVer - 1, ver = libVer, set = set, del = del })
+end
 
 function Library.broadcast(target)
 	if target then
-		Shared.to(target, "SharedLibrary", list)
+		local full = table.create(#list)
+		for i, s in ipairs(list) do full[i] = Shared.libSlim(s) end
+		Shared.to(target, "SharedLibrary", { ver = libVer, full = full })
 		return
 	end
 	if bcTimer then return end
 	bcTimer = task.delay(0.4, function()
 		bcTimer = nil
-		Shared.all("SharedLibrary", list)
+		sendDelta()
 	end)
 end
 
