@@ -341,7 +341,7 @@ local function updateNowPlaying(data)
 	-- Kalau masih pakai clone darurat TAPI server sudah ganti lagu, clone lama
 	-- masih memutar lagu LAMA -> dua audio tabrakan. Balik ke Sound server.
 	if Audio.isEmergency() then
-		local newId = data.Id and tostring(data.Id):match("%d+")
+		local newId = Shared.rawId(data.Id) -- [FIX R6]
 		if newId and Audio.emergencySoundId() ~= newId then
 			Audio.track(Audio.lastPath())
 		end
@@ -364,7 +364,7 @@ local function updateNowPlaying(data)
 		return
 	end
 
-	local newId  = tostring(data.Id):match("%d+")
+	local newId  = Shared.rawId(data.Id)
 	local sameId = (newId == songId)
 
 	songSeq = songSeq + 1
@@ -453,12 +453,17 @@ ui.npFavBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
+-- [FIX R6] Satu pewarna untuk semua tombol on/off (tab, Loudness, Auto play, Live).
+local function paintToggle(btn, on, text, onBg, onFg)
+	if text then btn.Text = text end
+	btn.BackgroundColor3 = on and (onBg or P.accent) or P.panel
+	btn.TextColor3       = on and (onFg or C.onAccent) or C.gray
+end
+
 local function paintTabs()
 	local mine = (S.libView == "mine")
-	ui.tabAllBtn.BackgroundColor3  = mine and P.panel  or P.accent
-	ui.tabAllBtn.TextColor3        = mine and C.gray   or C.onAccent
-	ui.tabMineBtn.BackgroundColor3 = mine and P.accent or P.panel
-	ui.tabMineBtn.TextColor3       = mine and C.onAccent or C.gray
+	paintToggle(ui.tabAllBtn, not mine)
+	paintToggle(ui.tabMineBtn, mine)
 end
 paintTabs()
 
@@ -517,11 +522,7 @@ UI.slider(ui.globalVolBg, function(pct)
 end, ui.scroll)
 
 local loudOn = Shared.loudness.enabled
-local function paintLoud()
-	ui.loudnessToggleBtn.Text             = loudOn and "On" or "Off"
-	ui.loudnessToggleBtn.BackgroundColor3 = loudOn and P.accent or P.panel
-	ui.loudnessToggleBtn.TextColor3       = loudOn and C.onAccent or C.gray
-end
+local function paintLoud() paintToggle(ui.loudnessToggleBtn, loudOn, loudOn and "On" or "Off") end
 paintLoud()
 ui.loudnessToggleBtn.MouseButton1Click:Connect(function()
 	loudOn = not loudOn
@@ -530,11 +531,7 @@ end)
 
 -- [FIX A1] Auto play On/Off (admin). Status asli datang lewat SpatialSettings.
 local autoOn = Shared.spatial.autoplay ~= false
-local function paintAuto()
-	ui.autoplayBtn.Text             = autoOn and "On" or "Off"
-	ui.autoplayBtn.BackgroundColor3 = autoOn and P.accent or P.panel
-	ui.autoplayBtn.TextColor3       = autoOn and C.onAccent or C.gray
-end
+local function paintAuto() paintToggle(ui.autoplayBtn, autoOn, autoOn and "On" or "Off") end
 paintAuto()
 ui.autoplayBtn.MouseButton1Click:Connect(function()
 	autoOn = not autoOn
@@ -545,11 +542,7 @@ end)
 
 -- [FIX L1] Siaran live (admin). Status resmi datang dari server lewat LiveState.
 local liveOn = false
-local function paintLive()
-	ui.liveBtn.Text             = liveOn and "LIVE - On" or "Off"
-	ui.liveBtn.BackgroundColor3 = liveOn and P.danger or P.panel
-	ui.liveBtn.TextColor3       = liveOn and C.white or C.gray
-end
+local function paintLive() paintToggle(ui.liveBtn, liveOn, liveOn and "LIVE - On" or "Off", P.danger, C.white) end
 paintLive()
 ui.liveBtn.MouseButton1Click:Connect(function()
 	remote:FireServer("SetLive", not liveOn)
