@@ -1,0 +1,8 @@
+std = "roblox"
+
+# Gaya penulisan yang memang dipakai game ini (bukan bug) dimatikan.
+[lints]
+multiple_statements = "allow"
+global_usage = "allow"
+mixed_table = "allow"
+roblox_manual_fromscale_or_fromoffset = "allow"
