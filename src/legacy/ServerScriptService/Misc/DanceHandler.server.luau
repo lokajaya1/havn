@@ -53,6 +53,7 @@ local CONFIG = {
 	SPEED_TRANSITION = 0.12,
 
 	LOAD_TIMEOUT = 0.6,  -- batas tunggu asset dingin sebelum tetap diputar
+	BROKEN_CHECK = 10,   -- baru dianggap rusak kalau selama ini tetap tidak termuat
 
 	MIN_SPEED = 0.5,
 	MAX_SPEED = 2.0,
@@ -229,7 +230,27 @@ end
 -- Play pada track dengan Length 0 tidak menampilkan apa pun; ini penyebab
 -- "diam" saat dance pertama. Menunggu hanya sekali per dance per karakter.
 -- Animasi yang asset-nya rusak dicatat supaya tidak ditunggu berulang kali.
+-- Asset yang hanya LAMBAT (lewat LOAD_TIMEOUT tapi termuat kemudian) tetap
+-- diputar dan tidak dicap rusak; cap rusak baru setelah BROKEN_CHECK detik.
 local brokenDances = {}
+local brokenCheck  = {}
+
+local function checkBrokenLater(player, danceName, track)
+	if brokenCheck[danceName] or brokenDances[danceName] then return end
+	brokenCheck[danceName] = true
+	task.delay(CONFIG.BROKEN_CHECK, function()
+		brokenCheck[danceName] = nil
+		-- Track sudah diganti (respawn / cache) → tidak bisa dinilai.
+		local s     = states[player.UserId]
+		local entry = s and s.tracks[danceName]
+		if not entry or entry.track ~= track or track.Length > 0 then return end
+		brokenDances[danceName] = true
+		warn(string.format(
+			"[DanceHandler] animasi '%s' (id %s) gagal dimuat — cek kepemilikan asset",
+			danceName, tostring(DANCES[danceName])
+			))
+	end)
+end
 
 local function ensureTrack(player, danceName)
 	local track = getTrack(player, danceName)
@@ -241,13 +262,7 @@ local function ensureTrack(player, danceName)
 		task.wait()
 	end
 
-	if track.Length == 0 then
-		brokenDances[danceName] = true
-		warn(string.format(
-			"[DanceHandler] animasi '%s' (id %s) gagal dimuat — cek kepemilikan asset",
-			danceName, tostring(DANCES[danceName])
-			))
-	end
+	if track.Length == 0 then checkBrokenLater(player, danceName, track) end
 	return track
 end
 
