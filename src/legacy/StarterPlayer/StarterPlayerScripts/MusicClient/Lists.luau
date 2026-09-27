@@ -33,8 +33,8 @@ function L.init(ctx)
 end
 
 -- ══ THUMBNAIL ═════════════════════════════════════════════════════════════
-local MAX_QUEUE   = 200
-local NEG_TTL     = 60     -- kegagalan hanya di-cache sebentar, lalu dicoba lagi
+local MAX_QUEUE   = Shared.thumbQueueMax -- [FIX R7]
+local NEG_TTL     = Shared.thumbFailTTL -- kegagalan hanya di-cache sebentar, lalu dicoba lagi
 local tCache, tQueue, tRunning = {}, {}, false
 
 -- Cache sukses disimpan permanen; cache GAGAL kedaluwarsa setelah NEG_TTL.
@@ -342,7 +342,7 @@ end
 -- = ±500 baris x ±14 instance sekaligus → HP patah-patah. Sekarang BATCH baris
 -- pertama langsung, sisanya BATCH per frame. Render baru (ketik lagi, ganti tab,
 -- library ter-update) membatalkan sisa render lama lewat renderGen.
-local BATCH = 30
+local BATCH = Shared.renderBatch
 local renderGen = 0
 
 local function renderRows(songs, parent, mineView)

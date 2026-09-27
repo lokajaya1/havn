@@ -115,7 +115,7 @@ end
 --   len    -> durasi asli, dikirim sekali begitu audio ter-load
 --   pos    -> heartbeat posisi playback, dasar keputusan akhir lagu di server
 --   failed -> audio memang tidak bisa dimuat di mesin ini
-local REPORT_EVERY = 3
+local REPORT_EVERY = Shared.reportEvery -- [FIX R7]
 local PROBE_AFTER  = Shared.probeDelay or 5   -- cek aset setelah sekian detik sunyi
 local TICK_VISIBLE = 0.25
 local TICK_HIDDEN  = 1
@@ -205,7 +205,7 @@ end
 --   * audio belum termuat > HEAL_AFTER dtk → coba salinan lokal baru (instance
 --     Sound baru = unduhan ulang), maks HEAL_MAX kali per lagu;
 --   * pengali fade tertahan di 0 padahal lagu jalan > 3 dtk → dinaikkan lagi.
-local HEAL_AFTER, HEAL_GAP, HEAL_MAX = 12, 12, 8
+local HEAL_AFTER, HEAL_GAP, HEAL_MAX = Shared.healAfter, Shared.healGap, Shared.healMax
 local heal = { seq = -1, silentSince = nil, lastAt = 0, count = 0, zeroSince = nil }
 
 local function healTick(_snd, loaded)

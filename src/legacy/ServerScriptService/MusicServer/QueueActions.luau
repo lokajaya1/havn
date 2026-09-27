@@ -71,7 +71,7 @@ end
 local function removeFromQueue(p, data)
 	local idx = type(data) == "table" and data.index or data
 	local id  = type(data) == "table" and data.id or nil
-	local okRate, msg = checkRate(p, "RemoveQueue", 0.5) -- [FIX M3]
+	local okRate, msg = checkRate(p, "RemoveQueue", Shared.removeQueueCooldown) -- [FIX M3]
 	if not okRate then return Shared.to(p, "QueueError", msg) end
 	if type(idx) == "number" and idx ~= idx then return Shared.to(p, "QueueError", "Invalid index") end
 
@@ -114,7 +114,7 @@ end
 
 local function voteSkip(p)
 	if skipBlocked(p) then return Shared.to(p, "SkipError", "Live: only the DJ can skip") end -- [FIX L1b] [FIX L2]
-	local okRate, msg = checkRate(p, "VoteSkip", 1) -- [FIX M3]
+	local okRate, msg = checkRate(p, "VoteSkip", Shared.voteSkipCooldown) -- [FIX M3]
 	if not okRate then return Shared.to(p, "SkipError", msg) end
 	Playback.voteSkip(p)
 end
@@ -122,7 +122,7 @@ end
 local function setLive(p, on) -- [FIX L1] DJ, jeda 2 dtk
 	if not isDJ(p) then return Shared.to(p, "SettingsError", "DJ only!") end -- [FIX L1b]
 	if type(on) ~= "boolean" then return end
-	local okRate, msg = checkRate(p, "Live", 2, true) -- [FIX R4]
+	local okRate, msg = checkRate(p, "Live", Shared.liveToggleCooldown, true) -- [FIX R4] [FIX R7]
 	if not okRate then return Shared.to(p, "SettingsError", msg) end
 	task.spawn(function()
 		if on then

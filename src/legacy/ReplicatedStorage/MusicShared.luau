@@ -27,6 +27,38 @@ M.addQueueCooldown = 2
 M.favCooldown      = 0.4
 M.nameCacheTTL     = 3600
 M.defaultVolume    = 1.0
+-- [FIX R7] Angka setelan yang dulu tersebar di tiap modul (nilainya TIDAK diubah).
+-- Jeda aksi remote per pemain (detik). Admin bebas, kecuali live & state.
+M.voteSkipCooldown    = 1
+M.removeQueueCooldown = 0.5
+M.liveToggleCooldown  = 2
+M.stateCooldown       = 1.5
+M.myLibCooldown       = 1
+M.libCooldown         = 2
+
+-- Siaran live lintas server (detik).
+M.live = {
+	lease    = 30, -- status siaran di MemoryStore kedaluwarsa sendiri
+	renew    = 10, -- perpanjang lease selama siaran
+	maxMiss  = 3,  -- gagal perpanjang berturut-turut → siaran berhenti
+	handover = 30, -- DJ pindah server: siaran lama bertahan maks sekian
+	poll     = 10, -- server pendengar membaca status tiap sekian detik
+}
+
+-- Playback server.
+M.progressTTL = 8     -- laporan posisi dianggap basi setelah ini
+M.hardTimeout = 900   -- anti-macet total
+M.maxDuration = 1800  -- di atas 30 menit pasti laporan ngawur
+M.autoRecent  = 20    -- auto play tidak mengulang sekian lagu terakhir
+
+-- Client.
+M.reportEvery   = 3   -- laporan posisi ke server tiap sekian detik
+M.healAfter     = 12  -- audio belum termuat sekian detik → salinan lokal baru
+M.healGap       = 12
+M.healMax       = 8   -- maks percobaan per lagu
+M.renderBatch   = 30  -- baris daftar lagu per frame
+M.thumbQueueMax = 200
+M.thumbFailTTL  = 60  -- thumbnail gagal dicoba lagi setelah sekian detik
 
 -- ── TIMING PLAYBACK (inti fix "lagu keskip / macet") ──────────────────────
 -- loadTimeout  : lama menunggu bukti audio benar-benar loaded.
