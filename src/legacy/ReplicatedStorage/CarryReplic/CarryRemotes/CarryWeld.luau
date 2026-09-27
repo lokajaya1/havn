@@ -4,6 +4,8 @@
 
 local Players = game:GetService("Players")
 
+local DanceShared = require(game:GetService("ReplicatedStorage").Modules.DanceShared)
+
 local DEFAULT_WALKSPEED  = 16
 local DEFAULT_JUMPPOWER  = 50
 local DEFAULT_JUMPHEIGHT = 7.2
@@ -46,12 +48,16 @@ local function destroyCarryWelds(char)
 	end
 end
 
+-- Semua animasi KECUALI dance: dance/sync tetap jalan selama & sesudah carry
+-- (dulu ikut dihentikan lalu diputar ulang watchdog dari detik 0).
 local function stopAllAnimations(char)
 	local animator = getAnimator(char)
 	if not animator then return end
 	pcall(function()
 		for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-			track:Stop(0)
+			if not DanceShared.isDanceTrack(track) then
+				track:Stop(0)
+			end
 		end
 	end)
 end
@@ -71,7 +77,8 @@ local function resetHumanoid(char, plr)
 	pcall(function()
 		hum.PlatformStand = false
 		hum.AutoRotate    = true
-		hum.WalkSpeed     = DEFAULT_WALKSPEED
+		-- Pemain yang masih menari/sync kembali ke kecepatan dance, bukan 16.
+		hum.WalkSpeed     = plr and DanceShared.walkSpeedFor(plr) or DEFAULT_WALKSPEED
 		hum.JumpPower     = DEFAULT_JUMPPOWER
 		hum.JumpHeight    = DEFAULT_JUMPHEIGHT
 	end)
