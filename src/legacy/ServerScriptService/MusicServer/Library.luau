@@ -20,6 +20,9 @@ local FavDS    = DSS:GetDataStore("MusicFavorites")
 local Library = {}
 local list = {}
 local saveDirty, saveRunning = false, false
+-- [FIX M1] Operasi lokal sejak tulis terakhir. Tulis = nilai LAMA di DataStore
+-- + operasi ini, jadi library global tidak pernah ditimpa daftar server ini.
+local addedIds, removedIds = {}, {}
 
 function Library.all()    return list end
 function Library.isFull() return #list >= Shared.maxSharedLib end
@@ -110,8 +113,21 @@ function Library.find(songId)
 	return nil, nil
 end
 
-function Library.insert(song)   table.insert(list, song) end
-function Library.removeAt(idx)  return table.remove(list, idx) end
+-- [FIX M1] catat operasi supaya tulis berikutnya bisa digabung dengan nilai lama
+function Library.insert(song)
+	table.insert(list, song)
+	local id = tostring(song.Id)
+	addedIds[id], removedIds[id] = true, nil
+end
+
+function Library.removeAt(idx)
+	local s = table.remove(list, idx)
+	if s then
+		local id = tostring(s.Id)
+		removedIds[id], addedIds[id] = true, nil
+	end
+	return s
+end
 
 -- ── persistensi global ────────────────────────────────────────────────────
 local function snapshotAll()
@@ -130,23 +146,107 @@ local function snapshotAll()
 	return snap
 end
 
+-- [FIX M1] Gabung, jangan timpa. Dasar = nilai LAMA di DataStore, dikurangi
+-- lagu yang dihapus di server ini, ditambah lagu yang ditambahkan di server ini.
+-- Tambahan admin di server lain tidak hilang, lagu yang dihapus server lain
+-- tidak hidup lagi, dan load yang gagal (daftar kosong) tidak bisa
+-- mengosongkan library global.
+local function mergeInto(old, snap, adds, dels)
+	local byId = {}
+	for _, s in ipairs(snap) do byId[s.Id] = s end
+	local out, seen = {}, {}
+	if type(old) == "table" then
+		for _, s in ipairs(old) do
+			if type(s) == "table" and s.Id then
+				local id = tostring(s.Id)
+				if not seen[id] and not dels[id] then
+					seen[id] = true
+					table.insert(out, byId[id] or s)
+				end
+			end
+		end
+	end
+	for _, s in ipairs(snap) do
+		if adds[s.Id] and not seen[s.Id] then
+			seen[s.Id] = true
+			table.insert(out, s)
+		end
+	end
+	return out
+end
+
+-- Isi DataStore terbaru jadi daftar lokal. Objek lokal dipakai ulang supaya
+-- status runtime (unavailable/failCount) tidak hilang, dan operasi yang terjadi
+-- SELAMA tulis berjalan tetap berlaku.
+local function adopt(data)
+	local byId = {}
+	for _, s in ipairs(list) do byId[s.Id] = s end
+	local out, seen, changed = {}, {}, false
+	for _, s in ipairs(data) do
+		if type(s) == "table" and s.Id and s.Requester then
+			local id = tostring(s.Id)
+			if not seen[id] and not removedIds[id] then
+				seen[id] = true
+				local cur = byId[id]
+				if not cur then
+					changed = true
+					cur = table.clone(s)
+					cur.unavailable, cur.failCount = nil, nil
+					cur.RawId = cur.RawId or Shared.rawId(cur.Id)
+				end
+				table.insert(out, cur)
+			end
+		end
+	end
+	for _, s in ipairs(list) do
+		if not seen[s.Id] then
+			if addedIds[s.Id] then
+				seen[s.Id] = true
+				table.insert(out, s)
+			else
+				changed = true
+			end
+		end
+	end
+	list = out
+	if changed then Library.broadcast() end
+end
+
 local function writeNow()
 	if saveRunning then return end
 	saveRunning, saveDirty = true, false
 	task.spawn(function()
 		local snap = snapshotAll()
+		local adds, dels = addedIds, removedIds
+		addedIds, removedIds = {}, {}
+		local ok, merged
 		for i = 1, 3 do
-			local ok = pcall(function()
-				DS:UpdateAsync("GlobalLib", function() return snap end)
+			ok, merged = pcall(function()
+				return DS:UpdateAsync("GlobalLib", function(old)
+					return mergeInto(old, snap, adds, dels)
+				end)
 			end)
 			if ok then break end
 			if i < 3 then task.wait(1) end
 		end
 		saveRunning = false
-		if saveDirty then task.delay(1, writeNow) end
+		if ok then
+			if type(merged) == "table" then adopt(merged) end
+			if saveDirty then task.delay(1, writeNow) end
+			return
+		end
+		-- Gagal 3x: operasi dikembalikan (operasi yang lebih baru tetap menang)
+		-- dan dicoba lagi oleh autosave, bukan diulang terus-menerus.
+		for id in pairs(adds) do
+			if addedIds[id] == nil and removedIds[id] == nil then addedIds[id] = true end
+		end
+		for id in pairs(dels) do
+			if addedIds[id] == nil and removedIds[id] == nil then removedIds[id] = true end
+		end
+		saveDirty = true
+		warn("[Music] gagal simpan library global, dicoba lagi saat autosave:", merged)
 	end)
 end
-
 function Library.save()
 	saveDirty = true
 	if not saveRunning then task.delay(1, writeNow) end
@@ -158,27 +258,43 @@ function Library.saveNow()
 end
 
 function Library.load()
-	for _ = 1, 3 do
+	for i = 1, 3 do
 		local ok, data = pcall(DS.GetAsync, DS, "GlobalLib")
-		if ok and type(data) == "table" then
+		if ok then
 			local clean, seen = {}, {}
-			for _, s in ipairs(data) do
-				if type(s) == "table" and s.Id and s.Requester and not seen[s.Id] then
-					seen[s.Id]    = true
-					s.unavailable = nil   -- status runtime, jangan dipersist
-					s.failCount   = nil
-					s.RawId       = s.RawId or Shared.rawId(s.Id)
-					table.insert(clean, s)
+			if type(data) == "table" then
+				for _, s in ipairs(data) do
+					if type(s) == "table" and s.Id and s.Requester and not seen[s.Id] then
+						seen[s.Id]    = true
+						s.unavailable = nil   -- status runtime, jangan dipersist
+						s.failCount   = nil
+						s.RawId       = s.RawId or Shared.rawId(s.Id)
+						table.insert(clean, s)
+					end
 				end
 			end
 			list = clean
-			return
+			return true
 		end
-		task.wait(0.5)
+		if i < 3 then task.wait(0.5 * i) end
 	end
+	-- [FIX M1] Gagal dimuat: daftar kosong SEMENTARA. Aman, karena tulis selalu
+	-- digabung dengan nilai lama. Dimuat ulang di latar sampai berhasil.
 	list = {}
+	warn("[Music] library global gagal dimuat, dicoba lagi tiap 30 dtk")
+	task.spawn(function()
+		for _ = 1, 20 do
+			task.wait(30)
+			local ok, data = pcall(DS.GetAsync, DS, "GlobalLib")
+			if ok then
+				adopt(type(data) == "table" and data or {})
+				print("[Music] library global termuat ulang:", #list, "lagu")
+				return
+			end
+		end
+	end)
+	return false
 end
-
 -- Library bisa berisi ratusan lagu, dan satu aksi admin memicu beberapa
 -- broadcast beruntun. Semua digabung jadi SATU kiriman per 0.4 detik supaya
 -- tidak membanjiri jaringan tiap client.
@@ -429,9 +545,15 @@ end
 -- ── shutdown ──────────────────────────────────────────────────────────────
 function Library.bindToClose()
 	game:BindToClose(function()
-		if saveDirty or saveRunning then
+		-- [FIX M1] tunggu tulis yang sedang jalan, lalu tulis sisa operasi (digabung)
+		local t0 = os.clock()
+		while saveRunning and os.clock() - t0 < 15 do task.wait(0.2) end
+		if saveDirty or next(addedIds) or next(removedIds) then
+			local snap, adds, dels = snapshotAll(), addedIds, removedIds
 			pcall(function()
-				DS:UpdateAsync("GlobalLib", function() return snapshotAll() end)
+				DS:UpdateAsync("GlobalLib", function(old)
+					return mergeInto(old, snap, adds, dels)
+				end)
 			end)
 		end
 		for uid, s in pairs(mine) do
