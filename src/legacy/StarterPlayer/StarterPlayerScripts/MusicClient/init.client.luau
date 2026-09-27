@@ -482,7 +482,7 @@ ui.reloadBtn.MouseButton1Click:Connect(function()
 
 	flash(ui.reloadBtn, P.accent)
 	Audio.track(Audio.lastPath())
-	remote:FireServer("RequestState")
+	remote:FireServer("RequestState", "reload") -- [FIX R2] tanpa library
 
 	if double then
 		awaitingResync = true
@@ -853,8 +853,9 @@ remote:FireServer("RequestMyLibrary")
 task.spawn(function()
 	for _, delay in ipairs({ 3, 8, 20 }) do
 		task.wait(delay)
-		if not alive or #S.sharedLib > 0 then return end
+		if not alive or S.libVer ~= nil then return end -- [FIX R2] berhenti begitu daftar lengkap diterima (library kosong juga)
 		remote:FireServer("RequestState")
+		remote:FireServer("RequestMyLibrary") -- [FIX R2] requestState tidak lagi membawa My Library
 	end
 end)
 
