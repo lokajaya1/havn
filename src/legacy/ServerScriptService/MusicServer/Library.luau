@@ -14,7 +14,6 @@ local Market  = game:GetService("MarketplaceService")
 
 local Shared   = require(RS:WaitForChild("MusicShared"))
 local DS       = DSS:GetDataStore("MusicLibrary")
-local PlayerDS = DSS:GetDataStore("MusicVolume")
 local FavDS    = DSS:GetDataStore("MusicFavorites")
 
 local Library = {}
@@ -415,7 +414,7 @@ function Library.myLoad(p)
 	s.loading = true
 
 	local ok, data
-	for i = 1, 3 do
+	for _ = 1, 3 do
 		ok, data = pcall(FavDS.GetAsync, FavDS, "MyLib_" .. uid)
 		if ok then break end
 		task.wait(0.5)
@@ -449,7 +448,7 @@ local function myWrite(uid)
 	local merge = s.failed
 	myPending += 1
 	local ok, res
-	for i = 1, 3 do
+	for _ = 1, 3 do
 		ok, res = pcall(function()
 			return FavDS:UpdateAsync("MyLib_" .. uid, function(old)
 				if not merge then return snap end

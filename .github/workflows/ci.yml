@@ -27,5 +27,8 @@ jobs:
       - name: Sintaks Luau + JSON
         run: lune run tools/checks/syntax
 
+      - name: Lint (selene)
+        run: lune run tools/checks/lint
+
       - name: rojo build
         run: rojo build default.project.json -o ci-build.rbxl
