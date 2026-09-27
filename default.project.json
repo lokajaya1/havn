@@ -4,9 +4,6 @@
     "$className": "DataModel",
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
-      "AnimationCache": {
-        "$path": "src/legacy/ReplicatedStorage/AnimationCache"
-      },
       "CarryReplic": {
         "$className": "Folder",
         "CarryRemotes": {
@@ -45,9 +42,6 @@
       "$className": "ServerScriptService",
       "ServerList": {
         "$path": "src/server/ServerList.server.luau"
-      },
-      "AnimationHandler": {
-        "$path": "src/legacy/ServerScriptService/AnimationHandler.server.luau"
       },
       "AnnouncementHandler": {
         "$path": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau"
@@ -186,14 +180,8 @@
         "AnnouncementClient": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/AnnouncementClient.client.luau"
         },
-        "AvatarContextMenu": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/AvatarContextMenu.client.luau"
-        },
         "ChatTags": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ChatTags.client.luau"
-        },
-        "ClientPreloader": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/ClientPreloader.client.luau"
         },
         "CommunNFav": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/CommunNFav.client.luau"

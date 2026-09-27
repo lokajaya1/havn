@@ -12,7 +12,6 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService  = game:GetService("UserInputService")
 local TweenService      = game:GetService("TweenService")
-local HttpService       = game:GetService("HttpService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -23,9 +22,6 @@ _G.DanceClient = true
 -- ═══════════════════════════════════════════════════════════
 -- KONFIG & TEMA
 -- ═══════════════════════════════════════════════════════════
-
--- Hapus otomatis DanceGUI lama buatan Studio supaya tidak dobel.
-local REMOVE_LEGACY_GUI = true
 
 local T = {
 	BG         = Color3.fromRGB(16, 16, 17),
@@ -227,8 +223,9 @@ local AnimationWarmup = requireFrom({ "Modules", "AnimationWarmup" }, 5)
 	or { add = function() end, addByName = function() end }
 
 local danceRemote     = ReplicatedStorage:WaitForChild("DanceRequest")
-local favoritesRemote = ReplicatedStorage:FindFirstChild("FavoritesRemote")
-local syncRemote      = ReplicatedStorage:FindFirstChild("SyncRemote")
+-- Remote dibuat server saat start; tunggu sebentar supaya tidak terlewat.
+local favoritesRemote = ReplicatedStorage:WaitForChild("FavoritesRemote", 10)
+local syncRemote      = ReplicatedStorage:WaitForChild("SyncRemote", 10)
 
 local POSE_KEYWORDS = {
 	"pose", "stand", "idle", "sit", "lean", "squat",
@@ -328,14 +325,6 @@ local TABS = {
 -- ═══════════════════════════════════════════════════════════
 -- BUILD UI
 -- ═══════════════════════════════════════════════════════════
-
-if REMOVE_LEGACY_GUI then
-	local legacy = playerGui:FindFirstChild("DanceGUI")
-	if legacy then legacy:Destroy() end
-	playerGui.ChildAdded:Connect(function(child)
-		if child.Name == "DanceGUI" then child:Destroy() end
-	end)
-end
 
 local C = getConfig()
 
@@ -844,13 +833,6 @@ local function refreshFavorites(names)
 	if State.tab == "FAVORITES" then applyFilter(true) else refreshRows() end
 end
 
--- Cadangan lokal kalau remote favorit belum ada di tempat.
-local function persistLocal()
-	pcall(function()
-		player:SetAttribute("DanceFavorites_v2", HttpService:JSONEncode(State.favorites))
-	end)
-end
-
 function toggleFavorite(name)
 	local index = table.find(State.favorites, name)
 	-- Server menolak favorit ke-251 diam-diam; jangan tampilkan yang tidak tersimpan.
@@ -863,8 +845,6 @@ function toggleFavorite(name)
 
 	if favoritesRemote then
 		favoritesRemote:FireServer(index and "remove" or "add", name)
-	else
-		persistLocal()
 	end
 	refreshFavorites(State.favorites)
 end
@@ -878,15 +858,7 @@ if favoritesRemote then
 end
 
 local function loadFavorites()
-	if favoritesRemote then
-		favoritesRemote:FireServer("load")
-		return
-	end
-	local ok, data = pcall(function()
-		local raw = player:GetAttribute("DanceFavorites_v2")
-		return raw and HttpService:JSONDecode(raw) or {}
-	end)
-	if ok and type(data) == "table" then refreshFavorites(data) end
+	if favoritesRemote then favoritesRemote:FireServer("load") end
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -985,8 +957,6 @@ local function updateSyncUI(isSyncing, target, currentDance)
 	speedValue.TextColor3       = enabled and T.ACCENT or T.TEXT_DIM
 	speedValue.Text             = enabled and fmtSpeed(State.speed) or "SYNC"
 
-	player:SetAttribute("IsSyncing",  State.isSyncing)
-	player:SetAttribute("SyncTarget", State.syncTarget)
 
 	layoutList()
 end
@@ -1313,11 +1283,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		setOpen(false)
 	end
 end)
-
-_G.ToggleDanceGUI = toggleSidebar
-_G.OpenDanceGUI   = function() setOpen(true) end
-_G.CloseDanceGUI  = function() setOpen(false) end
-_G.IsDanceGUIOpen = function() return State.open end
 
 -- ═══════════════════════════════════════════════════════════
 -- INIT
