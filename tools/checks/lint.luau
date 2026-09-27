@@ -20,6 +20,11 @@ local STRICT = {
 	"src/legacy/ReplicatedStorage/Config/DanceConfig.luau",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/DanceClient.client.luau",
 	"src/legacy/ReplicatedStorage/CustomUIModules/SyncManager.luau",
+	-- ruangan SHOP
+	"src/legacy/ServerScriptService/ShopServer.server.luau",
+	"src/legacy/ServerScriptService/ReceiptHandler.luau",
+	"src/legacy/ReplicatedStorage/ShopConfig.luau",
+	"src/legacy/StarterGui/ShopClient.client.luau",
 }
 local REPORT = { "src/legacy" }
 
