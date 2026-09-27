@@ -614,10 +614,23 @@ local following = false
 function P.isFollowing() return following end
 
 function P.follow(song, offset)
+	offset = math.max(0, tonumber(offset) or 0)
+	-- [FIX L3] Lagu & posisi sudah sama (mis. DJ pindah server): jangan putar
+	-- ulang, cukup lepas kendali lokal dan perbarui label.
+	local same = playing and nowPlaying and song and nowPlaying.Id == song.Id
+		and math.abs((os.clock() - startClock) - offset) < 2
 	following = true
 	token += 1
 	if endedConn then endedConn:Disconnect(); endedConn = nil end
 	skipVotes = {}
+	if same then
+		nowPlaying = song
+		local np = table.clone(song)
+		np.Elapsed = os.clock() - startClock
+		Shared.all("NowPlaying", np)
+		Shared.all("SkipVoteUpdate", P.votes())
+		return
+	end
 	resetReports()
 	duration, durSource = 0, "?"
 	if not sound or not sound.Parent then P.init() end
@@ -646,6 +659,19 @@ function P.follow(song, offset)
 	P.broadcastIds()
 end
 
+-- [FIX L3] Server ini mengambil alih siaran: lagu yang sedang diikuti diteruskan
+-- sebagai lagu lokal (watchdog + Ended aktif lagi), tanpa diputar ulang.
+function P.adopt()
+	if not following then return end
+	following = false
+	if not playing or not nowPlaying then P.next(); return end
+	token += 1
+	local tk = token
+	resumeUsed, retryUsed, okMarked = 0, 0, false
+	if endedConn then endedConn:Disconnect() end
+	endedConn = sound.Ended:Connect(function() onEnded(tk) end)
+	task.spawn(watchdog, tk, nowPlaying)
+end
 function P.unfollow()
 	if not following then return end
 	following = false
