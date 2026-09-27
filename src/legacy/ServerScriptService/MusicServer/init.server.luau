@@ -69,6 +69,24 @@ task.spawn(function()
 	end
 end)
 
+-- [FIX M3] Angka dari client wajib angka sungguhan: NaN lolos math.clamp.
+local function isNum(v) return type(v) == "number" and v == v end
+
+-- [FIX M3] ReportDuration: kuota token per pemain (5 token, terisi 1/dtk).
+-- Laporan sah: posisi tiap 3 dtk + durasi sekali + gagal ≤2 → tidak pernah habis.
+-- Spam dibuang supaya tidak memicu SongDuration ke semua pemain.
+local reportBucket = {}
+local function allowReport(p)
+	local now = os.clock()
+	local b = reportBucket[p]
+	if not b then b = { tokens = 5, at = now }; reportBucket[p] = b end
+	b.tokens = math.min(5, b.tokens + (now - b.at))
+	b.at = now
+	if b.tokens < 1 then return false end
+	b.tokens -= 1
+	return true
+end
+
 -- ═══ BOOT ═════════════════════════════════════════════════════════════════
 Library.load()
 Library.backfill()
@@ -329,6 +347,8 @@ end
 
 local function removeMySong(p, songId)
 	if not songId then return end
+	local okRate, msg = checkRate(p, "RemoveMySong", Shared.favCooldown) -- [FIX M3]
+	if not okRate then return Shared.to(p, "MyLibError", msg) end
 	task.spawn(function()
 		Library.myLoad(p)
 		if not p.Parent then return end
@@ -398,6 +418,9 @@ end
 local function removeFromQueue(p, data)
 	local idx = type(data) == "table" and data.index or data
 	local id  = type(data) == "table" and data.id or nil
+	local okRate, msg = checkRate(p, "RemoveQueue", 0.5) -- [FIX M3]
+	if not okRate then return Shared.to(p, "QueueError", msg) end
+	if type(idx) == "number" and idx ~= idx then return Shared.to(p, "QueueError", "Invalid index") end
 
 	-- Non-admin boleh menghapus antrian miliknya sendiri.
 	if not isAdmin(p) then
@@ -446,7 +469,7 @@ local function setSpatialSettings(p, s)
 	if not isAdmin(p)     then return Shared.to(p, "SettingsError", "Admin only!") end
 	if type(s) ~= "table" then return Shared.to(p, "SettingsError", "Invalid data") end
 
-	local cfg, modeChanged = Shared.spatial, false
+	local cfg, modeChanged = Shared.spatial, false -- [FIX M3] isNum: tolak NaN
 	if s.mode ~= nil then
 		if s.mode ~= "stage" and s.mode ~= "global" then
 			return Shared.to(p, "SettingsError", "Invalid music mode")
@@ -454,10 +477,10 @@ local function setSpatialSettings(p, s)
 		if cfg.mode ~= s.mode then cfg.mode = s.mode; modeChanged = true end
 	end
 
-	if type(s.min)    == "number" then cfg.min    = math.clamp(s.min,     1, 10000) end
-	if type(s.max)    == "number" then cfg.max    = math.clamp(s.max,    10, 10000) end
-	if type(s.size)   == "number" then cfg.size   = math.clamp(s.size,    1, 1000)  end
-	if type(s.volume) == "number" then cfg.volume = math.clamp(s.volume,  0, 1)     end
+	if isNum(s.min)     then cfg.min    = math.clamp(s.min,     1, 10000) end
+	if isNum(s.max)     then cfg.max    = math.clamp(s.max,    10, 10000) end
+	if isNum(s.size)    then cfg.size   = math.clamp(s.size,    1, 1000)  end
+	if isNum(s.volume)  then cfg.volume = math.clamp(s.volume,  0, 1)     end
 	if cfg.max <= cfg.min then cfg.max = cfg.min + 50 end
 
 	if modeChanged then Playback.applyMode(cfg.mode) else Playback.applySpatial(cfg) end
@@ -465,10 +488,10 @@ local function setSpatialSettings(p, s)
 
 	local L = Shared.loudness
 	if type(s.loudnessEnabled) == "boolean" then L.enabled        = s.loudnessEnabled end
-	if type(s.compMakeupGain)  == "number"  then L.compMakeupGain = math.clamp(s.compMakeupGain, 0, 30) end
-	if type(s.eqLow)  == "number" then L.eqLow  = math.clamp(s.eqLow,  -12, 12) end
-	if type(s.eqMid)  == "number" then L.eqMid  = math.clamp(s.eqMid,  -12, 12) end
-	if type(s.eqHigh) == "number" then L.eqHigh = math.clamp(s.eqHigh, -12, 12) end
+	if isNum(s.compMakeupGain)    then L.compMakeupGain = math.clamp(s.compMakeupGain, 0, 30) end
+	if isNum(s.eqLow)   then L.eqLow  = math.clamp(s.eqLow,  -12, 12) end
+	if isNum(s.eqMid)   then L.eqMid  = math.clamp(s.eqMid,  -12, 12) end
+	if isNum(s.eqHigh)  then L.eqHigh = math.clamp(s.eqHigh, -12, 12) end
 	Playback.applyLoudness()
 	Shared.all("LoudnessSync", loudnessPayload())
 
@@ -480,20 +503,24 @@ local Actions = {
 	RemoveSong         = removeSong,
 	AddToQueue         = addToQueue,
 	RemoveFromQueue    = removeFromQueue,
-	VoteSkip           = function(p) Playback.voteSkip(p) end,
+	VoteSkip           = function(p)
+		local okRate, msg = checkRate(p, "VoteSkip", 1) -- [FIX M3]
+		if not okRate then return Shared.to(p, "SkipError", msg) end
+		Playback.voteSkip(p)
+	end,
 	ForceSkip          = forceSkip,
 	SetVolume          = setVolume,
 	SetSpatialSettings = setSpatialSettings,
 	RequestState       = requestState,
 
-	RequestMyLibrary   = requestMyLibrary,
+	RequestMyLibrary   = function(p) if checkRate(p, "MyLib", 1) then requestMyLibrary(p) end end, -- [FIX M3]
 	ToggleFavorite     = toggleFavorite,
 	AddMySong          = addMySong,
 	RemoveMySong       = removeMySong,
 
 	-- Client melaporkan durasi asli / posisi / kegagalan load. Server tidak
 	-- me-render audio, jadi ini satu-satunya sumber yang bisa dipercaya.
-	ReportDuration     = function(p, data) Playback.report(p, data) end,
+	ReportDuration     = function(p, data) if allowReport(p) then Playback.report(p, data) end end, -- [FIX M3]
 }
 
 Shared.remote.OnServerEvent:Connect(function(p, action, data)
@@ -547,6 +574,7 @@ local function cleanupPlayer(p)
 	end)
 	Playback.clearVote(p)
 	lastState[p] = nil
+	reportBucket[p] = nil -- [FIX M3]
 
 	local d = playerData[p]
 	if not d then return end
