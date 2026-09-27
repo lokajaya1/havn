@@ -316,10 +316,16 @@ end
 
 -- ── status "tidak tersedia" ───────────────────────────────────────────────
 -- Butuh 2 kegagalan di percobaan TERPISAH; data lagu tidak pernah dihapus.
-function Library.markFail(song)
+-- `denied` (alasan dari Shared.deniedReasons): ditolak Roblox → langsung ditandai.
+function Library.markFail(song, denied)
 	local _, libSong = Library.find(song and song.Id or "")
 	if not libSong then return false end
 	libSong.failCount = (libSong.failCount or 0) + 1
+	if denied then
+		libSong.unavailable = true
+		warn("[Music] Ditandai tidak tersedia (ditolak Roblox: " .. tostring(denied) .. "):", song.Name, song.RawId)
+		return true
+	end
 	if libSong.failCount < 2 then
 		warn("[Music] Gagal load percobaan #1 (tidak dihukum):", song.Name, song.RawId)
 		return false

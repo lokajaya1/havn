@@ -58,6 +58,8 @@ local skipVotes            = {}
 local transitioning        = false
 
 local repPos, repFail = {}, {}   -- userId -> { pos, at } / true
+local repDenied       = {}       -- userId -> alasan (Shared.deniedReasons)
+local deniedIds       = {}       -- raw id -> alasan; ditolak Roblox, dilewati selama server hidup
 local startLag        = 0        -- keterlambatan client vs jam server
 local warnedAt        = 0
 
@@ -93,6 +95,7 @@ end
 
 local function resetReports()
 	repPos, repFail, repLen = {}, {}, {}
+	repDenied               = {}
 	startLag, warnedAt      = 0, 0
 	serverDur               = 0
 end
@@ -374,12 +377,16 @@ function P.report(player, data)
 	if type(data.pos) == "number" and data.pos >= 0 and data.pos <= el + 5 then
 		repPos[uid]  = { pos = data.pos, at = os.clock() }
 		repFail[uid] = nil
+		repDenied[uid] = nil
 		if not okMarked then okMarked = true; pcall(Library.markOk, nowPlaying) end
 		local lag = el - data.pos
 		if lag > startLag and lag < 120 then startLag = lag end
 	end
 
-	if data.failed == true then repFail[uid] = true end
+	if data.failed == true then
+		repFail[uid] = true
+		if Shared.deniedReasons[data.denied] then repDenied[uid] = data.denied end
+	end
 end
 
 -- Satu-satunya cara memulai Sound (dulu disalin di play, retry, follow).
@@ -407,6 +414,18 @@ local function failConfirmed()
 	return countKeys(repFail) >= need
 end
 
+-- Ditolak Roblox (moderasi / izin): aturan konfirmasi sama dengan failConfirmed.
+-- Hasil: alasan, atau nil kalau belum terkonfirmasi.
+local function deniedConfirmed()
+	local need = math.min(2, math.max(1, #Players:GetPlayers()))
+	local n, reason = 0, nil
+	for _, r in pairs(repDenied) do
+		n += 1
+		if reason ~= "moderated" then reason = r end
+	end
+	return n >= need and reason or nil
+end
+
 -- Ulangi :Play() lagu YANG SAMA. JANGAN set SoundId = "" (itu yang memicu
 -- 'Failed to load sound http://www.roblox.com/asset/?id=').
 local function replayCurrent(tk)
@@ -425,19 +444,28 @@ local function replayCurrent(tk)
 		:format(retryUsed, tostring(nowPlaying.Name), tostring(nowPlaying.RawId or id)))
 end
 
-local function markUnavailable(tk, song)
-	warn("[Music] gagal dimuat (dikonfirmasi", countKeys(repFail), "client):",
-		song.Name, "| ID:", song.RawId or "?")
+-- `denied`: alasan ditolak Roblox → tanpa coba ulang, langsung ditandai.
+local function markUnavailable(tk, song, denied)
+	if denied then
+		local raw = rawOf(song.Id)
+		if raw then deniedIds[raw] = denied end
+		warn("[Music] ditolak Roblox (" .. denied .. ", dikonfirmasi", countKeys(repDenied), "client):",
+			song.Name, "| ID:", song.RawId or raw or "?")
+	else
+		warn("[Music] gagal dimuat (dikonfirmasi", countKeys(repFail), "client):",
+			song.Name, "| ID:", song.RawId or "?")
+	end
 	Shared.all("SongUnavailable", { name = song.Name or "?", id = song.Id or "" })
 	pcall(function() sound:Stop() end)
 
-	if Library.markFail(song) then
+	if Library.markFail(song, denied) then
 		P.removeFromQueueById(song.Id)
 		Library.broadcast()
 		P.broadcastQueue()
 		P.broadcastIds()
 		Library.saveNow()
-		local note = '"' .. (song.Name or "?") .. '" marked unavailable (failed twice). Data is kept.'
+		local why = denied and ("blocked by Roblox: " .. denied) or "failed twice"
+		local note = '"' .. (song.Name or "?") .. '" marked unavailable (' .. why .. '). Data is kept.'
 		Shared.filtered(isAdminPlayer, "SongAutoRemoved", note)
 	end
 	advance(tk, "gagal load", true)
@@ -456,6 +484,7 @@ local function watchdog(tk, song)
 
 		local el  = os.clock() - startClock
 		local pos = bestPos()
+		local deniedWhy = (not pos) and deniedConfirmed() or nil
 
 		if duration > 1 then
 			if pos and pos >= duration - 0.3 then
@@ -466,6 +495,11 @@ local function watchdog(tk, song)
 				advance(tk, "watchdog jam dinding")
 				return
 			end
+
+		elseif deniedWhy then
+			-- Ditolak Roblox: memutar ulang hanya menambah error di semua client.
+			markUnavailable(tk, song, deniedWhy)
+			return
 
 		elseif os.clock() >= loadDeadline then
 			-- selene: allow(empty_if)
@@ -562,7 +596,7 @@ local function pickAuto()
 	for _, id in ipairs(recent) do skip[id] = true end
 	local fresh, any = {}, {}
 	for _, s in ipairs(Library.all()) do
-		if not s.unavailable and s.Id then
+		if not s.unavailable and s.Id and not deniedIds[rawOf(s.Id) or ""] then
 			table.insert(any, s)
 			if not skip[s.Id] then table.insert(fresh, s) end
 		end
@@ -584,7 +618,7 @@ function P.play(song)
 
 	-- Lagu yang sudah ditandai tidak tersedia: lewati, jangan bikin macet.
 	local _, libSong = Library.find(song.Id)
-	if libSong and libSong.unavailable then
+	if (libSong and libSong.unavailable) or deniedIds[rawOf(song.Id) or ""] then
 		warn("[Music] lewati lagu unavailable:", song.Name)
 		Shared.all("SongUnavailable", { name = song.Name or "?", id = song.Id })
 		playing = false; task.defer(P.next); return
@@ -754,6 +788,7 @@ end
 function P.clearVote(p)
 	repPos[p.UserId]  = nil
 	repFail[p.UserId] = nil
+	repDenied[p.UserId] = nil
 	repLen[p.UserId]  = nil
 	for i = #skipVotes, 1, -1 do
 		if skipVotes[i] == p then

@@ -128,6 +128,7 @@ local songSeq    = 0
 local songAt     = 0
 local durSent    = false
 local failSent   = false
+local deniedSent = false
 local rescuedFor = nil
 local lastPos    = 0
 local currentNP  = nil
@@ -143,6 +144,20 @@ local function reportPos(pos, len)
 	lastPos = os.clock()
 	remote:FireServer("ReportDuration", { id = songId, pos = pos, len = len })
 end
+
+-- Aset ditolak Roblox (moderasi / izin, lihat Audio.deniedReason): lapor ke
+-- server tanpa probe, salinan lokal, atau penyembuh — tiap percobaan ulang
+-- hanya menambah baris merah. `again` = kirim ulang sekali di detik PROBE_AFTER
+-- (laporan pertama bisa terbuang kuota ReportDuration).
+local function reportDenied(myId, again)
+	if durSent or not myId or myId ~= songId then return end
+	if deniedSent and not again then return end
+	local reason = Audio.deniedReason(myId)
+	if not reason then return end
+	deniedSent, failSent = true, true
+	remote:FireServer("ReportDuration", { id = myId, failed = true, denied = reason })
+end
+Audio.onDenied(function(id) reportDenied(id) end)
 
 -- Kalau audio belum berbunyi setelah PROBE_AFTER detik, cari tahu SEBABNYA
 -- lebih dulu, jangan langsung menuduh lagunya rusak:
@@ -164,8 +179,17 @@ local function watchLoadFailure(myId, seq)
 			if okRead and ((len and len > 0) or loaded == true) then return end
 		end
 
+		if Audio.deniedReason(myId) then
+			reportDenied(myId, true)
+			return
+		end
+
 		local assetOk = Audio.probe(myId)          -- memblokir, sudah di thread sendiri
 		if not alive or songSeq ~= seq or songId ~= myId or durSent then return end
+		if Audio.deniedReason(myId) then
+			reportDenied(myId, true)
+			return
+		end
 
 		if not assetOk and not failSent then
 			failSent = true
@@ -227,6 +251,7 @@ local function healTick(_snd, loaded)
 		end
 		return
 	end
+	if songId and Audio.deniedReason(songId) then return end -- ditolak Roblox: jangan dicoba ulang
 	heal.silentSince = heal.silentSince or now
 	if now - heal.silentSince < HEAL_AFTER or now - heal.lastAt < HEAL_GAP or heal.count >= HEAL_MAX then return end
 	heal.lastAt = now
@@ -369,10 +394,11 @@ local function updateNowPlaying(data)
 
 	songSeq = songSeq + 1
 	songId, songFullId = newId, "rbxassetid://" .. newId
-	durSent, failSent, lastPos = false, false, 0
+	durSent, failSent, deniedSent, lastPos = false, false, false, 0
 	songAt = os.clock()
 	if not sameId then rescuedFor = nil end
 	watchLoadFailure(newId, songSeq)
+	reportDenied(newId) -- sudah diketahui ditolak (mis. error tiba sebelum NowPlaying)
 	Audio.onNowPlaying(newId)
 	paintNpFav()
 
