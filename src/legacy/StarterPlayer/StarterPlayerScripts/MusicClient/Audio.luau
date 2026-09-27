@@ -72,6 +72,9 @@ function Audio.setGlobalVolume(v)
 	Audio.apply()
 end
 
+-- [FIX M7] Dipakai penyembuh otomatis di init.client.
+function Audio.getFade() return fade end
+function Audio.isFading() return fadeConn ~= nil end
 -- ── fade halus (smoothstep) ───────────────────────────────────────────────
 function Audio.fadeTo(target, duration)
 	target = math.clamp(target or 0, 0, 1)
@@ -267,7 +270,7 @@ function Audio.probe(rawId)
 end
 
 -- ── mode darurat / penyelamat otomatis ────────────────────────────────────
-function Audio.hardResync(data, auto)
+function Audio.hardResync(data, auto, quiet) -- [FIX M7] quiet: tanpa notifikasi (penyembuh otomatis)
 	local id = data and data.Id and tostring(data.Id):match("%d+")
 	if not id then
 		if not auto then UI.notify("No song to reload", UI.C.danger, 2) end
@@ -339,11 +342,12 @@ function Audio.hardResync(data, auto)
 		if current ~= s or not s.Parent then return end
 		local okRead, loaded, len = pcall(function() return s.IsLoaded, s.TimeLength end)
 		if okRead and (loaded == true or (len and len > 0)) then return end
-		UI.notify("Audio unavailable on your device", UI.C.danger, 3)
+		if not quiet then UI.notify("Audio unavailable on your device", UI.C.danger, 3) end -- [FIX M7]
 		Audio.track(lastPath)
 	end)
 
-	if auto then
+	if quiet then -- [FIX M7]
+	elseif auto then
 		UI.notify("Playing locally", UI.C.accent, 2)
 	else
 		UI.notify("Local playback active", UI.C.accent, 2)

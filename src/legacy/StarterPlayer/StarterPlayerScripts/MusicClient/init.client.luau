@@ -199,6 +199,43 @@ end
 
 -- Satu loop untuk progress UI sekaligus pelaporan ke server. Saat panel
 -- tertutup, loop melambat 4x dan tidak menulis properti UI sama sekali.
+-- [FIX M7] PENYEMBUH OTOMATIS. Dulu penyelamat hanya jalan SEKALI di detik ke-5
+-- tiap lagu; kalau CDN audio Roblox sedang HTTP 502/Timedout, salinan lokal ikut
+-- gagal dan pemain itu sunyi sampai lagu berganti (bisa 5 menit). Sekarang:
+--   * audio belum termuat > HEAL_AFTER dtk → coba salinan lokal baru (instance
+--     Sound baru = unduhan ulang), maks HEAL_MAX kali per lagu;
+--   * pengali fade tertahan di 0 padahal lagu jalan > 3 dtk → dinaikkan lagi.
+local HEAL_AFTER, HEAL_GAP, HEAL_MAX = 12, 12, 8
+local heal = { seq = -1, silentSince = nil, lastAt = 0, count = 0, zeroSince = nil }
+
+local function healTick(snd, loaded)
+	if heal.seq ~= songSeq then
+		heal.seq, heal.silentSince, heal.lastAt, heal.count, heal.zeroSince = songSeq, nil, 0, 0, nil
+	end
+	local now = os.clock()
+	if loaded then
+		heal.silentSince = nil
+		if Audio.getFade() < 0.05 and not Audio.isFading() then
+			heal.zeroSince = heal.zeroSince or now
+			if now - heal.zeroSince > 3 then
+				heal.zeroSince = nil
+				warn("[MusicClient] self-heal: volume fade stuck at 0, fading in")
+				Audio.fadeTo(1, Shared.fadeIn)
+			end
+		else
+			heal.zeroSince = nil
+		end
+		return
+	end
+	heal.silentSince = heal.silentSince or now
+	if now - heal.silentSince < HEAL_AFTER or now - heal.lastAt < HEAL_GAP or heal.count >= HEAL_MAX then return end
+	heal.lastAt = now
+	heal.count += 1
+	local elapsed = (now - songAt) + ((currentNP and currentNP.Elapsed) or 0)
+	warn(("[MusicClient] self-heal #%d: audio %s not loaded after %.0fs, retrying locally")
+		:format(heal.count, tostring(songId), now - heal.silentSince))
+	Audio.hardResync({ Id = songId, Elapsed = elapsed }, true, true)
+end
 local function startProg()
 	if progTask then task.cancel(progTask) end
 	progTask = task.spawn(function()
@@ -219,6 +256,7 @@ local function startProg()
 						return snd.IsPlaying, snd.TimePosition, snd.TimeLength, snd.IsLoaded
 					end)
 
+					pcall(healTick, snd, okRead and (loaded == true or (len and len > 1)) or false) -- [FIX M7]
 					if okRead and loaded and len and len > 1 then
 						reportLen(len)
 						if playing then
@@ -248,7 +286,9 @@ local function updateSectionVis()
 	ui.adminTitle.Text       = djOnly and "DJ" or "ADMIN SETTINGS"
 	ui.liveRow.Position      = djOnly and UDim2.new(0, 0, 0, 18) or UDim2.new(0, 0, 0, 288)
 	ui.adminSettings.Size    = djOnly and UDim2.new(1, 0, 0, 66) or UDim2.new(1, 0, 0, 348)
-	ui.forceSkipBtn.Visible  = S.isAdmin or (S.isDJ and S.liveOn)
+	-- [FIX M6b] saat live hanya DJ siaran yang melihat Force skip
+	if S.liveOn or S.liveFollow then ui.forceSkipBtn.Visible = S.liveOn == true and S.liveDjId == player.UserId
+	else ui.forceSkipBtn.Visible = S.isAdmin or S.isDJ end
 	-- Library global: hanya admin yang bisa menambah/menghapus isinya.
 	ui.addGlobalBtn.Visible  = S.isAdmin
 	ui.addMineBtn.Size = S.isAdmin and UDim2.new(0.5, -3, 0, 26) or UDim2.new(1, 0, 0, 26)
@@ -262,15 +302,21 @@ local function updateSectionVis()
 		local dj = tostring(S.liveDj or "?")
 		ui.liveTitle.Text = S.liveFollow and ("LIVE  ·  DJ " .. dj .. "  ·  another server") or ("LIVE  ·  DJ " .. dj)
 		local sub
-		if S.liveLocked then
-			sub = "Song requests are paused until the live ends"
-		elseif S.liveFollow then
+		local me = S.liveOn and S.liveDjId == player.UserId -- [FIX M6b]
+		if S.liveFollow then
 			sub = "Playing from another server - the local queue is on hold"
+		elseif me then
+			sub = "You are the DJ - only your requests play"
+		elseif S.liveLocked then
+			sub = "Song requests are paused until the live ends"
 		else
-			sub = "You are live - player requests are paused"
+			sub = "Your requests wait until the live ends"
 		end
-		local held = #S.fullQueue
-		if held > 0 then sub ..= ("  ·  %d queued on hold"):format(held) end
+		local held = 0
+		for _, q in ipairs(S.fullQueue) do
+			if S.liveFollow or q.RequesterId ~= S.liveDjId then held += 1 end
+		end
+		if held > 0 then sub ..= ("  ·  %d on hold"):format(held) end
 		ui.liveSub.Text = sub
 	end
 	if S.liveLocked ~= wasLocked then Lists.repaintQueueBtns() end
@@ -730,6 +776,7 @@ H.LiveState = function(data) -- [FIX L1]
 	liveOn = data.active == true
 	S.liveOn = liveOn -- [FIX L1b]
 	S.liveDj = data.dj -- [FIX M6]
+	S.liveDjId = data.djId -- [FIX M6b]
 	paintLive()
 	if liveOn ~= was then notify(liveOn and ("LIVE - DJ " .. tostring(data.dj)) or "Live ended") end
 	local wasF = S.liveFollow -- [FIX L2] server ini ikut siaran server lain

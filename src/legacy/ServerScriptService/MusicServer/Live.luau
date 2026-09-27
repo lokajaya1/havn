@@ -92,6 +92,7 @@ end
 -- status hilang (DJ berhenti / lease habis) → kembali ke musik server ini.
 local POLL = 10
 local following, followKey, followDj = false, nil, nil
+local followDjId -- [FIX M6b]
 local followFns = {}   -- fn(state) ikut lagu siaran | fn(nil) berhenti ikut
 
 function Live.isFollowing() return following end
@@ -107,6 +108,7 @@ local function syncFollower()
 		followKey = key
 		local first = not following
 		following, followDj = true, st.dj
+		followDjId = st.djId -- [FIX M6b]
 		local lag = st.startedAtMs and (nowMs() - st.startedAtMs) or 0
 		print(("[Live] ikut siaran DJ %s | lagu %s | mulai di detik %.1f")
 			:format(tostring(st.dj), tostring(st.song and st.song.Name), lag / 1000))
@@ -122,10 +124,12 @@ end
 Live.syncNow = syncFollower
 
 function Live.state() -- [FIX L2] + following
-	return { active = active, dj = active and djName or followDj, here = active, following = following }
+	return { active = active, dj = active and djName or followDj, here = active, following = following,
+		djId = active and djId or (following and followDjId or nil) } -- [FIX M6b]
 end
 
 function Live.isActive() return active end
+function Live.djId() return active and djId or nil end -- [FIX M6b]
 function Live.onChange(fn) table.insert(listeners, fn) end
 function Live.onRemote(fn) table.insert(remoteFns, fn) end
 
