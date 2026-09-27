@@ -42,7 +42,8 @@ local function isDJ(p)
 	end
 	return false
 end
-local function liveBlocks(p) return Live.isActive() and not isDJ(p) end
+-- [FIX M6] Saat live (server ini stasiun ATAU ikut siaran server lain) hanya DJ yang boleh request.
+local function liveBlocks(p) return (Live.isActive() or Live.isFollowing()) and not isDJ(p) end
 local function skipBlocked(p) return liveBlocks(p) or Live.isFollowing() end -- [FIX L2] server pendengar: skip dikunci
 
 local function queueLimit(p)
@@ -392,7 +393,7 @@ end
 -- ── ANTRIAN ───────────────────────────────────────────────────────────────
 local function addToQueue(p, songId)
 	if not songId then return end
-	if liveBlocks(p) then return Shared.to(p, "QueueError", "Live: only the DJ can request songs") end -- [FIX L1b]
+	if liveBlocks(p) then return Shared.to(p, "QueueError", "Live: song requests are paused") end -- [FIX L1b] [FIX M6]
 
 	local ok, msg = checkRate(p, "AddQueue", Shared.addQueueCooldown)
 	if not ok then return Shared.to(p, "QueueError", msg) end
@@ -626,6 +627,10 @@ local function cleanupPlayer(p)
 		Library.myUnload(p)
 	end)
 	Playback.clearVote(p)
+	if Playback.removeQueueByRequester(p.UserId) > 0 then -- [FIX M6] antrian pemain yang keluar dihapus
+		Playback.broadcastQueue()
+		Playback.broadcastIds()
+	end
 	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
 	liveCooldown[p] = nil
 	lastState[p] = nil

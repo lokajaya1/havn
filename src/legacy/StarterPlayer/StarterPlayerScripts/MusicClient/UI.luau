@@ -443,6 +443,13 @@ function UI.build()
 	end)
 
 	-- ══ NOW PLAYING ═══════════════════════════════════════════════════════
+	-- [FIX M6] Banner LIVE: muncul selama siaran (server ini atau server lain).
+	local liveBanner = w.frame({ Size = UDim2.new(1, 0, 0, 46), BackgroundColor3 = C.bgCard, LayoutOrder = 0, Visible = false, Parent = content })
+	w.corner(12).Parent = liveBanner; w.stroke(C.danger, 1).Parent = liveBanner
+	local liveDot = w.frame({ Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(0, 12, 0, 11), BackgroundColor3 = C.danger, Parent = liveBanner })
+	w.corner(5).Parent = liveDot
+	local liveTitle = w.text({ Size = UDim2.new(1, -40, 0, 16), Position = UDim2.new(0, 30, 0, 7), Text = "LIVE", TextColor3 = C.danger, Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = liveBanner })
+	local liveSub = w.text({ Size = UDim2.new(1, -40, 0, 14), Position = UDim2.new(0, 30, 0, 25), Text = "", TextColor3 = C.gray, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = liveBanner })
 	local np = w.frame({ Size = UDim2.new(1, 0, 0, 156), BackgroundColor3 = C.bgCard, LayoutOrder = 1, Parent = content })
 	w.corner(12).Parent = np; w.stroke(C.border, 1).Parent = np
 	local npc = w.frame({ Size = UDim2.new(1, -18, 1, -18), Position = UDim2.new(0, 9, 0, 9), BackgroundTransparency = 1, Parent = np })
@@ -628,6 +635,7 @@ function UI.build()
 		albumArt = albumArt, songTitle = songTitle, songArtist = songArtist,
 		progressBar = progressBar, currentTime = currentTime, totalTime = totalTime,
 		queueLabel = queueLabel, queueList = queueList, queueSection = queueSection,
+		liveBanner = liveBanner, liveTitle = liveTitle, liveSub = liveSub, -- [FIX M6]
 		libLabel = libLabel, libList = libList, libSection = libSection,
 		tabAllBtn = tabAllBtn, tabMineBtn = tabMineBtn,
 		skipBtn = skipBtn, forceSkipBtn = forceSkipBtn,
