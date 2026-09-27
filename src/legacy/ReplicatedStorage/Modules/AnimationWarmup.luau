@@ -19,6 +19,7 @@ local queue   = {}
 local cursor  = 1
 local queued  = {}
 local failed  = {}   -- asset yang tidak pernah selesai dimuat: jangan diulang
+local done    = {}   -- asset yang sudah panas: cache asset tetap ada, jangan diulang
 local running = false
 local animator
 
@@ -102,6 +103,7 @@ local function drain()
 		end
 
 		for _, entry in ipairs(batch) do
+			if entry.track.Length > 0 then done[entry.id] = true end
 			if entry.track.Length == 0 and not failed[entry.id] then
 				failed[entry.id] = true
 				warn("[AnimationWarmup] asset gagal dimuat, dilewati: " .. tostring(entry.id))
@@ -120,7 +122,7 @@ end
 -- urgent: taruh di depan antrean, dipakai saat pemain benar-benar menekan dance.
 function AnimationWarmup.add(ids, urgent)
 	for _, id in ipairs(ids) do
-		if id ~= nil and not queued[id] and not failed[id] then
+		if id ~= nil and not queued[id] and not failed[id] and not done[id] then
 			queued[id] = true
 			if urgent then
 				table.insert(queue, cursor, id)

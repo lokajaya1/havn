@@ -49,6 +49,8 @@ local CFG = {
 	SPEED_STEP     = 0.05,
 	SPEED_DEFAULT  = 1.0,
 	SPEED_THROTTLE = 0.12,   -- detik; batasi FireServer saat slider digeser
+	FAV_LIMIT      = 250,    -- sama dengan batas server (DanceHandler FAVORITES_LIMIT)
+	STOP_CONFIRM   = 0.3,    -- detik; IsDancing false harus bertahan sebelum baris dipadamkan
 
 	SEARCH_DEBOUNCE = 0.15,
 	EDGE_MARGIN     = 8,
@@ -851,6 +853,8 @@ end
 
 function toggleFavorite(name)
 	local index = table.find(State.favorites, name)
+	-- Server menolak favorit ke-251 diam-diam; jangan tampilkan yang tidak tersimpan.
+	if not index and #State.favorites >= CFG.FAV_LIMIT then return end
 	if index then
 		table.remove(State.favorites, index)
 	else
@@ -991,6 +995,18 @@ local function clearPlaying()
 	State.playing = nil
 	refreshRows()
 end
+
+-- Server mematikan dance sendiri (respawn/reset, carry, sync): padamkan baris
+-- yang masih menyala. Ditunggu sebentar supaya "false" dari stop sebelumnya
+-- tidak memadamkan dance yang baru saja dipilih.
+player:GetAttributeChangedSignal("IsDancing"):Connect(function()
+	if player:GetAttribute("IsDancing") ~= false then return end
+	task.delay(CFG.STOP_CONFIRM, function()
+		if player:GetAttribute("IsDancing") == false and State.playing and not State.isSyncing then
+			clearPlaying()
+		end
+	end)
+end)
 
 syncCard.Activated:Connect(function()
 	if syncRemote then syncRemote:FireServer("stop") end
