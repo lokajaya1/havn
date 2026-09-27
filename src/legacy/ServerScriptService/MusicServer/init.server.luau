@@ -482,6 +482,10 @@ local function setSpatialSettings(p, s)
 	if isNum(s.size)    then cfg.size   = math.clamp(s.size,    1, 1000)  end
 	if isNum(s.volume)  then cfg.volume = math.clamp(s.volume,  0, 1)     end
 	if cfg.max <= cfg.min then cfg.max = cfg.min + 50 end
+	if type(s.autoplay) == "boolean" and cfg.autoplay ~= s.autoplay then -- [FIX A1]
+		cfg.autoplay = s.autoplay
+		if cfg.autoplay and not Playback.isPlaying() then task.defer(Playback.next) end
+	end
 
 	if modeChanged then Playback.applyMode(cfg.mode) else Playback.applySpatial(cfg) end
 	Playback.setGlobalVolume(cfg.volume)
@@ -591,6 +595,17 @@ end
 Players.PlayerAdded:Connect(initPlayer)
 Players.PlayerRemoving:Connect(cleanupPlayer)
 for _, p in ipairs(Players:GetPlayers()) do task.spawn(initPlayer, p) end
+
+-- [FIX A1] Auto play mulai begitu ada pendengar (server kosong tidak memutar apa pun).
+local function kickAutoplay()
+	task.delay(2, function()
+		if Shared.spatial.autoplay and not Playback.isPlaying() and #Players:GetPlayers() > 0 then
+			Playback.next()
+		end
+	end)
+end
+Players.PlayerAdded:Connect(kickAutoplay)
+kickAutoplay()
 
 -- ═══ BULK IMPORT ══════════════════════════════════════════════════════════
 -- Tempel ID di bawah, jalankan server SEKALI. Idempotent: ID yang sudah ada

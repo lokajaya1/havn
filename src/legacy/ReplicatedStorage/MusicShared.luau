@@ -45,7 +45,7 @@ M.maxLoadRetry = 2
 M.fadeIn  = 0.55
 M.fadeOut = 0.45
 
-M.spatial = { min = 10, max = 500, size = 100, volume = 1.0, mode = "global" }
+M.spatial = { min = 10, max = 500, size = 100, volume = 1.0, mode = "global", autoplay = true } -- [FIX A1] autoplay: antrian kosong → lagu acak
 
 M.loudness = {
 	enabled        = true,
