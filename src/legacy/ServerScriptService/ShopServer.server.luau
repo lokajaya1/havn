@@ -17,7 +17,6 @@ local Marketplace       = game:GetService("MarketplaceService")
 local DataStoreService  = game:GetService("DataStoreService")
 local MessagingService  = game:GetService("MessagingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextChatService   = game:GetService("TextChatService")
 local SSS               = game:GetService("ServerScriptService")
 
 -- ── [FIX 1] ReceiptHandler (ganti shared["_db/connect"]) ──────
@@ -152,13 +151,9 @@ local function notifyServerScripts(player, passName)
 	OnOwnershipChanged:Fire(player, passName, true)
 end
 
+-- Pesan chat gift ditampilkan client (TextChannel:DisplaySystemMessage hanya jalan di
+-- client; dari server selalu gagal — terbukti di Studio 2026-09-28 05:34).
 local function broadcastGiftChat(recipientName, senderName, passName)
-	local ch  = TextChatService:FindFirstChild("TextChannels")
-	local gen = ch and ch:FindFirstChild("RBXGeneral")
-	if gen then
-		pcall(gen.DisplaySystemMessage, gen,
-			("🎁 %s gifted %s to %s!"):format(senderName, passName, recipientName))
-	end
 	R.GiftChatNotif:FireAllClients(senderName, recipientName, passName)
 end
 
@@ -576,8 +571,9 @@ R.GetAllOwnership.OnServerInvoke = function(player)
 		local admin  = isAdminRank(player)
 		local result = { _isAdmin = admin }
 		for _, pass in ipairs(Config.gamepasses) do
-			-- Admin = semua true; lainnya baca cache memory (sudah loaded di PlayerAdded)
-			result[pass.name] = admin or hasPass(player.UserId, pass.name, false)
+			-- Admin = semua true; lainnya tunggu data termuat (maks 10 dtk) supaya pass
+			-- sendiri tidak tampil "Beli" kalau Shop dibuka sebelum loadData selesai
+			result[pass.name] = admin or hasPass(player.UserId, pass.name, true)
 		end
 		return result
 	end)

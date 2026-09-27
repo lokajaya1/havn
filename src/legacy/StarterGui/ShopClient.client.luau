@@ -81,13 +81,15 @@ local headerRefresh  = nil
 
 -- ── Util ──────────────────────────────────────────────────────
 
+-- Harga gagal dimuat → callback(nil), TIDAK dicache (dicoba lagi saat kartu dirender ulang).
+-- Dulu gagal = 0 → tampil "Gratis" permanen.
 local function fetchPrice(passId, callback)
 	local cached = PriceCache[passId]
 	if cached then callback(cached) return end
 	task.spawn(function()
 		local ok, info = pcall(Marketplace.GetProductInfo, Marketplace, passId, Enum.InfoType.GamePass)
-		local price = (ok and info and info.PriceInRobux) or 0
-		PriceCache[passId] = price
+		local price = ok and type(info) == "table" and tonumber(info.PriceInRobux) or nil
+		if price then PriceCache[passId] = price end
 		callback(price)
 	end)
 end
@@ -438,6 +440,11 @@ local function createGamepassCard(passData)
 		priceLbl.TextColor3 = T.TEXT_DIM
 		fetchPrice(passData.id, function(price)
 			if not priceLbl.Parent or OwnershipCache[passData.name] then return end
+			if not price then
+				priceLbl.Text       = "—"
+				priceLbl.TextColor3 = T.TEXT_DIM
+				return
+			end
 			priceLbl.Text       = price > 0 and (price .. " R$") or "Gratis"
 			priceLbl.TextColor3 = T.ACCENT
 		end)
@@ -563,6 +570,8 @@ end)
 
 if GiftChatNotif then
 	GiftChatNotif.OnClientEvent:Connect(function(senderName, recipientName, passName)
+		-- Penerima sudah dapat "X memberimu …" dari GiftReceived → jangan dobel
+		if recipientName == player.Name then return end
 		chatMessage(senderName .. " memberikan " .. passName .. " ke " .. recipientName .. "!")
 	end)
 end
