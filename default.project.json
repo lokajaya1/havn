@@ -177,6 +177,9 @@
       "$className": "StarterPlayer",
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
+        "ServerListClient": {
+          "$path": "src/client/ServerListClient.client.luau"
+        },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
         },
