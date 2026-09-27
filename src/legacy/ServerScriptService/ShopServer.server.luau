@@ -19,7 +19,7 @@ local MessagingService  = game:GetService("MessagingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SSS               = game:GetService("ServerScriptService")
 
--- ── [FIX 1] ReceiptHandler (ganti shared["_db/connect"]) ──────
+-- ── ReceiptHandler (ganti shared["_db/connect"]) ─────────────
 -- Tunggu ReceiptHandler dengan TIMEOUT, jangan hang selamanya.
 local ReceiptHandler
 do
@@ -42,9 +42,8 @@ local Store   = DataStoreService:GetDataStore(Config.dataStore.name)
 local Cache   = {}   -- [userId]  → data
 local Intents = {}   -- [player]  → { recipient, passName, timestamp }
 local RankCache = {} -- [userId]  → bool (isAdmin), cleared on leave
--- [FIX 2a] data gagal dimuat → JANGAN pernah SetAsync (akan menimpa data asli dengan data kosong)
+-- data gagal dimuat → hanya disimpan lewat UpdateAsync gabung
 local LoadFailed    = {} -- [userId] → true
-local OwnCheckCache = {} -- ["uid|pass"] → { value, expires }  (CheckPlayerOwnership)
 local LastCall      = {} -- [player] → { [remoteName] = os.clock() }
 local function throttled(player, name, cooldown)
 	local t = LastCall[player]
@@ -90,10 +89,8 @@ local function makeChild(class, name, parent)
 end
 
 local R = {
-	CheckOwnership       = makeChild("RemoteFunction", "CheckOwnership",       RemoteFolder),
 	GetAllOwnership      = makeChild("RemoteFunction", "GetAllOwnership",      RemoteFolder), -- BATCH (1 call)
 	GetOnlinePlayers     = makeChild("RemoteFunction", "GetOnlinePlayers",     RemoteFolder),
-	CheckPlayerOwnership = makeChild("RemoteFunction", "CheckPlayerOwnership", RemoteFolder),
 	InitiateGift         = makeChild("RemoteEvent",    "InitiateGift",         RemoteFolder),
 	AdminGiftItem        = makeChild("RemoteEvent",    "AdminGiftItem",        RemoteFolder), -- FREE gift
 	OwnershipUpdated     = makeChild("RemoteEvent",    "OwnershipUpdated",     RemoteFolder),
@@ -175,9 +172,9 @@ local function hasPass(userId, passName, waitForData)
 	local data = Cache[userId]
 	if not data and waitForData then
 		local p = Players:GetPlayerByUserId(userId)
-		local t = tick()
+		local t = os.clock()
 		repeat task.wait(0.1); data = Cache[userId]
-		until data or not p or not p.Parent or tick() - t > 10
+		until data or not p or not p.Parent or os.clock() - t > 10
 	end
 	return data and data.Gamepasses[passName] or false
 end
@@ -447,7 +444,7 @@ local function setIntent(player, recipientId, passName)
 end
 
 -- ── Gift validation (paid path) ────────────────────────────────
-local function validateGift(sender, recipientId, passName)
+local function validateGift(_sender, recipientId, passName)
 	recipientId = validUserId(recipientId)
 	if not recipientId or type(passName) ~= "string" then return false end
 	local pass = Config.getGamepassByName(passName)
@@ -554,18 +551,7 @@ end
 -- REMOTE HANDLERS
 -- ══════════════════════════════════════════════════════════════
 
--- Single ownership check (backward compat)
-R.CheckOwnership.OnServerInvoke = function(player, passName)
-	if type(passName) ~= "string" or not Config.getGamepassByName(passName) then return false end
-	return limitedInvoke(player, "CheckOwnership|" .. passName, 0.5, false, function()
-		-- Admin rank = semua pass dianggap owned
-		if isAdminRank(player) then return true end
-		return hasPass(player.UserId, passName, false)
-	end)
-end
-
 -- BATCH: 1 call untuk semua pass + flag isAdmin
--- Menggantikan N sequential CheckOwnership calls di client
 R.GetAllOwnership.OnServerInvoke = function(player)
 	return limitedInvoke(player, "GetAllOwnership", 0.5, nil, function()
 		local admin  = isAdminRank(player)
@@ -601,20 +587,6 @@ R.GetOnlinePlayers.OnServerInvoke = function(player, passName)
 	end)
 end
 
-R.CheckPlayerOwnership.OnServerInvoke = function(player, targetId, passName)
-	-- [FIX 2a] validasi + cache 60 dtk + batas 1 panggilan/dtk (dulu: GetAsync ke userId bebas tanpa batas)
-	targetId = tonumber(targetId)
-	if not targetId or targetId ~= targetId or targetId <= 0 or targetId % 1 ~= 0 then return false end
-	if type(passName) ~= "string" or not Config.getGamepassByName(passName) then return false end
-	local key = targetId .. "|" .. passName
-	local hit = OwnCheckCache[key]
-	if hit and hit.expires > os.clock() then return hit.value end
-	if throttled(player, "CheckPlayerOwnership", 1) then return hit and hit.value or false end
-	local value = deepOwnershipCheck(targetId, passName) and true or false
-	OwnCheckCache[key] = { value = value, expires = os.clock() + 60 }
-	return value
-end
-
 -- PAID gift: server prompts purchase, ReceiptHandler processes
 R.InitiateGift.OnServerEvent:Connect(function(player, recipientId, passName)
 	-- Kalau ReceiptHandler tidak ada, gift berbayar dimatikan (jangan prompt sia-sia)
@@ -622,7 +594,7 @@ R.InitiateGift.OnServerEvent:Connect(function(player, recipientId, passName)
 		warn("[ShopServer] Gift berbayar dinonaktifkan (ReceiptHandler tidak ada).")
 		return
 	end
-	if throttled(player, "InitiateGift", 2) then return end -- [FIX 2a] anti-spam
+	if throttled(player, "InitiateGift", 2) then return end -- anti-spam
 	if not validateGift(player, recipientId, passName) then return end
 	recipientId = validUserId(recipientId)
 	setIntent(player, recipientId, passName)
@@ -660,7 +632,7 @@ R.AdminGiftItem.OnServerEvent:Connect(function(player, recipientId, passName)
 end)
 
 -- ══════════════════════════════════════════════════════════════
--- [FIX 2] ReceiptHandler integration (paid gift processor)
+-- ReceiptHandler integration (paid gift processor)
 -- Menggantikan shared["_db/connect"]:AddProcessor(...)
 --
 -- ReceiptHandler.RegisterProduct(productId, func) — func harus balikin true/false.
@@ -678,9 +650,9 @@ local function handleGiftReceipt(receipt, player)
 	-- Pastikan data pemain sudah loaded
 	local data = Cache[userId]
 	if not data then
-		local t = tick()
+		local t = os.clock()
 		repeat task.wait(0.1); data = Cache[userId]
-		until data or not player.Parent or tick() - t > 10
+		until data or not player.Parent or os.clock() - t > 10
 		if not data or not player.Parent then
 			return false  -- ReceiptHandler → NotProcessedYet, dicoba lagi nanti
 		end
@@ -827,8 +799,6 @@ end
 
 _G.ShopServer = {
 	HasGamepass   = hasPass,
-	IsAdminRank   = isAdminRank,
-	GetPlayerData = function(uid) return Cache[uid] end,
 }
 
 print(("[ShopServer] Ready | %d gamepasses | adminRankMin=%d | Gift system %s"):format(
