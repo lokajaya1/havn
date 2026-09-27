@@ -149,6 +149,7 @@ end
 
 -- ── Ownership ─────────────────────────────────────────────────
 -- Pass baru ATAU pass HAVN lama (Config legacyIds) = punya
+-- Return: punya, errored (API gagal → cek lagi nanti)
 local function robloxOwns(userId, pass)
 	return Config.userOwnsPass(userId, pass)
 end
@@ -175,89 +176,76 @@ local function deepOwnershipCheck(userId, passName)
 end
 
 -- ── Data management ───────────────────────────────────────────
-local function grantPass(userId, passName)
+-- Semua tulisan ShopData lewat UpdateAsync GABUNG, tidak pernah SetAsync: pass hadiah
+-- dari server lain (pesan MessagingService bisa hilang) dan data sesi di server lain
+-- (pindah server) tidak tertimpa. Tidak ada yang dihapus saat digabung.
+local Dirty       = {} -- [userId] → true: cache punya perubahan yang belum pasti tersimpan
+local PendingWant = {} -- [userId] → { [passName] = entry | false } (lihat PendingGifts di bawah)
+local Inflight    = 0  -- tulisan latar yang sedang berjalan (ditunggu BindToClose)
+
+local function entryKey(e)
+	if type(e) ~= "table" then return tostring(e) end
+	return table.concat({ tostring(e.PurchaseId), tostring(e.From), tostring(e.To),
+		tostring(e.Pass), tostring(e.Time), tostring(e.Type) }, "|")
+end
+
+local function unionList(dst, src)
+	if type(src) ~= "table" then return end
+	local seen = {}
+	for _, e in ipairs(dst) do seen[entryKey(e)] = true end
+	for _, e in ipairs(src) do
+		local k = entryKey(e)
+		if not seen[k] then
+			seen[k] = true
+			table.insert(dst, e)
+		end
+	end
+end
+
+-- Masukkan isi src ke dst (keduanya sudah ensureFields). Return: pass yang baru jadi true.
+local function absorb(dst, src)
+	local added = {}
+	for name, owned in pairs(src.Gamepasses) do
+		if owned == true and dst.Gamepasses[name] ~= true then
+			dst.Gamepasses[name] = true
+			table.insert(added, name)
+		end
+	end
+	for id, rec in pairs(src.Purchases) do
+		if dst.Purchases[id] == nil then dst.Purchases[id] = rec end
+	end
+	unionList(dst.GiftHistory, src.GiftHistory)
+	if type(src.GiftsSent) == "table" then
+		if type(dst.GiftsSent) ~= "table" then dst.GiftsSent = {} end
+		unionList(dst.GiftsSent, src.GiftsSent)
+	end
+	return added
+end
+
+-- Data tersimpan → cache pemain di server ini (tabel cache TIDAK diganti).
+-- quiet = false → pass yang baru muncul diberitahukan (client, RankManager, ToolGiver).
+local function adopt(userId, stored, quiet)
 	local data = Cache[userId]
-	if not data then return false end
-	data.Gamepasses[passName] = true
-	task.spawn(function()
-		-- [FIX 2a] data belum termuat → lewati SetAsync, langsung UpdateAsync (gabung ke data tersimpan)
-		if LoadFailed[userId] or not retry(Store.SetAsync, Store, userId, data) then
-			task.wait(2)
-			retry(function()
-				return Store:UpdateAsync(userId, function(old)
-					old = ensureFields(old)
-					old.Gamepasses[passName] = true
-					return old
-				end)
-			end)
-		end
-	end)
-	return true
-end
-
-local function loadData(player)
-	local uid = player.UserId
-	if Cache[uid] then return Cache[uid] end
-	local ok, data = retry(Store.GetAsync, Store, uid)
-	if not ok then
-		LoadFailed[uid] = true -- [FIX 2a]
-		warn(("[ShopServer] load data GAGAL uid %d → simpan hanya lewat UpdateAsync gabung"):format(uid))
-	end
-	data = ensureFields(ok and data or nil)
-	if not player.Parent then return nil end
-	Cache[uid] = data
-	-- Sync Roblox-purchased passes
-	for _, pass in ipairs(Config.gamepasses) do
-		if not data.Gamepasses[pass.name] and robloxOwns(uid, pass) then
-			data.Gamepasses[pass.name] = true
+	if not data or type(stored) ~= "table" then return end
+	stored = ensureFields(stored)
+	local added = absorb(data, stored)
+	if type(stored.PendingGifts) == "table" then
+		local want = PendingWant[userId]
+		if type(data.PendingGifts) ~= "table" then data.PendingGifts = {} end
+		for name, e in pairs(stored.PendingGifts) do
+			if data.PendingGifts[name] == nil and not (want and want[name] ~= nil) then
+				data.PendingGifts[name] = e
+			end
 		end
 	end
-	return data
-end
-
-local function saveData(player)
-	local uid  = player.UserId
-	local data = Cache[uid]
-	if not data then return end
-	if not LoadFailed[uid] then
-		retry(Store.SetAsync, Store, uid, data)
-		return
+	LoadFailed[userId] = nil -- cache kini memuat data tersimpan
+	local p = Players:GetPlayerByUserId(userId)
+	if p and not quiet then
+		for _, name in ipairs(added) do onPassGranted(p, name, nil) end
 	end
-	-- [FIX 2a] data sesi ini dibuat dari nol (load gagal) → gabungkan, jangan timpa
-	local ok, merged = retry(function()
-		return Store:UpdateAsync(uid, function(old)
-			old = ensureFields(old)
-			for name, owned in pairs(data.Gamepasses) do
-				if owned then old.Gamepasses[name] = true end
-			end
-			for id, rec in pairs(data.Purchases) do
-				if old.Purchases[id] == nil then old.Purchases[id] = rec end
-			end
-			return old
-		end)
-	end)
-	if ok and merged then
-		LoadFailed[uid] = nil
-		if Cache[uid] then Cache[uid] = ensureFields(merged) end
-		print(("[ShopServer] data uid %d dipulihkan lewat UpdateAsync gabung"):format(uid))
-	else
-		warn(("[ShopServer] simpan uid %d dilewati (data belum pernah termuat)"):format(uid))
-	end
-end
-
-local function updateData(userId, fn)
-	local ok, newData = retry(function()
-		return Store:UpdateAsync(userId, function(old) return fn(ensureFields(old)) end)
-	end)
-	if ok and newData then
-		Cache[userId] = newData
-		LoadFailed[userId] = nil -- [FIX 2a] cache kini = data tersimpan
-	end
-	return ok, newData
 end
 
 -- Ubah sebagian data: UpdateAsync ke DataStore, lalu fungsi yang SAMA ke cache.
--- Cache tidak diganti, jadi perubahan sesi yang belum tersimpan tetap ada.
 -- mutate harus aman dijalankan berulang (UpdateAsync bisa mengulang transform).
 local function commit(userId, mutate)
 	local ok = retry(function()
@@ -267,13 +255,149 @@ local function commit(userId, mutate)
 	return ok
 end
 
+-- Ubah cache SEKARANG, simpan di latar. Gagal → Dirty (disimpan lagi saat autosave/keluar).
+local function persist(userId, mutate)
+	local data = Cache[userId]
+	if data then mutate(data) end
+	Inflight += 1
+	task.spawn(function()
+		if not commit(userId, mutate) then Dirty[userId] = true end
+		Inflight -= 1
+	end)
+end
+
+-- Simpan seluruh cache dengan cara GABUNG ke data tersimpan, lalu ambil hasil gabungannya.
+local function mergeSave(userId)
+	local data = Cache[userId]
+	if not data then return false end
+	local ok, merged = retry(function()
+		return Store:UpdateAsync(userId, function(old)
+			old = ensureFields(old)
+			absorb(old, data)
+			local want = PendingWant[userId]
+			if want then
+				if type(old.PendingGifts) ~= "table" then old.PendingGifts = {} end
+				for name, e in pairs(want) do old.PendingGifts[name] = e or nil end
+			end
+			return old
+		end)
+	end)
+	if ok and merged then
+		Dirty[userId] = nil
+		adopt(userId, merged, false)
+	else
+		warn(("[ShopServer] simpan uid %d gagal, dicoba lagi di autosave"):format(userId))
+	end
+	return ok
+end
+
+-- Baca data tersimpan dan gabungkan ke cache (tanpa menulis).
+local function reconcile(userId)
+	local ok, stored = retry(Store.GetAsync, Store, userId)
+	if ok and Cache[userId] then adopt(userId, stored or {}, false) end
+	return ok
+end
+
+local function grantPass(userId, passName)
+	if not Cache[userId] then return false end
+	persist(userId, function(d)
+		d.Gamepasses[passName] = true
+		return d
+	end)
+	return true
+end
+
+-- Load DataStore gagal → coba baca lagi di latar (pass hadiah muncul tanpa rejoin)
+local RELOAD_DELAYS = { 5, 15, 30, 60 }
+local function reloadLater(player)
+	for _, d in ipairs(RELOAD_DELAYS) do
+		task.wait(d)
+		if not player.Parent or not LoadFailed[player.UserId] then return end
+		if reconcile(player.UserId) then
+			print(("[ShopServer] data uid %d termuat ulang"):format(player.UserId))
+			return
+		end
+	end
+end
+
+-- Cek gamepass Roblox error saat join → cek lagi (pemilik tidak ditolak sepanjang sesi)
+local RECHECK_DELAYS = { 10, 30, 60 }
+local function recheckPasses(player, passes)
+	for _, d in ipairs(RECHECK_DELAYS) do
+		task.wait(d)
+		if not player.Parent then return end
+		local left = {}
+		for _, pass in ipairs(passes) do
+			if not hasPass(player.UserId, pass.name, false) then
+				local owned, errored = robloxOwns(player.UserId, pass)
+				if owned then
+					grantPass(player.UserId, pass.name)
+					onPassGranted(player, pass.name, nil)
+				elseif errored then
+					table.insert(left, pass)
+				end
+			end
+		end
+		if #left == 0 then return end
+		passes = left
+	end
+end
+
+local function loadData(player)
+	local uid = player.UserId
+	if Cache[uid] then return Cache[uid] end
+	local ok, data = retry(Store.GetAsync, Store, uid)
+	if not ok then
+		LoadFailed[uid] = true
+		warn(("[ShopServer] load data GAGAL uid %d → dicoba lagi di latar"):format(uid))
+	end
+	data = ensureFields(ok and data or nil)
+	if not player.Parent then return nil end
+	Cache[uid] = data
+	if not ok then task.spawn(reloadLater, player) end
+	-- Sync Roblox-purchased passes (pass baru ATAU lama) → dicatat di ShopData
+	local synced, recheck = {}, {}
+	for _, pass in ipairs(Config.gamepasses) do
+		if not data.Gamepasses[pass.name] then
+			local owned, errored = robloxOwns(uid, pass)
+			if owned then
+				table.insert(synced, pass.name)
+			elseif errored then
+				table.insert(recheck, pass)
+			end
+		end
+	end
+	if #synced > 0 then
+		persist(uid, function(d)
+			for _, name in ipairs(synced) do d.Gamepasses[name] = true end
+			return d
+		end)
+	end
+	if #recheck > 0 then task.spawn(recheckPasses, player, recheck) end
+	return data
+end
+
+-- Keluar / autosave / tutup server: tulis hanya kalau ada yang belum pasti tersimpan
+local function saveData(player)
+	local uid = player.UserId
+	if not Cache[uid] then return end
+	if Dirty[uid] or LoadFailed[uid] then mergeSave(uid) end
+end
+
+local function updateData(userId, fn)
+	local ok, newData = retry(function()
+		return Store:UpdateAsync(userId, function(old) return fn(ensureFields(old)) end)
+	end)
+	-- Cache hanya untuk pemain di server ini (dulu: pemain offline ikut dicache → basi)
+	if ok and newData and Cache[userId] then adopt(userId, newData, true) end
+	return ok, newData
+end
+
 -- ── Tujuan gift tersimpan (PendingGifts) ──────────────────────
 -- Struk gift bisa diulang Roblox di sesi LAIN (pembeli keluar/server mati sebelum
 -- selesai). Tujuan disimpan di data pembeli: PendingGifts[passName] = { To, Time }.
 -- PendingWant = keadaan terakhir yang diminta server ini; tulisan yang telat
 -- selalu menulis keadaan terakhir (urutan tulis tidak penting).
-local PendingWant = {} -- [userId] → { [passName] = entry | false }
-
 local function setPending(userId, passName, entry)
 	PendingWant[userId] = PendingWant[userId] or {}
 	PendingWant[userId][passName] = entry or false
@@ -342,20 +466,21 @@ local function processGift(receipt, intent)
 	end)
 	if not ok then return false end
 
-	-- Record on sender side
-	task.spawn(function()
-		local sd = Cache[senderId]
-		if sd then
-			sd.GiftsSent = sd.GiftsSent or {}
-			local r = Players:GetPlayerByUserId(recipientId)
-			table.insert(sd.GiftsSent, {
-				To=recipientId, ToName=r and r.Name or "Unknown",
-				Pass=passName, Time=os.time(),
-			})
-		end
-	end)
+	-- Record on sender side (disimpan gabung, dulu hanya di cache sampai keluar)
+	if Cache[senderId] then
+		local r = Players:GetPlayerByUserId(recipientId)
+		local sent = {
+			To=recipientId, ToName=r and r.Name or "Unknown",
+			Pass=passName, Time=os.time(),
+		}
+		persist(senderId, function(d)
+			if type(d.GiftsSent) ~= "table" then d.GiftsSent = {} end
+			unionList(d.GiftsSent, { sent })
+			return d
+		end)
+	end
 
-	-- Notify if recipient is on this server
+	-- Notify if recipient is on this server (cache sudah diisi updateData)
 	local recipient = Players:GetPlayerByUserId(recipientId)
 	if recipient then
 		grantPass(recipientId, passName)
@@ -602,10 +727,7 @@ Marketplace.PromptGamePassPurchaseFinished:Connect(function(player, passId, purc
 	if not purchased then return end
 	local pass = Config.getGamepassById(passId)
 	if not pass then return end
-	local data = Cache[player.UserId]
-	if not data then return end
-	data.Gamepasses[pass.name] = true
-	saveData(player)
+	if not grantPass(player.UserId, pass.name) then return end
 	onPassGranted(player, pass.name, nil)
 end)
 
@@ -635,21 +757,37 @@ Players.PlayerRemoving:Connect(function(player)
 	LoadFailed[uid] = nil
 	LastCall[player] = nil
 	PendingWant[uid] = nil
+	Dirty[uid] = nil
 end)
 
 for _, p in ipairs(Players:GetPlayers()) do task.spawn(loadData, p) end
 
--- Auto-save tiap 5 menit
+-- Tiap 5 menit: simpan yang belum pasti tersimpan; yang lain dibaca ulang
+-- (pass hadiah dari server lain yang pesannya hilang ikut masuk)
 task.spawn(function()
 	while true do
 		task.wait(300)
-		for _, p in ipairs(Players:GetPlayers()) do task.spawn(saveData, p) end
+		for _, p in ipairs(Players:GetPlayers()) do
+			task.spawn(function()
+				local uid = p.UserId
+				if Dirty[uid] or LoadFailed[uid] then saveData(p) elseif Cache[uid] then reconcile(uid) end
+			end)
+		end
 	end
 end)
 
+-- Tutup server: simpan semua pemain BERSAMAAN + tunggu tulisan latar (maks 25 dtk)
 game:BindToClose(function()
-	for _, p in ipairs(Players:GetPlayers()) do saveData(p) end
-	task.wait(3)
+	local left = 0
+	for _, p in ipairs(Players:GetPlayers()) do
+		left += 1
+		task.spawn(function()
+			pcall(saveData, p)
+			left -= 1
+		end)
+	end
+	local t = os.clock()
+	while (left > 0 or Inflight > 0) and os.clock() - t < 25 do task.wait(0.1) end
 end)
 
 -- ── Global API (RankManager, ToolGiver, dll) ──────────────────

@@ -120,15 +120,18 @@ function ShopConfig.ownershipIds(pass)
 end
 
 -- Cek kepemilikan di Roblox (server). Punya ID baru ATAU lama = punya.
--- Error API dihitung tidak punya (sama seperti kode lama).
+-- Error API dihitung tidak punya (sama seperti kode lama); nilai ke-2 = ada error
+-- (ShopServer mengecek ulang nanti).
 function ShopConfig.userOwnsPass(userId, pass)
-	if not pass then return false end
+	if not pass then return false, false end
 	local Marketplace = game:GetService("MarketplaceService")
+	local errored = false
 	for _, id in ipairs(ShopConfig.ownershipIds(pass)) do
 		local ok, owned = pcall(Marketplace.UserOwnsGamePassAsync, Marketplace, userId, id)
-		if ok and owned then return true end
+		if ok and owned then return true, false end
+		if not ok then errored = true end
 	end
-	return false
+	return false, errored
 end
 
 function ShopConfig.getGamepassByProduct(productId)
