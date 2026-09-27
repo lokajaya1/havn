@@ -193,17 +193,21 @@ end
 -- Dibatasi supaya tombol yang ditekan berkali-kali (atau paket ulang) tidak
 -- memicu banjir data.
 local lastState = {}
+-- [FIX R2] Permintaan yang datang sebelum PlayerAdded diproses → dijawab
+-- begitu data pemain siap (dulu dibuang, lalu ditambal push buta 0.5 & 3 dtk).
+local pendingState = {}
 
-local function requestState(p)
+local function requestState(p, data)
 	local d = playerData[p]
-	if not d then return end
+	if not d then pendingState[p] = true; return end
 	local now = os.clock()
 	if lastState[p] and (now - lastState[p]) < 1.5 then return end
 	lastState[p] = now
 	task.spawn(function()
 		Shared.to(p, "SoundLocation", Playback.path())
-		Library.broadcast(p)
-		Library.myBroadcast(p)
+		-- [FIX R2] tombol reload hanya butuh status lagu, bukan library 130 KB;
+		-- My Library dikirim lewat RequestMyLibrary / selesai dimuat (tidak dobel).
+		if data ~= "reload" then Library.broadcast(p) end
 		Shared.to(p, "QueueUpdate",  Playback.queue())
 		Shared.to(p, "VolumeUpdate", d.volume or 0.7)
 		Shared.to(p, "IsAdmin",      isAdmin(p))
@@ -285,11 +289,22 @@ local function removeSong(p, songId)
 end
 
 -- ── LIBRARY SAYA (semua player) ───────────────────────────────────────────
+-- [FIX R2] My Library hanya dikirim kalau diminta client. Diminta saat masih
+-- dimuat → dikirim SEKALI begitu selesai (dulu terkirim 3-4x saat join).
+local wantMy = {}
+local function sendMyIfWanted(p)
+	if wantMy[p] and p.Parent then
+		wantMy[p] = nil
+		Library.myBroadcast(p)
+	end
+end
+
 local function requestMyLibrary(p)
 	if Library.myIsLoaded(p) then return Library.myBroadcast(p) end
+	wantMy[p] = true
 	task.spawn(function()
 		Library.myLoad(p)
-		Library.myBroadcast(p)
+		sendMyIfWanted(p)
 	end)
 end
 
@@ -606,13 +621,14 @@ local function initPlayer(p)
 
 	task.spawn(function()
 		Library.myLoad(p)
-		if p.Parent then Library.myBroadcast(p) end
+		sendMyIfWanted(p) -- [FIX R2]
 	end)
 
-	for _, delay in ipairs({ 0.5, 3 }) do
-		task.delay(delay, function()
-			if p.Parent and playerData[p] then requestState(p) end
-		end)
+	-- [FIX R2] Tidak ada lagi push buta 0.5 & 3 dtk (library terkirim 2-3x).
+	-- Client meminta sendiri saat UI-nya siap; yang terlanjur datang dijawab di sini.
+	if pendingState[p] then
+		pendingState[p] = nil
+		requestState(p)
 	end
 
 	local function onRankChanged()
@@ -642,6 +658,7 @@ local function cleanupPlayer(p)
 	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
 	liveCooldown[p] = nil
 	lastState[p] = nil
+	pendingState[p], wantMy[p] = nil, nil -- [FIX R2]
 	reportBucket[p] = nil -- [FIX M3]
 
 	local d = playerData[p]
