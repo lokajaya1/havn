@@ -34,6 +34,13 @@ local function skipBlocked(p) return Live.isFollowing() or (Live.isActive() and 
 
 local function queueLimit(p)
 	if isAdmin(p) then return 999 end
+	-- Nilai dari UnifiedRankManager: rank + gamepass VIP/VVIP (baru/lama) + member community.
+	-- Atribut GroupRank/HasVIPGamepass di bawah tidak pernah di-set (terbukti Studio
+	-- 2026-09-28), jadi dulu semua non-admin dapat batas Guest.
+	local attr = p:GetAttribute("QueueLimit")
+	if type(attr) == "number" and attr == attr and attr >= 1 then
+		return math.floor(attr)
+	end
 	if RankConfig and RankConfig.GetQueueLimit then
 		return RankConfig.GetQueueLimit(
 			p:GetAttribute("GroupRank") or 0,

@@ -210,7 +210,7 @@ local function initPlayer(p)
 		sendRole(p)
 		if isAdmin(p) then Shared.to(p, "SpatialSettings", table.clone(Shared.spatial)) end
 	end
-	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass", "Role" }) do -- Role: peran DJ
+	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass", "Role", "QueueLimit" }) do -- Role: peran DJ
 		pcall(function() p:GetAttributeChangedSignal(attr):Connect(onRankChanged) end)
 	end
 end
