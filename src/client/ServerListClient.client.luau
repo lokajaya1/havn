@@ -164,6 +164,8 @@ end
 noticeEv.OnClientEvent:Connect(showToast)
 
 -- Drag & drop lewat judul panel (helper yang sama dengan panel "/").
+-- customPos/reclamp dideklarasi DI SINI (sebelum dipakai); dulu di bawah -> jadi global (selene).
+local customPos, reclamp = false, nil
 if _G.MenuUI and _G.MenuUI.makeDraggable then
 	local ok, r = pcall(_G.MenuUI.makeDraggable, panel, { header }, function() customPos = true end)
 	if ok and type(r) == "function" then reclamp = r end
@@ -171,7 +173,6 @@ end
 
 -- ── ukuran responsif ──────────────────────────────────────────────────────
 local cols, panelW, maxH = 2, 600, 400
-local customPos, reclamp = false, nil
 local function fitHeight(count)
 	local rows = math.max(1, math.ceil(count / cols))
 	local want = 110 + rows * CARD_H + (rows - 1) * GAP + 8

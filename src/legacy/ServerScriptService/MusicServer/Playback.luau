@@ -464,6 +464,7 @@ local function watchdog(tk, song)
 			end
 
 		elseif os.clock() >= loadDeadline then
+			-- selene: allow(empty_if)
 			if pos then
 				-- Ada client yang jelas sedang memutar: jangan hakimi.
 			elseif #Players:GetPlayers() == 0 then
