@@ -266,6 +266,10 @@ function CarryManager:_handleServerEvent(args)
 			CarryUI.Toast("Cannot Carry", nameOf(args.targetPlr) .. " is busy right now", 3)
 		end
 
+	elseif cmd == "TooFar" then
+		pendingOutgoing = nil
+		CarryUI.Toast("Too Far", "Get closer to " .. nameOf(args.targetPlr) .. " to carry", 3)
+
 	elseif cmd == "DestroyCarryInfo" then
 		if state.active then
 			clearState()
