@@ -52,7 +52,7 @@ local S = {
 	sortMode   = "last",
 	libView    = "all",     -- "all" | "mine"
 	isAdmin    = false,
-	isDJ       = false, -- [FIX L1b]
+	isDJ       = false,
 	liveOn     = false,
 	queueLimit = { current = 0, max = Shared.maxGlobalQueue, myLimit = 1 },
 	spatial    = {},
@@ -115,7 +115,7 @@ end
 --   len    -> durasi asli, dikirim sekali begitu audio ter-load
 --   pos    -> heartbeat posisi playback, dasar keputusan akhir lagu di server
 --   failed -> audio memang tidak bisa dimuat di mesin ini
-local REPORT_EVERY = Shared.reportEvery -- [FIX R7]
+local REPORT_EVERY = Shared.reportEvery
 local PROBE_AFTER  = Shared.probeDelay or 5   -- cek aset setelah sekian detik sunyi
 local TICK_VISIBLE = 0.25
 local TICK_HIDDEN  = 1
@@ -199,7 +199,7 @@ end
 
 -- Satu loop untuk progress UI sekaligus pelaporan ke server. Saat panel
 -- tertutup, loop melambat 4x dan tidak menulis properti UI sama sekali.
--- [FIX M7] PENYEMBUH OTOMATIS. Dulu penyelamat hanya jalan SEKALI di detik ke-5
+-- PENYEMBUH OTOMATIS. Dulu penyelamat hanya jalan SEKALI di detik ke-5
 -- tiap lagu; kalau CDN audio Roblox sedang HTTP 502/Timedout, salinan lokal ikut
 -- gagal dan pemain itu sunyi sampai lagu berganti (bisa 5 menit). Sekarang:
 --   * audio belum termuat > HEAL_AFTER dtk → coba salinan lokal baru (instance
@@ -256,7 +256,7 @@ local function startProg()
 						return snd.IsPlaying, snd.TimePosition, snd.TimeLength, snd.IsLoaded
 					end)
 
-					pcall(healTick, snd, okRead and (loaded == true or (len and len > 1)) or false) -- [FIX M7]
+					pcall(healTick, snd, okRead and (loaded == true or (len and len > 1)) or false)
 					if okRead and loaded and len and len > 1 then
 						reportLen(len)
 						if playing then
@@ -277,7 +277,7 @@ end
 -- ══ NOW PLAYING ═══════════════════════════════════════════════════════════
 local function updateSectionVis()
 	ui.queueSection.Visible  = #S.fullQueue > 0
-	-- [FIX L1b] DJ non-admin: kotak "DJ" yang hanya berisi tombol Live.
+	-- DJ non-admin: kotak "DJ" yang hanya berisi tombol Live.
 	local djOnly = (not S.isAdmin) and S.isDJ
 	ui.adminSettings.Visible = S.isAdmin or S.isDJ
 	for _, ch in ipairs(ui.adminCt:GetChildren()) do
@@ -286,14 +286,14 @@ local function updateSectionVis()
 	ui.adminTitle.Text       = djOnly and "DJ" or "ADMIN SETTINGS"
 	ui.liveRow.Position      = djOnly and UDim2.new(0, 0, 0, 18) or UDim2.new(0, 0, 0, 288)
 	ui.adminSettings.Size    = djOnly and UDim2.new(1, 0, 0, 66) or UDim2.new(1, 0, 0, 348)
-	-- [FIX M6b] saat live hanya DJ siaran yang melihat Force skip
+	-- saat live hanya DJ siaran yang melihat Force skip
 	if S.liveOn or S.liveFollow then ui.forceSkipBtn.Visible = S.liveOn == true and S.liveDjId == player.UserId
 	else ui.forceSkipBtn.Visible = S.isAdmin or S.isDJ end
 	-- Library global: hanya admin yang bisa menambah/menghapus isinya.
 	ui.addGlobalBtn.Visible  = S.isAdmin
 	ui.addMineBtn.Size = S.isAdmin and UDim2.new(0.5, -3, 0, 26) or UDim2.new(1, 0, 0, 26)
 
-	-- [FIX M6] Banner LIVE + kunci request (tombol ▶ redup, antrian "ON HOLD").
+	-- Banner LIVE + kunci request (tombol ▶ redup, antrian "ON HOLD").
 	local wasAny, wasLocked = S.liveAny, S.liveLocked
 	S.liveAny    = S.liveOn == true or S.liveFollow == true
 	S.liveLocked = S.liveAny and not S.isDJ
@@ -302,7 +302,7 @@ local function updateSectionVis()
 		local dj = tostring(S.liveDj or "?")
 		ui.liveTitle.Text = S.liveFollow and ("LIVE  ·  DJ " .. dj .. "  ·  another server") or ("LIVE  ·  DJ " .. dj)
 		local sub
-		local me = S.liveOn and S.liveDjId == player.UserId -- [FIX M6b]
+		local me = S.liveOn and S.liveDjId == player.UserId
 		if S.liveFollow then
 			sub = "Playing from another server - the local queue is on hold"
 		elseif me then
@@ -341,7 +341,7 @@ local function updateNowPlaying(data)
 	-- Kalau masih pakai clone darurat TAPI server sudah ganti lagu, clone lama
 	-- masih memutar lagu LAMA -> dua audio tabrakan. Balik ke Sound server.
 	if Audio.isEmergency() then
-		local newId = Shared.rawId(data.Id) -- [FIX R6]
+		local newId = Shared.rawId(data.Id)
 		if newId and Audio.emergencySoundId() ~= newId then
 			Audio.track(Audio.lastPath())
 		end
@@ -453,7 +453,7 @@ ui.npFavBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- [FIX R6] Satu pewarna untuk semua tombol on/off (tab, Loudness, Auto play, Live).
+-- Satu pewarna untuk semua tombol on/off (tab, Loudness, Auto play, Live).
 local function paintToggle(btn, on, text, onBg, onFg)
 	if text then btn.Text = text end
 	btn.BackgroundColor3 = on and (onBg or P.accent) or P.panel
@@ -487,7 +487,7 @@ ui.reloadBtn.MouseButton1Click:Connect(function()
 
 	flash(ui.reloadBtn, P.accent)
 	Audio.track(Audio.lastPath())
-	remote:FireServer("RequestState", "reload") -- [FIX R2] tanpa library
+	remote:FireServer("RequestState", "reload") -- tanpa library
 
 	if double then
 		awaitingResync = true
@@ -529,7 +529,7 @@ ui.loudnessToggleBtn.MouseButton1Click:Connect(function()
 	paintLoud()
 end)
 
--- [FIX A1] Auto play On/Off (admin). Status asli datang lewat SpatialSettings.
+-- Auto play On/Off (admin). Status asli datang lewat SpatialSettings.
 local autoOn = Shared.spatial.autoplay ~= false
 local function paintAuto() paintToggle(ui.autoplayBtn, autoOn, autoOn and "On" or "Off") end
 paintAuto()
@@ -537,10 +537,10 @@ ui.autoplayBtn.MouseButton1Click:Connect(function()
 	autoOn = not autoOn
 	paintAuto()
 	remote:FireServer("SetSpatialSettings", { autoplay = autoOn })
-	notify(autoOn and "Auto play on" or "Auto play off") -- [FIX A1]
+	notify(autoOn and "Auto play on" or "Auto play off")
 end)
 
--- [FIX L1] Siaran live (admin). Status resmi datang dari server lewat LiveState.
+-- Siaran live (admin). Status resmi datang dari server lewat LiveState.
 local liveOn = false
 local function paintLive() paintToggle(ui.liveBtn, liveOn, liveOn and "LIVE - On" or "Off", P.danger, C.white) end
 paintLive()
@@ -650,7 +650,7 @@ end
 
 H.SongRetry = function() notify("Reloading song") end
 
--- [FIX R1] Daftar lengkap (saat join / diminta) membawa nomor versi.
+-- Daftar lengkap (saat join / diminta) membawa nomor versi.
 H.SharedLibrary = function(data)
 	if type(data) ~= "table" then return end
 	S.sharedLib = data.full or data
@@ -658,7 +658,7 @@ H.SharedLibrary = function(data)
 	if S.libView == "all" then refreshLib() end
 end
 
--- [FIX R1] Perubahan kecil library. Belum punya daftar lengkap → abaikan (menyusul).
+-- Perubahan kecil library. Belum punya daftar lengkap → abaikan (menyusul).
 -- Versi melompat (ada delta terlewat) → tetap diterapkan, lalu minta daftar lengkap.
 H.LibDelta = function(d)
 	if type(d) ~= "table" or type(d.ver) ~= "number" or type(S.libVer) ~= "number" then return end
@@ -734,7 +734,7 @@ end
 H.GlobalVolumeUpdate = function(data)
 	if not data then return end
 	local pct = math.clamp(data, 0, 1)
-	Audio.setGlobalVolume(pct) -- [FIX M5] pribadi × global
+	Audio.setGlobalVolume(pct) -- pribadi × global
 	ui.globalVolSlider.Size = UDim2.new(pct, 0, 1, 0)
 	ui.globalVolLabel.Text  = "Global " .. math.floor(pct * 100) .. "%"
 end
@@ -764,7 +764,7 @@ end
 H.SpatialSettings = function(data)
 	if not data then return end
 	Audio.setSpatial(data)          -- dipakai salinan lokal agar terdengar sama
-	Audio.setGlobalVolume(data.volume) -- [FIX M5] pemain baru join langsung tahu volume global
+	Audio.setGlobalVolume(data.volume) -- pemain baru join langsung tahu volume global
 	if not S.isAdmin then return end
 	S.spatial = data
 	ui.minDistInput.Text = tostring(math.floor(data.min  or 10))
@@ -774,24 +774,24 @@ H.SpatialSettings = function(data)
 	ui.globalVolSlider.Size = UDim2.new(v, 0, 1, 0)
 	ui.globalVolLabel.Text  = "Global " .. math.floor(v * 100) .. "%"
 	paintMode(data.mode == "global" and "global" or "stage")
-	if data.autoplay ~= nil then autoOn = data.autoplay == true; paintAuto() end -- [FIX A1]
+	if data.autoplay ~= nil then autoOn = data.autoplay == true; paintAuto() end
 end
 
-H.LiveState = function(data) -- [FIX L1]
+H.LiveState = function(data)
 	if type(data) ~= "table" then return end
 	local was = liveOn
 	liveOn = data.active == true
-	S.liveOn = liveOn -- [FIX L1b]
-	S.liveDj = data.dj -- [FIX M6]
-	S.liveDjId = data.djId -- [FIX M6b]
+	S.liveOn = liveOn
+	S.liveDj = data.dj
+	S.liveDjId = data.djId
 	paintLive()
 	if liveOn ~= was then notify(liveOn and ("LIVE - DJ " .. tostring(data.dj)) or "Live ended") end
-	local wasF = S.liveFollow -- [FIX L2] server ini ikut siaran server lain
+	local wasF = S.liveFollow -- server ini ikut siaran server lain
 	S.liveFollow = data.following == true
 	if S.liveFollow ~= (wasF == true) then
 		notify(S.liveFollow and ("LIVE from another server - DJ " .. tostring(data.dj)) or "Live ended")
 	end
-	updateSectionVis() -- [FIX M6] setelah liveOn/liveFollow/liveDj terisi
+	updateSectionVis() -- setelah liveOn/liveFollow/liveDj terisi
 end
 H.LoudnessSync = function(data)
 	if not data then return end
@@ -846,9 +846,9 @@ remote:FireServer("RequestMyLibrary")
 task.spawn(function()
 	for _, delay in ipairs({ 3, 8, 20 }) do
 		task.wait(delay)
-		if not alive or S.libVer ~= nil then return end -- [FIX R2] berhenti begitu daftar lengkap diterima (library kosong juga)
+		if not alive or S.libVer ~= nil then return end -- berhenti begitu daftar lengkap diterima (library kosong juga)
 		remote:FireServer("RequestState")
-		remote:FireServer("RequestMyLibrary") -- [FIX R2] requestState tidak lagi membawa My Library
+		remote:FireServer("RequestMyLibrary") -- requestState tidak lagi membawa My Library
 	end
 end)
 

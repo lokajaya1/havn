@@ -18,7 +18,7 @@ local FavDS    = DSS:GetDataStore("MusicFavorites")
 local Library = {}
 local list = {}
 local saveDirty, saveRunning = false, false
--- [FIX M1] Operasi lokal sejak tulis terakhir. Tulis = nilai LAMA di DataStore
+-- Operasi lokal sejak tulis terakhir. Tulis = nilai LAMA di DataStore
 -- + operasi ini, jadi library global tidak pernah ditimpa daftar server ini.
 local addedIds, removedIds = {}, {}
 
@@ -28,7 +28,7 @@ function Library.isFull() return #list >= Shared.maxSharedLib end
 -- ── info asset (cache) ────────────────────────────────────────────────────
 local cache = {}
 
--- [FIX R4] info aset (jaga jarak + ulang) & URL thumbnail ada di MusicShared.
+-- info aset (jaga jarak + ulang) & URL thumbnail ada di MusicShared.
 
 function Library.info(rawId)
 	local num = tonumber(rawId)
@@ -82,7 +82,7 @@ function Library.find(songId)
 	return nil, nil
 end
 
--- [FIX M1] catat operasi supaya tulis berikutnya bisa digabung dengan nilai lama
+-- catat operasi supaya tulis berikutnya bisa digabung dengan nilai lama
 function Library.insert(song)
 	table.insert(list, song)
 	local id = tostring(song.Id)
@@ -115,7 +115,7 @@ local function snapshotAll()
 	return snap
 end
 
--- [FIX M1] Gabung, jangan timpa. Dasar = nilai LAMA di DataStore, dikurangi
+-- Gabung, jangan timpa. Dasar = nilai LAMA di DataStore, dikurangi
 -- lagu yang dihapus di server ini, ditambah lagu yang ditambahkan di server ini.
 -- Tambahan admin di server lain tidak hilang, lagu yang dihapus server lain
 -- tidak hidup lagi, dan load yang gagal (daftar kosong) tidak bisa
@@ -188,7 +188,7 @@ local function writeNow()
 		local snap = snapshotAll()
 		local adds, dels = addedIds, removedIds
 		addedIds, removedIds = {}, {}
-		local ok, merged = Shared.retry(3, 1, function() -- [FIX R4]
+		local ok, merged = Shared.retry(3, 1, function()
 			return DS:UpdateAsync("GlobalLib", function(old)
 				return mergeInto(old, snap, adds, dels)
 			end)
@@ -222,7 +222,7 @@ function Library.saveNow()
 end
 
 function Library.load()
-	local ok, data = Shared.retry(3, function(i) return 0.5 * i end, DS.GetAsync, DS, "GlobalLib") -- [FIX R4]
+	local ok, data = Shared.retry(3, function(i) return 0.5 * i end, DS.GetAsync, DS, "GlobalLib")
 	if ok then
 		local clean, seen = {}, {}
 		if type(data) == "table" then
@@ -237,10 +237,10 @@ function Library.load()
 			end
 		end
 		list = clean
-		Library.primeSync() -- [FIX R1] semua client akan dapat daftar ini lewat kiriman penuh
+		Library.primeSync() -- semua client akan dapat daftar ini lewat kiriman penuh
 		return true
 	end
-	-- [FIX M1] Gagal dimuat: daftar kosong SEMENTARA. Aman, karena tulis selalu
+	-- Gagal dimuat: daftar kosong SEMENTARA. Aman, karena tulis selalu
 	-- digabung dengan nilai lama. Dimuat ulang di latar sampai berhasil.
 	list = {}
 	warn("[Music] library global gagal dimuat, dicoba lagi tiap 30 dtk")
@@ -257,7 +257,7 @@ function Library.load()
 	end)
 	return false
 end
--- [FIX R1] Dulu SELURUH library (±565 lagu ≈ 150-200 KB) dikirim ulang ke
+-- Dulu SELURUH library (±565 lagu ≈ 150-200 KB) dikirim ulang ke
 -- SEMUA pemain tiap ada perubahan. Sekarang:
 --   broadcast(p) → daftar lengkap ke satu pemain (join / diminta), + versi;
 --   broadcast()  → hanya lagu yang berubah sejak kiriman terakhir, ke semua.
@@ -402,7 +402,7 @@ local function clean(song)
 end
 
 -- YIELDS. Panggil dari task.spawn.
--- [FIX M2] `loaded` baru dipasang SETELAH data datang. Pemanggil yang datang
+-- `loaded` baru dipasang SETELAH data datang. Pemanggil yang datang
 -- selagi load berjalan menunggu, bukan memakai daftar kosong (dulu ♥ di detik
 -- awal hilang ditimpa hasil load walau notifikasi bilang "Saved").
 function Library.myLoad(p)
@@ -416,7 +416,7 @@ function Library.myLoad(p)
 	end
 	s.loading = true
 
-	local ok, data = Shared.retry(3, 0.5, FavDS.GetAsync, FavDS, "MyLib_" .. uid) -- [FIX R4]
+	local ok, data = Shared.retry(3, 0.5, FavDS.GetAsync, FavDS, "MyLib_" .. uid)
 
 	local out, seen = {}, {}
 	if ok and type(data) == "table" then
@@ -428,13 +428,13 @@ function Library.myLoad(p)
 		end
 	end
 	s.list    = out
-	s.failed  = not ok -- [FIX 2c2] load gagal → myWrite menggabungkan, bukan menimpa
+	s.failed  = not ok -- load gagal → myWrite menggabungkan, bukan menimpa
 	s.loaded  = true
 	s.loading = false
 	return s.list
 end
 
--- [FIX M2] jumlah tulis Library Saya yang sedang berjalan (ditunggu BindToClose)
+-- jumlah tulis Library Saya yang sedang berjalan (ditunggu BindToClose)
 local myPending = 0
 
 local function myWrite(uid)
@@ -445,10 +445,10 @@ local function myWrite(uid)
 	for _, song in ipairs(s.list) do table.insert(snap, clean(song)) end
 	local merge = s.failed
 	myPending += 1
-	local ok, res = Shared.retry(3, 1, function() -- [FIX R4]
+	local ok, res = Shared.retry(3, 1, function()
 		return FavDS:UpdateAsync("MyLib_" .. uid, function(old)
 			if not merge then return snap end
-			-- [FIX 2c2] library lama belum pernah termuat → gabung (lama + baru), jangan timpa
+			-- library lama belum pernah termuat → gabung (lama + baru), jangan timpa
 			local out, seen = {}, {}
 			if type(old) == "table" then
 				for _, song in ipairs(old) do
@@ -466,11 +466,11 @@ local function myWrite(uid)
 	end)
 	myPending -= 1
 	if not ok then
-		s.dirty = true -- [FIX M2] jangan dibuang diam-diam: ikut ditulis saat keluar / shutdown
+		s.dirty = true -- jangan dibuang diam-diam: ikut ditulis saat keluar / shutdown
 		warn("[Music] gagal simpan Library Saya untuk UserId", uid)
 		return
 	end
-	-- [FIX M2] Gabungan berhasil → daftar lokal = hasil gabungan dan mode gabung
+	-- Gabungan berhasil → daftar lokal = hasil gabungan dan mode gabung
 	-- dimatikan. Dulu `failed` tidak pernah direset, jadi hapus favorit
 	-- sesudahnya tidak pernah tersimpan (lagu lama selalu ikut kembali).
 	if merge and not s.dirty and type(res) == "table" and mine[uid] == s then
@@ -541,7 +541,7 @@ function Library.myRemove(p, songId)
 	return Library.myRemoveAt(p, idx)
 end
 
--- [FIX R4] Pembuat entri lagu (dulu disusun manual di 5 tempat).
+-- Pembuat entri lagu (dulu disusun manual di 5 tempat).
 --   meta(src, extra)            : salin metadata lagu yang sudah ada + field tambahan
 --   fromInfo(rawId, info, extra): entri baru dari hasil Library.info / validate
 local META = { "Id", "RawId", "Name", "AudioCreator", "creatorType", "creatorId", "thumbnailUrl" }
@@ -587,7 +587,7 @@ end
 -- ── shutdown ──────────────────────────────────────────────────────────────
 function Library.bindToClose()
 	game:BindToClose(function()
-		-- [FIX M1] tunggu tulis yang sedang jalan, lalu tulis sisa operasi (digabung)
+		-- tunggu tulis yang sedang jalan, lalu tulis sisa operasi (digabung)
 		local t0 = os.clock()
 		while saveRunning and os.clock() - t0 < 15 do task.wait(0.2) end
 		if saveDirty or next(addedIds) or next(removedIds) then
@@ -598,7 +598,7 @@ function Library.bindToClose()
 				end)
 			end)
 		end
-		-- [FIX M2] tunggu tulis Library Saya dari PlayerRemoving, lalu tulis sisanya
+		-- tunggu tulis Library Saya dari PlayerRemoving, lalu tulis sisanya
 		while myPending > 0 and os.clock() - t0 < 25 do task.wait(0.2) end
 		for uid, s in pairs(mine) do
 			if s.dirty then pcall(myWrite, uid) end

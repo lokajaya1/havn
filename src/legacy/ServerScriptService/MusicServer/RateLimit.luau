@@ -1,11 +1,11 @@
--- MusicServer/RateLimit  (ModuleScript)  [FIX R5] dipindah dari init.server
+-- MusicServer/RateLimit  (ModuleScript)  dipindah dari init.server
 -- Pembatas aksi remote per pemain + kuota laporan durasi + cek angka dari client.
 
 local isAdmin = require(script.Parent:WaitForChild("Permissions")).isAdmin
 
 local rateHits = {}
 
--- [FIX R4] Satu pembatas untuk semua aksi. everyone = true: admin juga dibatasi
+-- Satu pembatas untuk semua aksi. everyone = true: admin juga dibatasi
 -- (dulu SetLive & RequestState punya tabel jeda sendiri).
 local function checkRate(p, action, cooldown, everyone)
 	if isAdmin(p) and not everyone then return true end
@@ -29,10 +29,10 @@ task.spawn(function()
 	end
 end)
 
--- [FIX M3] Angka dari client wajib angka sungguhan: NaN lolos math.clamp.
+-- Angka dari client wajib angka sungguhan: NaN lolos math.clamp.
 local function isNum(v) return type(v) == "number" and v == v end
 
--- [FIX M3] ReportDuration: kuota token per pemain (5 token, terisi 1/dtk).
+-- ReportDuration: kuota token per pemain (5 token, terisi 1/dtk).
 -- Laporan sah: posisi tiap 3 dtk + durasi sekali + gagal ≤2 → tidak pernah habis.
 -- Spam dibuang supaya tidak memicu SongDuration ke semua pemain.
 local reportBucket = {}

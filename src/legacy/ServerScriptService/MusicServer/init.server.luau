@@ -1,9 +1,9 @@
 -- ServerScriptService/MusicServer  (Script)
--- Bootstrap + handler aksi + lifecycle player. [FIX R5] ModuleScript anak:
+-- Bootstrap + handler aksi + lifecycle player. ModuleScript anak:
 --   Library (library global + My Library), Playback (Sound & antrian),
 --   Live (siaran lintas server), Permissions, RateLimit, Volume,
---   LibraryActions (aksi library global & My Library). [FIX R5b]
---   QueueActions (antrian, skip, live). [FIX R5c]
+--   LibraryActions (aksi library global & My Library).
+--   QueueActions (antrian, skip, live).
 --
 -- FIX PENTING:
 --   Actions.ReportDuration dulu memanggil Playback.report(data.id, data.len,
@@ -17,16 +17,16 @@ local RS      = game:GetService("ReplicatedStorage")
 local Shared   = require(RS:WaitForChild("MusicShared"))
 local Library  = require(script:WaitForChild("Library"))
 local Playback = require(script:WaitForChild("Playback"))
-local Live     = require(script:WaitForChild("Live")) -- [FIX L1] siaran live
+local Live     = require(script:WaitForChild("Live")) -- siaran live
 
 -- ═══ IZIN & RATE LIMIT ════════════════════════════════════════════════════
-local Perm = require(script:WaitForChild("Permissions")) -- [FIX R5]
+local Perm = require(script:WaitForChild("Permissions"))
 local isAdmin, isDJ, queueLimit = Perm.isAdmin, Perm.isDJ, Perm.queueLimit
 
 local Rate   = require(script:WaitForChild("RateLimit"))
 local Volume = require(script:WaitForChild("Volume"))
 local LibraryActions = require(script:WaitForChild("LibraryActions"))
-local QueueActions   = require(script:WaitForChild("QueueActions")) -- [FIX R5c]
+local QueueActions   = require(script:WaitForChild("QueueActions"))
 local checkRate, isNum, allowReport = Rate.check, Rate.isNum, Rate.allowReport
 
 -- ═══ BOOT ═════════════════════════════════════════════════════════════════
@@ -38,14 +38,14 @@ Playback.init()
 Playback.applyMode(Shared.spatial.mode)
 Playback.setGlobalVolume(Shared.defaultVolume)
 
--- [FIX L1] Lagu yang mulai / diulang / berhenti di server ini dilaporkan ke Live
+-- Lagu yang mulai / diulang / berhenti di server ini dilaporkan ke Live
 -- (hanya berefek kalau server ini sedang siaran). Status siaran ke semua pemain.
 Playback.onSongStart = function(song) Live.songChanged(song, 0) end
 Live.onChange(function(st)
-	Playback.liveDjId = Live.djId() -- [FIX M6b] antrian DJ saja selama live
+	Playback.liveDjId = Live.djId() -- antrian DJ saja selama live
 	Shared.all("LiveState", st)
 end)
--- [FIX L2] Server ini ikut siaran server lain: posisi = jam sekarang − jam mulai.
+-- Server ini ikut siaran server lain: posisi = jam sekarang − jam mulai.
 Live.onFollow(function(st)
 	if not st then return Playback.unfollow() end
 	local song = st.song and table.clone(st.song) or nil
@@ -55,7 +55,7 @@ Live.onFollow(function(st)
 end)
 
 local playerData = {}
-QueueActions.bind(playerData) -- [FIX R5c] batas antrian per pemain
+QueueActions.bind(playerData) -- batas antrian per pemain
 
 local function saveVolDebounced(p)
 	local d = playerData[p]
@@ -75,23 +75,23 @@ end
 -- Satu RequestState mengirim seluruh library + antrian + state ke satu pemain.
 -- Dibatasi supaya tombol yang ditekan berkali-kali (atau paket ulang) tidak
 -- memicu banjir data.
--- [FIX R4] Peran + batas antrian, dikirim saat RequestState dan saat atribut peran berubah.
+-- Peran + batas antrian, dikirim saat RequestState dan saat atribut peran berubah.
 local function sendRole(p)
 	Shared.to(p, "IsAdmin",    isAdmin(p))
-	Shared.to(p, "IsDJ",       isDJ(p)) -- [FIX L1b]
+	Shared.to(p, "IsDJ",       isDJ(p))
 	Shared.to(p, "QueueLimit", { current = Playback.queueSize(), max = Shared.maxGlobalQueue, myLimit = queueLimit(p) })
 end
--- [FIX R2] Permintaan yang datang sebelum PlayerAdded diproses → dijawab
+-- Permintaan yang datang sebelum PlayerAdded diproses → dijawab
 -- begitu data pemain siap (dulu dibuang, lalu ditambal push buta 0.5 & 3 dtk).
 local pendingState = {}
 
 local function requestState(p, data)
 	local d = playerData[p]
 	if not d then pendingState[p] = true; return end
-	if not checkRate(p, "State", Shared.stateCooldown, true) then return end -- [FIX R7]
+	if not checkRate(p, "State", Shared.stateCooldown, true) then return end
 	task.spawn(function()
 		Shared.to(p, "SoundLocation", Playback.path())
-		-- [FIX R2] tombol reload hanya butuh status lagu, bukan library 130 KB;
+		-- tombol reload hanya butuh status lagu, bukan library 130 KB;
 		-- My Library dikirim lewat RequestMyLibrary / selesai dimuat (tidak dobel).
 		if data ~= "reload" then Library.broadcast(p) end
 		Shared.to(p, "QueueUpdate",  Playback.queue())
@@ -101,7 +101,7 @@ local function requestState(p, data)
 		-- menempatkan salinan lokal saat audio server gagal dimuat.
 		Shared.to(p, "SpatialSettings", table.clone(Shared.spatial))
 		Shared.to(p, "LoudnessSync", loudnessPayload())
-		Shared.to(p, "LiveState", Live.state()) -- [FIX L1]
+		Shared.to(p, "LiveState", Live.state())
 
 		local np = Playback.current()
 		if np then
@@ -128,7 +128,7 @@ local function setSpatialSettings(p, s)
 	if not isAdmin(p)     then return Shared.to(p, "SettingsError", "Admin only!") end
 	if type(s) ~= "table" then return Shared.to(p, "SettingsError", "Invalid data") end
 
-	local cfg, modeChanged = Shared.spatial, false -- [FIX M3] isNum: tolak NaN
+	local cfg, modeChanged = Shared.spatial, false -- isNum: tolak NaN
 	if s.mode ~= nil then
 		if s.mode ~= "stage" and s.mode ~= "global" then
 			return Shared.to(p, "SettingsError", "Invalid music mode")
@@ -141,9 +141,9 @@ local function setSpatialSettings(p, s)
 	if isNum(s.size)    then cfg.size   = math.clamp(s.size,    1, 1000)  end
 	if isNum(s.volume)  then cfg.volume = math.clamp(s.volume,  0, 1)     end
 	if cfg.max <= cfg.min then cfg.max = cfg.min + 50 end
-	if type(s.autoplay) == "boolean" and cfg.autoplay ~= s.autoplay then -- [FIX A1]
+	if type(s.autoplay) == "boolean" and cfg.autoplay ~= s.autoplay then
 		cfg.autoplay = s.autoplay
-		if cfg.autoplay and not Playback.isPlaying() and not Playback.isFollowing() then task.defer(Playback.next) end -- [FIX L2]
+		if cfg.autoplay and not Playback.isPlaying() and not Playback.isFollowing() then task.defer(Playback.next) end
 	end
 
 	if modeChanged then Playback.applyMode(cfg.mode) else Playback.applySpatial(cfg) end
@@ -168,11 +168,11 @@ local Actions = {
 
 	-- Client melaporkan durasi asli / posisi / kegagalan load. Server tidak
 	-- me-render audio, jadi ini satu-satunya sumber yang bisa dipercaya.
-	ReportDuration     = function(p, data) if allowReport(p) then Playback.report(p, data) end end, -- [FIX M3]
+	ReportDuration     = function(p, data) if allowReport(p) then Playback.report(p, data) end end,
 }
 
-for name, h in pairs(LibraryActions.handlers) do Actions[name] = h end -- [FIX R5b]
-for name, h in pairs(QueueActions.handlers) do Actions[name] = h end -- [FIX R5c]
+for name, h in pairs(LibraryActions.handlers) do Actions[name] = h end
+for name, h in pairs(QueueActions.handlers) do Actions[name] = h end
 
 Shared.remote.OnServerEvent:Connect(function(p, action, data)
 	if type(action) ~= "string" or not p or not p.Parent then return end
@@ -194,9 +194,9 @@ local function initPlayer(p)
 		end
 	end)
 
-	LibraryActions.onJoin(p) -- [FIX R5b]
+	LibraryActions.onJoin(p)
 
-	-- [FIX R2] Tidak ada lagi push buta 0.5 & 3 dtk (library terkirim 2-3x).
+	-- Tidak ada lagi push buta 0.5 & 3 dtk (library terkirim 2-3x).
 	-- Client meminta sendiri saat UI-nya siap; yang terlanjur datang dijawab di sini.
 	if pendingState[p] then
 		pendingState[p] = nil
@@ -210,7 +210,7 @@ local function initPlayer(p)
 		sendRole(p)
 		if isAdmin(p) then Shared.to(p, "SpatialSettings", table.clone(Shared.spatial)) end
 	end
-	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass", "Role" }) do -- [FIX L1b] Role: peran DJ
+	for _, attr in ipairs({ "IsAdmin", "IsOwner", "IsVIP", "IsPremium", "GroupRank", "HasVIPGamepass", "HasVVIPGamepass", "Role" }) do -- Role: peran DJ
 		pcall(function() p:GetAttributeChangedSignal(attr):Connect(onRankChanged) end)
 	end
 end
@@ -221,18 +221,18 @@ local function cleanupPlayer(p)
 		Library.myUnload(p)
 	end)
 	Playback.clearVote(p)
-	if Playback.removeQueueByRequester(p.UserId) > 0 then -- [FIX M6] antrian pemain yang keluar dihapus
+	if Playback.removeQueueByRequester(p.UserId) > 0 then -- antrian pemain yang keluar dihapus
 		Playback.broadcastQueue()
 		Playback.broadcastIds()
 	end
-	Live.playerLeft(p) -- [FIX L1] DJ keluar → siaran berhenti
-	pendingState[p] = nil -- [FIX R2]
-	LibraryActions.forget(p) -- [FIX R5b]
-	Rate.forget(p) -- [FIX R5] jeda & kuota laporan
+	Live.playerLeft(p) -- DJ keluar → siaran berhenti
+	pendingState[p] = nil
+	LibraryActions.forget(p)
+	Rate.forget(p) -- jeda & kuota laporan
 
 	local d = playerData[p]
 	if not d then return end
-	Volume.flush(p, d) -- [FIX M2] ditulis hanya kalau diubah
+	Volume.flush(p, d) -- ditulis hanya kalau diubah
 	playerData[p] = nil
 end
 
@@ -240,10 +240,10 @@ Players.PlayerAdded:Connect(initPlayer)
 Players.PlayerRemoving:Connect(cleanupPlayer)
 for _, p in ipairs(Players:GetPlayers()) do task.spawn(initPlayer, p) end
 
--- [FIX A1] Auto play mulai begitu ada pendengar (server kosong tidak memutar apa pun).
+-- Auto play mulai begitu ada pendengar (server kosong tidak memutar apa pun).
 local function kickAutoplay()
 	task.delay(2, function()
-		if Shared.spatial.autoplay and not Playback.isPlaying() and not Playback.isFollowing() and #Players:GetPlayers() > 0 then -- [FIX L2]
+		if Shared.spatial.autoplay and not Playback.isPlaying() and not Playback.isFollowing() and #Players:GetPlayers() > 0 then
 			Playback.next()
 		end
 	end)
@@ -251,7 +251,7 @@ end
 Players.PlayerAdded:Connect(kickAutoplay)
 kickAutoplay()
 
--- [FIX L3] DJ tiba dari server lain di tengah siaran → ambil alih otomatis.
+-- DJ tiba dari server lain di tengah siaran → ambil alih otomatis.
 -- Dicoba 2x karena atribut peran (IsAdmin/Role) dipasang beberapa detik setelah join.
 local function tryTakeover(p)
 	if not p.Parent or Live.isActive() or not isDJ(p) then return end

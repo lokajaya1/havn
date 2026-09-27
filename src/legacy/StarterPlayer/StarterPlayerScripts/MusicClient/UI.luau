@@ -75,7 +75,7 @@ function UI.fmtTime(s)
 	return ("%d:%02d"):format(math.floor(s / 60), math.floor(s % 60))
 end
 
--- [FIX R6] UI.extractId dihapus: pakai Shared.rawId (isinya sama persis).
+-- UI.extractId dihapus: pakai Shared.rawId (isinya sama persis).
 
 function UI.clearList(frame)
 	for _, c in ipairs(frame:GetChildren()) do
@@ -441,7 +441,7 @@ function UI.build()
 	end)
 
 	-- ══ NOW PLAYING ═══════════════════════════════════════════════════════
-	-- [FIX M6] Banner LIVE: muncul selama siaran (server ini atau server lain).
+	-- Banner LIVE: muncul selama siaran (server ini atau server lain).
 	local liveBanner = w.frame({ Size = UDim2.new(1, 0, 0, 46), BackgroundColor3 = C.bgCard, LayoutOrder = 0, Visible = false, Parent = content })
 	w.corner(12).Parent = liveBanner; w.stroke(C.danger, 1).Parent = liveBanner
 	local liveDot = w.frame({ Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(0, 12, 0, 11), BackgroundColor3 = C.danger, Parent = liveBanner })
@@ -509,7 +509,7 @@ function UI.build()
 	local adminSettings = w.frame({ Size = UDim2.new(1, 0, 0, 348), BackgroundColor3 = C.bgCard, LayoutOrder = 3, Visible = false, Parent = content })
 	w.corner(12).Parent = adminSettings; w.stroke(C.border, 1).Parent = adminSettings
 	local adminCt = w.frame({ Size = UDim2.new(1, -18, 1, -18), Position = UDim2.new(0, 9, 0, 9), BackgroundTransparency = 1, Parent = adminSettings })
-	-- [FIX L1b] disimpan supaya bisa diganti "DJ" untuk DJ non-admin
+	-- disimpan supaya bisa diganti "DJ" untuk DJ non-admin
 	local adminTitle = w.text({ Size = UDim2.new(1, 0, 0, 14), Text = "ADMIN SETTINGS", TextColor3 = C.accent, Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = adminCt })
 
 	local function makeRow(y, lbl, def)
@@ -552,13 +552,13 @@ function UI.build()
 	local applyBtn = w.button({ Size = UDim2.new(0, 54, 0, 22), Position = UDim2.new(1, -54, 0, 0), BackgroundColor3 = C.accent, Text = "Apply", TextColor3 = C.onAccent, TextSize = 9, Parent = gRow })
 	w.corner(6).Parent = applyBtn
 
-	-- [FIX A1] Auto play On/Off (langsung terkirim, tanpa Apply)
+	-- Auto play On/Off (langsung terkirim, tanpa Apply)
 	local apRow = w.frame({ Size = UDim2.new(1, 0, 0, 27), Position = UDim2.new(0, 0, 0, 258), BackgroundTransparency = 1, Parent = adminCt })
 	w.text({ Size = UDim2.new(0.45, 0, 1, 0), Text = "Auto play", TextColor3 = C.gray, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = apRow })
 	local autoplayBtn = w.button({ Size = UDim2.new(0.55, 0, 0, 23), Position = UDim2.new(0.45, 0, 0, 2), BackgroundColor3 = C.accent, Text = "On", TextColor3 = C.onAccent, TextSize = 9, Parent = apRow })
 	w.corner(6).Parent = autoplayBtn
 
-	-- [FIX L1] Siaran live ke semua server (admin)
+	-- Siaran live ke semua server (admin)
 	local liveRow = w.frame({ Size = UDim2.new(1, 0, 0, 27), Position = UDim2.new(0, 0, 0, 288), BackgroundTransparency = 1, Parent = adminCt })
 	w.text({ Size = UDim2.new(0.45, 0, 1, 0), Text = "Live (all servers)", TextColor3 = C.gray, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, Parent = liveRow })
 	local liveBtn = w.button({ Size = UDim2.new(0.55, 0, 0, 23), Position = UDim2.new(0.45, 0, 0, 2), BackgroundColor3 = C.bgLight, Text = "Off", TextColor3 = C.gray, TextSize = 9, Parent = liveRow })
@@ -633,7 +633,7 @@ function UI.build()
 		albumArt = albumArt, songTitle = songTitle, songArtist = songArtist,
 		progressBar = progressBar, currentTime = currentTime, totalTime = totalTime,
 		queueLabel = queueLabel, queueList = queueList, queueSection = queueSection,
-		liveBanner = liveBanner, liveTitle = liveTitle, liveSub = liveSub, -- [FIX M6]
+		liveBanner = liveBanner, liveTitle = liveTitle, liveSub = liveSub,
 		libLabel = libLabel, libList = libList, libSection = libSection,
 		tabAllBtn = tabAllBtn, tabMineBtn = tabMineBtn,
 		skipBtn = skipBtn, forceSkipBtn = forceSkipBtn,
@@ -648,9 +648,9 @@ function UI.build()
 		eqHighInput = eqHighInput, loudnessToggleBtn = loudnessToggleBtn,
 		globalVolSlider = globalVolSlider, globalVolBg = globalVolBg, globalVolLabel = globalVolLabel,
 		modeLabel = modeLabel, modeBtn = modeBtn,
-		autoplayBtn = autoplayBtn, -- [FIX A1]
-		liveBtn = liveBtn, -- [FIX L1]
-		liveRow = liveRow, adminCt = adminCt, adminTitle = adminTitle, -- [FIX L1b] DJ melihat baris Live saja
+		autoplayBtn = autoplayBtn,
+		liveBtn = liveBtn,
+		liveRow = liveRow, adminCt = adminCt, adminTitle = adminTitle, -- DJ melihat baris Live saja
 	}
 end
 
