@@ -148,9 +148,9 @@ local function onPassGranted(player, passName, senderName)
 end
 
 -- ── Ownership ─────────────────────────────────────────────────
-local function robloxOwns(userId, passId)
-	local ok, owned = pcall(Marketplace.UserOwnsGamePassAsync, Marketplace, userId, passId)
-	return ok and owned or false
+-- Pass baru ATAU pass HAVN lama (Config legacyIds) = punya
+local function robloxOwns(userId, pass)
+	return Config.userOwnsPass(userId, pass)
 end
 
 local function hasPass(userId, passName, waitForData)
@@ -171,7 +171,7 @@ local function deepOwnershipCheck(userId, passName)
 	local ok, stored = retry(Store.GetAsync, Store, userId)
 	if ok and stored and stored.Gamepasses and stored.Gamepasses[passName] then return true end
 	local pass = Config.getGamepassByName(passName)
-	return pass and robloxOwns(userId, pass.id) or false
+	return pass and robloxOwns(userId, pass) or false
 end
 
 -- ── Data management ───────────────────────────────────────────
@@ -208,7 +208,7 @@ local function loadData(player)
 	Cache[uid] = data
 	-- Sync Roblox-purchased passes
 	for _, pass in ipairs(Config.gamepasses) do
-		if not data.Gamepasses[pass.name] and robloxOwns(uid, pass.id) then
+		if not data.Gamepasses[pass.name] and robloxOwns(uid, pass) then
 			data.Gamepasses[pass.name] = true
 		end
 	end

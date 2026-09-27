@@ -7,6 +7,7 @@ local Players     = game:GetService("Players")
 local Marketplace = game:GetService("MarketplaceService")
 local SSS         = game:GetService("ServerScriptService")
 local RankConfig  = require(SSS:WaitForChild("RankConfig"))
+local ShopConfig  = require(game:GetService("ReplicatedStorage"):WaitForChild("ShopConfig"))
 
 local attributesReadyEvent      = Instance.new("BindableEvent")
 attributesReadyEvent.Name       = "PlayerAttributesReady"
@@ -36,10 +37,9 @@ local function hasGamepass(player, passId)
 			if ok and owns then result = true end
 		end
 	end
-	-- Fallback Roblox API
+	-- Fallback Roblox API (pass baru ATAU pass HAVN lama)
 	if not result then
-		local ok, owns = pcall(Marketplace.UserOwnsGamePassAsync, Marketplace, player.UserId, passId)
-		result = ok and owns or false
+		result = ShopConfig.userOwnsPass(player.UserId, ShopConfig.getGamepassById(passId))
 	end
 	c[key] = result
 	return result
