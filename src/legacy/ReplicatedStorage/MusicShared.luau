@@ -59,6 +59,20 @@ M.healMax       = 8   -- maks percobaan per lagu
 M.renderBatch   = 30  -- baris daftar lagu per frame
 M.thumbQueueMax = 200
 M.thumbFailTTL  = 60  -- thumbnail gagal dicoba lagi setelah sekian detik
+M.deniedMax     = 500 -- id "ditolak Roblox" yang diingat client
+
+-- Gagal muat PERMANEN, dikenali dari teks error engine
+-- "Failed to load sound <id>: <alasan>". Lagu seperti ini tidak dicoba ulang:
+-- tiap percobaan hanya menambah satu baris merah di F9. "not approved" =
+-- audio kena moderasi Roblox (terbukti 2026-09-28), "not authorized" = izin
+-- experience. HTTP 502 / Timedout = sementara, tetap lewat jalur coba ulang.
+M.deniedPatterns = {
+	{ "not approved", "moderated" },
+	{ "not authorized", "permission" },
+	{ "does not have access", "permission" },
+	{ "access permission", "permission" },
+}
+M.deniedReasons = { moderated = true, permission = true }
 
 -- ── TIMING PLAYBACK (inti fix "lagu keskip / macet") ──────────────────────
 -- loadTimeout  : lama menunggu bukti audio benar-benar loaded.
@@ -103,6 +117,19 @@ end
 function M.assetId(v)
 	local raw = M.rawId(v)
 	return raw and ("rbxassetid://" .. raw) or nil
+end
+
+-- "Failed to load sound rbxassetid://123: Asset is not approved ..." → "123", "moderated".
+-- Error sementara (HTTP 502, Timedout, …) → "123", nil. Bukan error muat sound → nil.
+function M.loadErrorReason(msg)
+	if type(msg) ~= "string" then return nil end
+	local id, why = string.match(msg, "Failed to load sound [^%d]*(%d+)[^:]*:%s*(.*)$")
+	if not id then return nil end
+	why = string.lower(why)
+	for _, p in ipairs(M.deniedPatterns) do
+		if string.find(why, p[1], 1, true) then return id, p[2] end
+	end
+	return id, nil
 end
 
 -- ── helper umum ───────────────────────────────────────────────

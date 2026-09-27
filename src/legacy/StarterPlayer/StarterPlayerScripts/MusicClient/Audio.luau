@@ -8,6 +8,7 @@
 -- server sehingga antrian tetap jalan.
 
 local ContentProvider = game:GetService("ContentProvider")
+local LogService   = game:GetService("LogService")
 local Players      = game:GetService("Players")
 local RunService   = game:GetService("RunService")
 local RS           = game:GetService("ReplicatedStorage")
@@ -220,6 +221,33 @@ function Audio.setSpatial(cfg)
 	if Audio.isEmergency() and current then placeClone(current) end
 end
 
+-- ── aset yang ditolak Roblox (permanen) ───────────────────────────────────
+-- PreloadAsync memberi status Failure untuk HTTP 502 maupun aset yang ditolak,
+-- jadi alasannya dibaca dari baris error engine di LogService (terbukti
+-- 2026-09-28: pesan tiba < 1 dtk, tipe MessageError). Id yang ditolak tidak
+-- dimuat lagi oleh preload, probe, salinan lokal, maupun penyembuh otomatis.
+-- JANGAN print/warn teks berisi "Failed to load sound" di sini (memicu diri sendiri).
+local denied, deniedCount = {}, 0
+local deniedListeners = {}
+
+function Audio.deniedReason(rawId)
+	local id = Shared.rawId(rawId)
+	return id and denied[id] or nil
+end
+
+function Audio.onDenied(fn)
+	table.insert(deniedListeners, fn)
+end
+
+local logConn = LogService.MessageOut:Connect(function(msg, kind)
+	if kind ~= Enum.MessageType.MessageError then return end
+	local id, reason = Shared.loadErrorReason(msg)
+	if not id or not reason or denied[id] then return end
+	if deniedCount >= (Shared.deniedMax or 500) then denied, deniedCount = {}, 0 end
+	denied[id], deniedCount = reason, deniedCount + 1
+	for _, fn in ipairs(deniedListeners) do task.spawn(fn, id, reason) end
+end)
+
 -- ── pra-muat & pemeriksaan aset ───────────────────────────────────────────
 -- INI kunci masalah "HTTP 502 tepat saat lagu ganti": aset baru diminta ke CDN
 -- pada detik lagu itu mulai. Dengan memuatnya lebih dulu selagi lagu sekarang
@@ -228,7 +256,7 @@ local preloaded = {}
 
 function Audio.preload(rawId)
 	local id = Shared.rawId(rawId)
-	if not id or preloaded[id] then return end
+	if not id or preloaded[id] or denied[id] then return end
 
 	local n = 0
 	for _ in pairs(preloaded) do n += 1 end
@@ -251,7 +279,7 @@ end
 -- MEMBLOKIR (yield) — panggil dari thread terpisah.
 function Audio.probe(rawId)
 	local id = Shared.rawId(rawId)
-	if not id then return false end
+	if not id or denied[id] then return false end
 	local probe = Instance.new("Sound")
 	probe.SoundId = "rbxassetid://" .. id
 	probe.Volume  = 0
@@ -273,6 +301,10 @@ function Audio.hardResync(data, auto, quiet) -- quiet: tanpa notifikasi (penyemb
 	local id = data and Shared.rawId(data.Id)
 	if not id then
 		if not auto then UI.notify("No song to reload", UI.C.danger, 2) end
+		return false
+	end
+	if denied[id] then
+		if not auto then UI.notify("Audio blocked by Roblox", UI.C.danger, 2) end
 		return false
 	end
 
@@ -369,6 +401,7 @@ function Audio.cleanup()
 	if ancestryConn then ancestryConn:Disconnect(); ancestryConn = nil end
 	if volConn     then volConn:Disconnect();     volConn = nil end
 	if fadeConn     then fadeConn:Disconnect();     fadeConn = nil end
+	if logConn      then logConn:Disconnect();      logConn = nil end
 	for _, c in ipairs(SoundService:GetChildren()) do
 		if c:IsA("Sound") and c:GetAttribute("LocalResync") then
 			pcall(function() c:Destroy() end)
