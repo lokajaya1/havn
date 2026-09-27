@@ -81,15 +81,27 @@ function DanceShared.walkSpeedFor(player)
 	return DanceShared.WALKSPEED.default
 end
 
--- Selama di-carry pose gendong harus menang. Dance TIDAK dihentikan (fase &
+-- Yang DIGENDONG: pose gendong harus menang. Dance TIDAK dihentikan (fase &
 -- sync tetap jalan), hanya bobotnya diturunkan: prioritas sama (Action4)
 -- dicampur menurut bobot, jadi 0,01 ≈ tak terlihat. Terbukti tereplikasi
 -- ke client (uji Studio 2026-09-28).
+-- Yang MENGGENDONG tetap menari (gendong sambil joget, keputusan user), tapi
+-- dance-nya turun ke Action3: pose gendong (Action4) menang di sendi yang
+-- dianimasikannya (tangan memegang), sendi lain tetap ikut dance. Dengan
+-- prioritas sama keduanya dicampur 50/50 → tangan kedut (laporan user).
+-- Atribut "Carried" dipasang CarryWeld pada yang digendong; InCarry ikut
+-- dicek supaya atribut yang tertinggal tidak menyembunyikan dance.
 DanceShared.CARRY_WEIGHT = 0.01
 DanceShared.WEIGHT_FADE  = 0.2
 
 function DanceShared.danceWeightFor(player)
-	return (player and player:GetAttribute("InCarry") == true) and DanceShared.CARRY_WEIGHT or 1
+	local carried = player and player:GetAttribute("InCarry") == true and player:GetAttribute("Carried") == true
+	return carried and DanceShared.CARRY_WEIGHT or 1
+end
+
+function DanceShared.dancePriorityFor(player)
+	local carrier = player and player:GetAttribute("InCarry") == true and player:GetAttribute("Carried") ~= true
+	return carrier and Enum.AnimationPriority.Action3 or Enum.AnimationPriority.Action4
 end
 
 -- Track dance masih "hidup": sedang main dan tidak sedang memudar karena
@@ -98,12 +110,17 @@ function DanceShared.isTrackAlive(track)
 	return track ~= nil and track.IsPlaying and track.WeightTarget > DanceShared.CARRY_WEIGHT / 2
 end
 
--- Samakan bobot semua track dance yang sedang main dengan status carry pemain.
+-- Samakan bobot & prioritas semua track dance yang sedang main dengan status
+-- carry pemain (digendong / menggendong / bebas).
 function DanceShared.applyDanceWeight(player, fade)
 	local _, animator = DanceShared.getRig(player)
 	if not animator then return end
-	local weight = DanceShared.danceWeightFor(player)
+	local weight   = DanceShared.danceWeightFor(player)
+	local priority = DanceShared.dancePriorityFor(player)
 	for _, track in ipairs(DanceShared.playingDanceTracks(animator)) do
+		if track.Priority ~= priority then
+			pcall(function() track.Priority = priority end)
+		end
 		-- Hanya kalau berbeda: AdjustWeight(1, 0) pada dance yang baru mulai
 		-- akan memotong fade-in-nya.
 		if track.WeightTarget > 0 and math.abs(track.WeightTarget - weight) > 1e-3 then
