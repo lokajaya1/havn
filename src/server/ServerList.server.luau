@@ -189,8 +189,11 @@ joinEv.OnServerEvent:Connect(function(p, targetId)
 	notice(p, "Teleporting...")
 	local opts = Instance.new("TeleportOptions")
 	opts.ServerInstanceId = targetId
+	-- [FIX L3] DJ yang sedang live: serahkan siaran ke server tujuan (tanpa putus).
+	if Live and Live.handover then pcall(Live.handover, p) end
 	local ok, err = pcall(TeleportService.TeleportAsync, TeleportService, game.PlaceId, { p }, opts)
 	if not ok then
+		if Live and Live.cancelHandover then pcall(Live.cancelHandover, p) end
 		warn("[ServerList] teleport gagal:", err)
 		notice(p, "Teleport failed, try again")
 	end
@@ -199,6 +202,7 @@ end)
 TeleportService.TeleportInitFailed:Connect(function(p, result, msg)
 	warn("[ServerList] TeleportInitFailed:", p and p.Name, result, msg)
 	notice(p, "Teleport failed: " .. tostring(result and result.Name or msg))
+	if Live and Live.cancelHandover then pcall(Live.cancelHandover, p) end -- [FIX L3]
 end)
 
 Players.PlayerRemoving:Connect(function(p)

@@ -658,6 +658,24 @@ end
 Players.PlayerAdded:Connect(kickAutoplay)
 kickAutoplay()
 
+-- [FIX L3] DJ tiba dari server lain di tengah siaran → ambil alih otomatis.
+-- Dicoba 2x karena atribut peran (IsAdmin/Role) dipasang beberapa detik setelah join.
+local function tryTakeover(p)
+	if not p.Parent or Live.isActive() or not isDJ(p) then return end
+	if not Live.handoverFor(p.UserId) then return end
+	if Playback.isFollowing() then Playback.adopt() end
+	local ok, err = Live.start(p, Playback.current(), Playback.elapsed(), true)
+	if ok then
+		Shared.to(p, "LiveState", Live.state())
+	else
+		warn("[Live] ambil alih gagal:", err)
+	end
+end
+Players.PlayerAdded:Connect(function(p)
+	task.delay(4, tryTakeover, p)
+	task.delay(10, tryTakeover, p)
+end)
+
 -- ═══ BULK IMPORT ══════════════════════════════════════════════════════════
 -- Tempel ID di bawah, jalankan server SEKALI. Idempotent: ID yang sudah ada
 -- dilewati, jadi blok ini boleh dibiarkan selamanya.

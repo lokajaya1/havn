@@ -39,9 +39,15 @@ local function slim(song)
 	}
 end
 
+-- [FIX L3] SERAH TERIMA: DJ yang sedang live pindah server lewat Server List.
+-- Server lama tetap menyiarkan maks HANDOVER_SEC dtk dan menandai status
+-- "handoverTo = UserId DJ"; server baru yang dimasuki DJ itu boleh mengambil alih.
+local HANDOVER_SEC = 30
+local handingOver, handoverUid = false, nil
 local function buildState()
 	return {
 		jobId = jobId, dj = djName, djId = djId, ver = ver,
+		handoverTo = handingOver and handoverUid or nil, -- [FIX L3]
 		song = current and current.song or nil,
 		startedAtMs = current and current.startedAtMs or nil,
 	}
@@ -49,11 +55,12 @@ end
 
 -- Tulis status kalau kunci kosong/kedaluwarsa atau milik server ini.
 -- Hasil: true | false, namaDjLain | false, nil, galat
-local function claim()
+local function claim(takeoverUid) -- [FIX L3] takeoverUid: ambil alih siaran yang diserahkan
 	local busyBy
 	local ok, res = pcall(function()
 		return map:UpdateAsync(KEY, function(old)
-			if type(old) == "table" and old.jobId ~= jobId then
+			if type(old) == "table" and old.jobId ~= jobId
+				and not (takeoverUid and old.handoverTo == takeoverUid) then
 				busyBy = old.dj or "?"
 				return nil
 			end
@@ -131,12 +138,12 @@ local function setCurrent(song, elapsed)
 end
 
 -- YIELDS. Mulai siaran dari server ini.
-function Live.start(p, song, elapsed)
+function Live.start(p, song, elapsed, takeover) -- [FIX L3] takeover
 	if active then return false, "Live is already running on this server" end
 	djName, djId = p.Name, p.UserId
 	setCurrent(song, elapsed)
 	ver += 1
-	local ok, busy, err = claim()
+	local ok, busy, err = claim(takeover and p.UserId or nil)
 	if not ok then
 		djName, djId, current = nil, nil, nil
 		if busy then return false, "Live is in use by " .. tostring(busy) end
@@ -144,6 +151,8 @@ function Live.start(p, song, elapsed)
 		return false, "Live failed to start, try again"
 	end
 	active = true
+	handingOver, handoverUid = false, nil
+	following, followKey, followDj = false, nil, nil -- server ini jadi stasiun, bukan pendengar
 	print(("[Live] siaran DIMULAI oleh %s | server %s"):format(djName, string.sub(jobId, 1, 8)))
 	publish("start")
 	changed()
@@ -177,6 +186,7 @@ end
 function Live.stop(reason, skipRemove)
 	if not active then return end
 	active = false
+	handingOver, handoverUid = false, nil -- [FIX L3]
 	ver += 1
 	if not skipRemove then
 		local ok, old = pcall(map.GetAsync, map, KEY)
@@ -203,8 +213,43 @@ end
 
 function Live.playerLeft(p)
 	if active and p.UserId == djId then
+		if handingOver and handoverUid == p.UserId then return end -- [FIX L3] sedang serah terima
 		task.spawn(Live.stop, "DJ keluar")
 	end
+end
+
+-- [FIX L3] Dipanggil ServerList sebelum teleport. true = serah terima dimulai.
+function Live.handover(p)
+	if not active or p.UserId ~= djId then return false end
+	handingOver, handoverUid = true, p.UserId
+	ver += 1
+	task.spawn(claim)
+	print(("[Live] serah terima ke server tujuan DJ %s (maks %d dtk)"):format(tostring(djName), HANDOVER_SEC))
+	local myVer = ver
+	task.delay(HANDOVER_SEC, function()
+		if active and handingOver and ver >= myVer then
+			local ok, st = pcall(map.GetAsync, map, KEY)
+			local taken = ok and type(st) == "table" and st.jobId ~= jobId
+			Live.stop(taken and "diambil alih server baru" or "serah terima habis", taken)
+		end
+	end)
+	return true
+end
+
+-- [FIX L3] Teleport gagal → siaran lanjut normal di server ini.
+function Live.cancelHandover(p)
+	if not handingOver or (p and p.UserId ~= handoverUid) then return end
+	handingOver, handoverUid = false, nil
+	ver += 1
+	task.spawn(claim)
+	print("[Live] serah terima dibatalkan (teleport gagal)")
+end
+
+-- [FIX L3] YIELDS. Server baru: apakah siaran sedang diserahkan ke pemain ini?
+function Live.handoverFor(uid)
+	if active then return false end
+	local ok, st = pcall(map.GetAsync, map, KEY)
+	return ok and type(st) == "table" and st.jobId ~= jobId and st.handoverTo == uid
 end
 
 game:BindToClose(function()
