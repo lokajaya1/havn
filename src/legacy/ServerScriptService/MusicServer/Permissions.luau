@@ -1,0 +1,56 @@
+-- MusicServer/Permissions  (ModuleScript)  [FIX R5] dipindah dari init.server
+-- Siapa boleh apa: admin, premium, DJ siaran live, batas antrian per pemain.
+
+local RS  = game:GetService("ReplicatedStorage")
+local SSS = game:GetService("ServerScriptService")
+
+local Shared = require(RS:WaitForChild("MusicShared"))
+local Live   = require(script.Parent:WaitForChild("Live"))
+
+local RankConfig = (function()
+	local mod = SSS:FindFirstChild("RankConfig")
+	if not mod then return nil end
+	local ok, m = pcall(require, mod)
+	return (ok and type(m) == "table") and m or nil
+end)()
+
+local function isAdmin(p)   return p ~= nil and p:GetAttribute("IsAdmin")   == true end
+local function isPremium(p) return p ~= nil and p:GetAttribute("IsPremium") == true end
+
+-- [FIX L1b] DJ = admin ATAU peran di Shared.liveDjRoles. Saat server ini siaran
+-- live, hanya DJ yang boleh request lagu dan skip.
+local function isDJ(p)
+	if isAdmin(p) then return true end
+	local role = p and p:GetAttribute("Role")
+	for _, r in ipairs(Shared.liveDjRoles or {}) do
+		if role == r then return true end
+	end
+	return false
+end
+-- [FIX M6] Saat live (server ini stasiun ATAU ikut siaran server lain) hanya DJ yang boleh request.
+local function liveBlocks(p) return (Live.isActive() or Live.isFollowing()) and not isDJ(p) end
+-- [FIX M6b] Saat live: skip hanya oleh DJ yang menyalakan siaran (admin lain juga dikunci).
+local function skipBlocked(p) return Live.isFollowing() or (Live.isActive() and p.UserId ~= Live.djId()) end
+
+local function queueLimit(p)
+	if isAdmin(p) then return 999 end
+	if RankConfig and RankConfig.GetQueueLimit then
+		return RankConfig.GetQueueLimit(
+			p:GetAttribute("GroupRank") or 0,
+			p:GetAttribute("HasVIPGamepass")  == true,
+			p:GetAttribute("HasVVIPGamepass") == true
+		)
+	end
+	if isPremium(p) then return 3 end
+	if p:GetAttribute("IsVVIP") == true or p:GetAttribute("HasVVIPGamepass") == true then return 2 end
+	return 1
+end
+
+return {
+	isAdmin     = isAdmin,
+	isPremium   = isPremium,
+	isDJ        = isDJ,
+	liveBlocks  = liveBlocks,
+	skipBlocked = skipBlocked,
+	queueLimit  = queueLimit,
+}
