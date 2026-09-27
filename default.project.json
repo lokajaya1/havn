@@ -43,6 +43,9 @@
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
+      "ServerList": {
+        "$path": "src/server/ServerList.server.luau"
+      },
       "AnimationHandler": {
         "$path": "src/legacy/ServerScriptService/AnimationHandler.server.luau"
       },
