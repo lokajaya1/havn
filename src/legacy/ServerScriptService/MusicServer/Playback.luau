@@ -194,6 +194,18 @@ function P.removeFromQueue(idx, expectId)
 	return table.remove(queue, idx)
 end
 
+-- [FIX M6] Pemain keluar → lagu yang ia antrekan (belum diputar) ikut dihapus.
+-- Lagu yang SEDANG diputar dibiarkan selesai. Mengembalikan jumlah yang dihapus.
+function P.removeQueueByRequester(userId)
+	local n = 0
+	for i = #queue, 1, -1 do
+		if queue[i].RequesterId == userId then
+			table.remove(queue, i)
+			n += 1
+		end
+	end
+	return n
+end
 function P.removeFromQueueById(songId)
 	local id = tostring(songId)
 	for i = #queue, 1, -1 do

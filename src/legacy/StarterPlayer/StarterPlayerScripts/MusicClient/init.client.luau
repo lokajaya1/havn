@@ -252,6 +252,29 @@ local function updateSectionVis()
 	-- Library global: hanya admin yang bisa menambah/menghapus isinya.
 	ui.addGlobalBtn.Visible  = S.isAdmin
 	ui.addMineBtn.Size = S.isAdmin and UDim2.new(0.5, -3, 0, 26) or UDim2.new(1, 0, 0, 26)
+
+	-- [FIX M6] Banner LIVE + kunci request (tombol ▶ redup, antrian "ON HOLD").
+	local wasAny, wasLocked = S.liveAny, S.liveLocked
+	S.liveAny    = S.liveOn == true or S.liveFollow == true
+	S.liveLocked = S.liveAny and not S.isDJ
+	ui.liveBanner.Visible = S.liveAny
+	if S.liveAny then
+		local dj = tostring(S.liveDj or "?")
+		ui.liveTitle.Text = S.liveFollow and ("LIVE  ·  DJ " .. dj .. "  ·  another server") or ("LIVE  ·  DJ " .. dj)
+		local sub
+		if S.liveLocked then
+			sub = "Song requests are paused until the live ends"
+		elseif S.liveFollow then
+			sub = "Playing from another server - the local queue is on hold"
+		else
+			sub = "You are live - player requests are paused"
+		end
+		local held = #S.fullQueue
+		if held > 0 then sub ..= ("  ·  %d queued on hold"):format(held) end
+		ui.liveSub.Text = sub
+	end
+	if S.liveLocked ~= wasLocked then Lists.repaintQueueBtns() end
+	if S.liveAny ~= wasAny then Lists.updateQueue(S.fullQueue) end
 end
 
 -- Favorit bergaya outline merah, konsisten dengan tombol ♥ di daftar lagu.
@@ -706,7 +729,7 @@ H.LiveState = function(data) -- [FIX L1]
 	local was = liveOn
 	liveOn = data.active == true
 	S.liveOn = liveOn -- [FIX L1b]
-	updateSectionVis()
+	S.liveDj = data.dj -- [FIX M6]
 	paintLive()
 	if liveOn ~= was then notify(liveOn and ("LIVE - DJ " .. tostring(data.dj)) or "Live ended") end
 	local wasF = S.liveFollow -- [FIX L2] server ini ikut siaran server lain
@@ -714,6 +737,7 @@ H.LiveState = function(data) -- [FIX L1]
 	if S.liveFollow ~= (wasF == true) then
 		notify(S.liveFollow and ("LIVE from another server - DJ " .. tostring(data.dj)) or "Live ended")
 	end
+	updateSectionVis() -- [FIX M6] setelah liveOn/liveFollow/liveDj terisi
 end
 H.LoudnessSync = function(data)
 	if not data then return end

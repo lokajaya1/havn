@@ -184,6 +184,9 @@ local function paintQueueBtn(songId, btn)
 	elseif status == "diAntrian" then
 		btn.BackgroundColor3 = C.inQueue; btn.TextColor3 = C.white
 		btn.Text = "✓"; btn.TextSize = 12
+	elseif S.liveLocked then -- [FIX M6] live: request dikunci
+		btn.BackgroundColor3 = C.bgLight; btn.TextColor3 = C.muted
+		btn.Text = "▶"; btn.TextSize = 10
 	else
 		btn.BackgroundColor3 = C.accent; btn.TextColor3 = C.onAccent
 		btn.Text = "▶"; btn.TextSize = 10
@@ -318,14 +321,16 @@ local function libItem(song, parent, lo, mineView)
 				UI.notify("Already playing", C.playing, 2); return
 			elseif status == "diAntrian" then
 				UI.notify("Already in the queue", C.inQueue, 2); return
+			elseif S.liveLocked then -- [FIX M6]
+				UI.notify("Live: song requests are paused", C.danger, 2); return
 			end
 			remote:FireServer("AddToQueue", song.Id)
 		end)
 		qBtn.MouseEnter:Connect(function()
-			if not (S.queueIds or {})[song.Id] then tws(qBtn, { BackgroundColor3 = C.accentDk }) end
+			if not (S.queueIds or {})[song.Id] and not S.liveLocked then tws(qBtn, { BackgroundColor3 = C.accentDk }) end -- [FIX M6]
 		end)
 		qBtn.MouseLeave:Connect(function()
-			if not (S.queueIds or {})[song.Id] then tws(qBtn, { BackgroundColor3 = C.accent }) end
+			if not (S.queueIds or {})[song.Id] then paintQueueBtn(song.Id, qBtn) end
 		end)
 	end
 
@@ -535,7 +540,7 @@ function L.updateQueue(songs)
 
 	local max = (S.queueLimit and S.queueLimit.max) or Shared.maxGlobalQueue
 	local n   = #songs
-	ui.queueLabel.Text = ("QUEUE (%d/%d)"):format(n, max)
+	ui.queueLabel.Text = ("QUEUE (%d/%d)"):format(n, max) .. ((S.liveAny and n > 0) and "  ·  ON HOLD (LIVE)" or "") -- [FIX M6]
 	ui.queueLabel.TextColor3 =
 		n >= max * 0.8 and C.danger or n >= max * 0.6 and C.accent or C.white
 
