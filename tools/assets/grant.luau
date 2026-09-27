@@ -74,7 +74,7 @@ for start = 1, #ids, BATCH do
 		})
 		if okReq then
 			res = r
-			if res.statusCode ~= 429 and res.statusCode < 500 then
+			if res.statusCode ~= 429 and res.statusCode ~= 408 and res.statusCode < 500 then
 				break
 			end
 		else
