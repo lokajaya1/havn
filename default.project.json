@@ -40,6 +40,9 @@
       "Modules": {
         "$path": "src/legacy/ReplicatedStorage/Modules"
       },
+      "CommandShared": {
+        "$path": "src/legacy/ReplicatedStorage/CommandShared.luau"
+      },
       "MusicShared": {
         "$path": "src/legacy/ReplicatedStorage/MusicShared.luau"
       },
@@ -114,9 +117,6 @@
       },
       "ReceiptHandler": {
         "$path": "src/legacy/ServerScriptService/ReceiptHandler.luau"
-      },
-      "RefreshCharacter": {
-        "$path": "src/legacy/ServerScriptService/RefreshCharacter.server.luau"
       },
       "RoleManagerServer": {
         "$path": "src/legacy/ServerScriptService/RoleManagerServer.server.luau"
