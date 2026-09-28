@@ -34,6 +34,7 @@ local DEFAULT_DURATION  = 5
 local MAX_TEXT_LENGTH = 200
 
 -- Jeda per staf. /global memakai kuota MessagingService semua server.
+-- (GlobalRequestEvent dihapus: 0 pemakai di seluruh place, terbukti A0a.)
 local COOLDOWN = { global = 5, notif = 2 }
 
 -- ── Remotes ─────────────────────────────────────────────────
@@ -49,7 +50,6 @@ local function remote(name: string): RemoteEvent
 end
 
 local GlobalAnnouncementEvent = remote("GlobalAnnouncementEvent")
-local GlobalRequestEvent      = remote("GlobalRequestEvent")
 
 -- ── Helpers ─────────────────────────────────────────────────
 
@@ -192,13 +192,4 @@ end)
 -- /notif → server ini saja
 makeCommand("/notif", nil, "notif", function(player, text)
 	announceLocal(player.UserId, player.DisplayName, text)
-end)
-
--- ── Fallback dari tombol GUI ────────────────────────────────
-
-GlobalRequestEvent.OnServerEvent:Connect(function(player, announcementText)
-	if not canAnnounce(player) then return end
-	local text = sanitize(announcementText)
-	if not text or onCooldown(player, "global") then return end
-	announceGlobal(player.UserId, player.DisplayName, text)
 end)

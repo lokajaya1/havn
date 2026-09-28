@@ -32,8 +32,9 @@ local UNDO_MAX       = 5
 local MAX_ARGS       = 8
 local MAX_ARG_LEN    = 50
 
--- Command gratis (hanya memengaruhi diri sendiri, aman dibuka)
-local FREE_CMDS = { re = true, normal = true, rejoin = true }
+-- Daftar perintah, perintah gratis & cooldown: satu sumber dengan CommandPanel
+local CommandShared = require(RS:WaitForChild("CommandShared"))
+local FREE_CMDS     = CommandShared.FREE
 
 -- Tunggu ShopServer (opsional)
 do
@@ -320,7 +321,7 @@ H.headless = function(p) toggleDescProp(p, "DT_Headless", "Head",     ASSET.HEAD
 H.korblox  = function(p) toggleDescProp(p, "DT_Korblox",  "RightLeg", ASSET.KORBLOX,  ASSET.DEFAULT) end
 
 H.size = function(p, args)
-	local n = tonumber(args[1]); if n ~= n then n = nil end -- [FIX 2c3] tolak NaN ("nan" lolos math.clamp)
+	local n = tonumber(args[1]); if n ~= n then n = nil end -- tolak NaN ("nan" lolos math.clamp)
 	n = math.clamp(n or 1, 0.1, 1)
 	local hum = getHum(p); if not hum then return end
 	pushUndo(p)
@@ -502,12 +503,7 @@ end
 -- ═══════════════════════════════════════════════════════════
 -- COOLDOWN
 -- ═══════════════════════════════════════════════════════════
-local CD = {
-	re=3, reset=5, rejoin=10, sit=1, stand=1, afk=2,
-	headless=2, korblox=2, size=1, ghost=1, clearhats=2,
-	highlight=1, sparkle=1, fire=1, smoke=1, trail=1,
-	glow=1, hat=1, nametag=1, normal=2, undo=1,
-}
+local CD = CommandShared.COOLDOWN
 
 local function takeToken(player)
 	local now = os.clock()

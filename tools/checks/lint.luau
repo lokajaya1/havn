@@ -25,6 +25,13 @@ local STRICT = {
 	"src/legacy/ServerScriptService/ReceiptHandler.luau",
 	"src/legacy/ReplicatedStorage/ShopConfig.luau",
 	"src/legacy/StarterGui/ShopClient.client.luau",
+	-- ruangan ADMIN
+	"src/legacy/ServerScriptService/CommandServer.server.luau",
+	"src/legacy/StarterGui/CommandPanel.client.luau",
+	"src/legacy/ReplicatedStorage/CommandShared.luau",
+	"src/legacy/ServerScriptService/AnnouncementHandler.server.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/AnnouncementClient.client.luau",
+	"src/legacy/ServerScriptService/LiveScreenServer.server.luau",
 }
 local REPORT = { "src/legacy" }
 
