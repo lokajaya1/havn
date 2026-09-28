@@ -39,6 +39,17 @@ DonationConfig.store = {
 DonationConfig.queueMax = 50 -- antrean pengumuman maksimal per server
 DonationConfig.bigRecipient = "HAVN" -- teks "TO @…" di efek besar
 
+-- Donasi tampil di SEMUA server (MessagingService). Server lain: notifikasi, papan LIST/LIVE/TOP, efek besar.
+-- Partikel & LiveScreen hanya di server donatur (butuh karakternya).
+DonationConfig.global = {
+	enabled = true,
+	topic = "DonationGlobal", -- Studio: + store.studioSuffix (beli uji tidak tampil di server live)
+	minRobux = 10, -- donasi di bawah ini hanya tampil di server asal
+	retry = { 2, 5 }, -- detik coba ulang PublishAsync
+	resubscribe = { 5, 15, 30, 60 }, -- detik coba ulang SubscribeAsync (angka terakhir berulang)
+	recent = 50, -- purchaseId terakhir yang diingat (pesan kembar dibuang)
+}
+
 -- Papan di map (Workspace.DonationBoards: TopBoard, FeedBoard, LiveBoard, TopMannequins/Top1–3; diatur di Studio).
 DonationConfig.boards = {
 	every = 60, -- detik baca ulang peringkat

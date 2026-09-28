@@ -2,13 +2,16 @@
 -- Struk HANYA lewat ReceiptHandler.RegisterProduct (satu ProcessReceipt per game; tidak memakai
 -- PromptProductPurchaseFinished — itu bukan bukti bayar dan ikut menyala untuk gift Shop).
 -- Alur: pemain (opsional) kirim pesan → server filter PublicChat → pemain beli produk →
--- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen.
+-- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen,
+-- lalu dikirim ke server lain (Global): di sana notifikasi, papan & efek besar (tanpa partikel/LiveScreen).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
 local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SSS = game:GetService("ServerScriptService")
+local MessagingService = game:GetService("MessagingService")
+local HttpService = game:GetService("HttpService")
 
 local Config = require(ReplicatedStorage:WaitForChild("DonationConfig"))
 local Store = require(script:WaitForChild("Store"))
@@ -132,9 +135,12 @@ end)
 local queue = {}
 local running = false
 
+-- item.remote = donasi dari server lain: partikel & LiveScreen dilewati (donatur tidak ada di server ini).
 local function announce(item)
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, item.message, item.userId)
-	effectEvent:FireAllClients(item.userId, item.robux)
+	if not item.remote then
+		effectEvent:FireAllClients(item.userId, item.robux)
+	end
 	local okBoard, errBoard = pcall(boards.onDonation, boards, item)
 	if not okBoard then
 		warn("[Donation] papan gagal: " .. tostring(errBoard))
@@ -143,7 +149,7 @@ local function announce(item)
 	if big then
 		big:FireAllClients(item.name, Config.bigRecipient, item.robux, item.userId)
 	end
-	local sig = screenSignal()
+	local sig = not item.remote and screenSignal()
 	if sig then
 		sig:Fire(item.name, item.robux) -- LiveScreenServer mencari anak Players berdasarkan Player.Name
 	end
@@ -174,6 +180,20 @@ local function enqueue(item)
 	task.spawn(pump)
 end
 
+-- ── Semua server ─────────────────────────────────────────────
+-- Studio memakai topik ber-akhiran _studio: beli uji tidak pernah tampil di server live.
+local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))
+local Global = require(script:WaitForChild("Global"))
+local global = Global.new({
+	messaging = MessagingService,
+	jobId = jobId,
+	topic = Config.global.topic .. suffix,
+	cfg = Config,
+	enqueue = enqueue,
+	task = task,
+	warn = warn,
+})
+
 -- ── Struk ────────────────────────────────────────────────────
 local function onReceipt(receipt, player)
 	local tier = Config.tierForProduct(receipt.ProductId)
@@ -190,7 +210,7 @@ local function onReceipt(receipt, player)
 	end
 	if isNew then
 		print(("[Donation] %s +%d R$ (total %d)"):format(player.Name, robux, total))
-		enqueue({
+		local item = {
 			displayName = player.DisplayName,
 			name = player.Name,
 			userId = player.UserId,
@@ -198,7 +218,11 @@ local function onReceipt(receipt, player)
 			message = takeMessage(player),
 			gap = tier.gap,
 			big = tier.big,
-		})
+			tier = tier.robux,
+			purchaseId = tostring(receipt.PurchaseId),
+		}
+		enqueue(item)
+		global:publish(item)
 	end
 	return true
 end
@@ -208,5 +232,6 @@ for _, tier in Config.tiers do
 end
 
 boards:start()
+global:start()
 
 print(("[Donation] Ready | %d produk | store %s%s"):format(#Config.tiers, Config.store.data, suffix))
