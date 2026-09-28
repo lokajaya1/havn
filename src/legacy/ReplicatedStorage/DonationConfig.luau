@@ -39,6 +39,15 @@ DonationConfig.store = {
 DonationConfig.queueMax = 50 -- antrean pengumuman maksimal per server
 DonationConfig.bigRecipient = "HAVN" -- teks "TO @…" di efek besar
 
+-- Papan di map (Workspace.DonationBoards: TopBoard, FeedBoard, LiveBoard, TopMannequins/Top1–3; diatur di Studio).
+DonationConfig.boards = {
+	every = 60, -- detik baca ulang peringkat
+	soon = 5, -- detik tunda baca ulang setelah donasi
+	topCount = 50, -- baris di TOP DONATORS
+	feedCount = 10, -- baris di LIST DONATIONS
+	danceAnims = { 507771019, 507772104, 507776043 }, -- emote dance resmi Roblox untuk manekin #1–#3
+}
+
 -- Efek partikel (template di ReplicatedStorage.DonationEffects = assets/DonationEffects.rbxm).
 -- time = detik emitter menyala; sound = audio Group SOLA's (izin [NEW] terbukti AU0 2026-09-29), diputar 3D di donatur.
 -- Exotic = Model utuh di kaki donatur (atribut WholeAtBase).
