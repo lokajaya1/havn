@@ -47,6 +47,13 @@ do
 end
 
 -- ── Helpers umum ──────────────────────────────────────────
+-- Potong maks n KARAKTER tanpa membelah huruf UTF-8 (sub() memotong byte).
+local function utf8Prefix(s, n)
+	local ok, cut = pcall(utf8.offset, s, n + 1)
+	if ok and cut then return s:sub(1, cut - 1) end
+	return s
+end
+
 local function safeCall(fn, errLabel, ...)
 	local ok, err = pcall(fn, ...)
 	if not ok then
@@ -240,6 +247,8 @@ local function clearDTEffects(char)
 		if v.Name:sub(1, 3) == "DT_" then pcall(v.Destroy, v) end
 	end
 	for _, k in ipairs(DT_ATTRS) do char:SetAttribute(k, false) end
+	char:SetAttribute("DT_Status", nil)
+	char:SetAttribute("DT_StatusKind", nil)
 end
 
 local function resetToBaseDesc(p, char, hum)
@@ -286,49 +295,25 @@ end
 H.sit   = function(p) local h = getHum(p); if h then h.Sit = true end end
 H.stand = function(p) local h = getHum(p); if h then h.Sit = false; h.Jump = true end end
 
--- Label di atas kepala (/afk, /nametag). Ukuran dalam STUD (Scale, sama seperti
--- OverheadTag: 36 px desain per stud) → ikut mengecil saat jauh, dan hilang
--- setelah MaxDistance. Dulu Offset (piksel layar): makin jauh terlihat makin
--- besar dibanding avatar dan menutupi pandangan dari seluruh map.
-local LABEL_PPS          = 36
-local LABEL_MAX_DISTANCE = 80
+-- Status di atas kepala (/afk, /nametag) = SATU slot di OverheadTag (di antara
+-- title dan nama). Server hanya menulis atribut character; OverheadTag yang
+-- menggambar pill-nya (lebar ikut teks). /nametag menimpa AFK dan sebaliknya.
+-- Atribut di CHARACTER: hilang saat respawn (sama seperti label lama), tetap
+-- ada saat Head diganti ApplyDescription (/headless, /size).
+local STATUS_MAX_CHARS = 40
 
-local function headLabel(head, name, text, widthPx, heightPx, offsetY, bg, bgTrans, fg)
-	local bb = Instance.new("BillboardGui")
-	bb.Name           = name
-	bb.Size           = UDim2.fromScale(widthPx / LABEL_PPS, heightPx / LABEL_PPS)
-	bb.StudsOffset    = Vector3.new(0, offsetY, 0)
-	bb.MaxDistance    = LABEL_MAX_DISTANCE
-	bb.LightInfluence = 0
-	bb.Parent         = head
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size                   = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3       = bg
-	lbl.BackgroundTransparency = bgTrans
-	lbl.BorderSizePixel        = 0
-	lbl.Text                   = text
-	lbl.TextColor3             = fg
-	lbl.Font                   = Enum.Font.GothamBold
-	lbl.TextScaled             = true -- tinggi huruf ±50% kotak, seperti TextSize 11 di kotak 22 px
-	lbl.Parent                 = bb
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop    = UDim.new(0.25, 0)
-	pad.PaddingBottom = UDim.new(0.25, 0)
-	pad.PaddingLeft   = UDim.new(0.04, 0)
-	pad.PaddingRight  = UDim.new(0.04, 0)
-	pad.Parent        = lbl
-	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0.2, 0)
+local function setStatus(char, text, kind)
+	char:SetAttribute("DT_StatusKind", kind)
+	char:SetAttribute("DT_Status", text)
 end
 
 H.afk = function(p)
 	local _, char = getHum(p); if not char then return end
-	local head = char:FindFirstChild("Head"); if not head then return end
-	local ex   = head:FindFirstChild("DT_AFK")
-	if ex then ex:Destroy(); return end
-
-	headLabel(head, "DT_AFK", "AFK", 52, 20, 2.8,
-		Color3.fromRGB(20, 20, 26), 0.15, Color3.fromRGB(255, 195, 40))
+	if char:GetAttribute("DT_StatusKind") == "afk" then
+		setStatus(char, nil, nil) -- toggle mati
+	else
+		setStatus(char, "AFK", "afk")
+	end
 end
 
 H.headless = function(p) toggleDescProp(p, "DT_Headless", "Head",     ASSET.HEADLESS, ASSET.DEFAULT) end
@@ -488,12 +473,13 @@ end
 
 H.nametag = function(p, args)
 	local _, char = getHum(p); if not char then return end
-	local head = char:FindFirstChild("Head"); if not head then return end
 
-	local ex = head:FindFirstChild("DT_Nametag"); if ex then ex:Destroy() end
-	local txt = table.concat(args, " "):sub(1, 40)
-	if txt == "" then return end
-	-- [FIX 2026-09-26] teks nametag terlihat semua pemain → wajib filter Roblox (fail-closed)
+	local txt = utf8Prefix(table.concat(args, " "), STATUS_MAX_CHARS):match("^%s*(.-)%s*$")
+	if txt == "" then
+		setStatus(char, nil, nil) -- /nametag kosong = hapus status
+		return
+	end
+	-- teks terlihat semua pemain → wajib filter Roblox (fail-closed)
 	local okF, filtered = pcall(function()
 		return TextService:FilterStringAsync(txt, p.UserId, Enum.TextFilterContext.PublicChat)
 			:GetNonChatStringForBroadcastAsync()
@@ -502,11 +488,8 @@ H.nametag = function(p, args)
 		warn("[CommandServer] nametag: filter gagal, tag tidak dipasang")
 		return
 	end
-	txt = filtered
-	if not char.Parent or not head.Parent then return end
-
-	headLabel(head, "DT_Nametag", txt, 140, 22, 3.5,
-		Color3.fromRGB(15, 15, 20), 0.2, Color3.fromRGB(230, 230, 238))
+	if not char.Parent then return end
+	setStatus(char, filtered, "tag")
 end
 
 H.undo = function(p)
@@ -559,7 +542,7 @@ local function sanitizeArgs(args)
 	for i = 1, math.min(#args, MAX_ARGS) do
 		local v = args[i]
 		if type(v) == "string" then
-			clean[#clean + 1] = v:sub(1, MAX_ARG_LEN)
+			clean[#clean + 1] = utf8Prefix(v, MAX_ARG_LEN)
 		elseif type(v) == "number" then
 			clean[#clean + 1] = tostring(v)
 		end

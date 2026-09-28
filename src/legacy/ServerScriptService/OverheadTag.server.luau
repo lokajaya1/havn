@@ -15,9 +15,11 @@
 -- StudsOffsetWorldSpace menggeser lurus ke atas di ruang DUNIA, jadi
 -- kedalamannya benar dari sudut mana pun.
 --
--- ExtentsOffsetWorldSpace.Y = 0.5 menaikkan tag setengah tingginya
--- sendiri, jadi TEPI BAWAH tag persis di titik acuan. Tingginya tidak
--- perlu ikut dihitung manual saat menyetel jarak.
+-- Titik yang digeser = TENGAH tag. Jadi tengahnya dinaikkan ke
+-- puncak kepala + CLEARANCE + setengah tinggi tag → TEPI BAWAH tag tepat
+-- di atas topi. (Dulu ExtentsOffsetWorldSpace 0.5 dikira "setengah tinggi
+-- tag", padahal satuannya ukuran HEAD → separuh bawah tag — nama & role —
+-- masuk ke topi dan tertutup kepala. Terbukti screenshot 2026-09-28 07:00.)
 --
 -- ── Kenapa tag mengecil saat zoom out ──────────────────────
 -- Size pakai Scale, yang untuk BillboardGui satuannya STUD. Tag jadi
@@ -27,6 +29,15 @@
 -- Layout ditulis dalam "design px" lalu dibagi TAG_PPS jadi stud.
 --
 -- Lainnya:
+--  • Status /afk & /nametag (atribut character DT_Status) juga DI DALAM
+--    billboard ini: satu kesatuan title → status → nama → role, tidak lagi
+--    billboard terpisah yang menumpuk. Lebar pill status ikut panjang teks.
+--  • Susunan rata BAWAH: nama & role tidak pernah bergeser; slot yang
+--    kosong tidak meninggalkan celah (title turun kalau tidak ada status).
+--  • Bubble chat dinaikkan setinggi tag (VerticalStudsOffset) supaya tidak
+--    menutupi nama/status.
+--  • Tinggi kepala diukur ulang saat aksesoris selesai dimuat
+--    (CharacterAppearanceLoaded / Accessory baru) → role tidak menempel topi.
 --  • Title tinggal DI DALAM billboard yang sama dengan nama, jadi
 --    jaraknya mustahil meleset dan ikut hilang saat nametag disembunyikan.
 --  • Tinggi tag selalu sama, punya title atau tidak — nama tidak lompat.
@@ -34,9 +45,11 @@
 --  • Ganti Role cuma menulis ulang label, tidak membangun ulang tag.
 -- ═══════════════════════════════════════════════════════════
 
-local Players = game:GetService("Players")
-local RS      = game:GetService("ReplicatedStorage")
-local SSS     = game:GetService("ServerScriptService")
+local Players     = game:GetService("Players")
+local RS          = game:GetService("ReplicatedStorage")
+local SSS         = game:GetService("ServerScriptService")
+local TextService = game:GetService("TextService")
+local TextChat    = game:GetService("TextChatService")
 
 local RankConfig = require(SSS:WaitForChild("RankConfig"))
 
@@ -60,20 +73,48 @@ local BILL_W  = TitleStyle and TitleStyle.TAG_W    or 300
 local TITLE_H = TitleStyle and TitleStyle.PLATE_H  or 20
 local GAP_T_N = TitleStyle and TitleStyle.NAME_GAP or 2
 
-local NAME_H  = 15
-local GAP_N_R = 1
-local ROLE_H  = 10
+local NAME_H   = 15
+local GAP_N_R  = 1
+local ROLE_H   = 10
+local STATUS_H = 16   -- pill /afk & /nametag
+local GAP_S    = 2    -- jarak pill → nama dan title → pill
+local STATUS_TEXT = 11
+local STATUS_PAD  = 8 -- ruang kiri + kanan teks di dalam pill
 
-local TOTAL_H = TITLE_H + GAP_T_N + NAME_H + GAP_N_R + ROLE_H   -- 48
-local NAME_Y  = TITLE_H + GAP_T_N
-local ROLE_Y  = NAME_Y + NAME_H + GAP_N_R
+-- Tersusun dari BAWAH: role, nama, (status), title.
+local TOTAL_H  = TITLE_H + GAP_S + STATUS_H + GAP_S + NAME_H + GAP_N_R + ROLE_H   -- 66
+local ROLE_Y   = TOTAL_H - ROLE_H
+local NAME_Y   = ROLE_Y - GAP_N_R - NAME_H
+local STATUS_Y = NAME_Y - GAP_S - STATUS_H
+local TITLE_Y_WITH_STATUS = STATUS_Y - GAP_S - TITLE_H           -- 0
+local TITLE_Y_NO_STATUS   = NAME_Y - GAP_T_N - TITLE_H           -- title nempel nama
+
+local STATUS_STYLE = {
+	afk = { text = Color3.fromRGB(255, 195, 40),  bg = Color3.fromRGB(20, 20, 26), bgT = 0.15 },
+	tag = { text = Color3.fromRGB(230, 230, 238), bg = Color3.fromRGB(15, 15, 20), bgT = 0.2 },
+}
 
 -- Jarak tepi bawah tag ke puncak kepala (stud).
-local CLEARANCE    = 0.35
+-- (TAG_CENTER dihitung di bawah, setelah TOTAL_H diketahui.)
+local CLEARANCE    = 0.45
 -- Batas atas kalau player pakai topi raksasa; tanpa ini tag bisa
 -- terbang jauh sekali di atas kepala.
 local MAX_HEAD_TOP = 2.5
 local MAX_DISTANCE = 80
+
+local HALF_TAG = TOTAL_H / PPS / 2
+-- Bubble chat bawaan digambar di atas kepala; naikkan setinggi tag supaya
+-- tidak menutupi nama/status. Properti instance di TextChatService →
+-- ditulis server, tereplikasi ke semua client.
+local BUBBLE_OFFSET = CLEARANCE + TOTAL_H / PPS
+do
+	local cfg = TextChat:FindFirstChildOfClass("BubbleChatConfiguration")
+	if cfg then
+		pcall(function() cfg.VerticalStudsOffset = BUBBLE_OFFSET end)
+	end
+end
+
+local paintStatus -- didefinisikan di bawah (dipakai applyTag)
 
 -- ── Connection registry (per player) ──────────────────────
 local playerConns = {}
@@ -114,6 +155,81 @@ local function headTop(character, head)
 	return math.min(top, MAX_HEAD_TOP)
 end
 
+local function tagOffset(character, head)
+	return Vector3.new(0, headTop(character, head) + CLEARANCE + HALF_TAG, 0)
+end
+
+-- ── Status (/afk, /nametag) ───────────────────────────────
+
+local function textWidth(text)
+	local ok, size = pcall(TextService.GetTextSize, TextService, text, STATUS_TEXT,
+		Enum.Font.GothamBold, Vector2.new(10000, 100))
+	if ok and size then return size.X end
+	return utf8.len(text) and utf8.len(text) * STATUS_TEXT * 0.62 or #text * 7 -- cadangan
+end
+
+-- Teks status SUDAH difilter CommandServer sebelum ditulis ke atribut.
+paintStatus = function(character, bill)
+	local pill = bill:FindFirstChild("StatusPill")
+	local slot = bill:FindFirstChild("TitleSlot")
+	if not (pill and slot) then return end
+	local text  = character:GetAttribute("DT_Status")
+	local style = STATUS_STYLE[character:GetAttribute("DT_StatusKind")] or STATUS_STYLE.tag
+	local on    = type(text) == "string" and text ~= ""
+
+	pill.Visible = on
+	slot.Position = UDim2.fromScale(0, (on and TITLE_Y_WITH_STATUS or TITLE_Y_NO_STATUS) / TOTAL_H)
+	if not on then return end
+
+	local label = pill:FindFirstChild("StatusText")
+	local w = math.min(textWidth(text) + STATUS_PAD * 2, BILL_W)
+	pill.Size = UDim2.fromScale(w / BILL_W, STATUS_H / TOTAL_H)
+	pill.BackgroundColor3       = style.bg
+	pill.BackgroundTransparency = style.bgT
+	if label then
+		label.Text       = text
+		label.TextColor3 = style.text
+	end
+end
+
+local function tagOf(character)
+	local head = character:FindFirstChild("Head")
+	return head and head:FindFirstChild("OverheadTag")
+end
+
+-- Ukur ulang tinggi kepala TANPA membangun ulang tag (plate title tetap).
+local function remeasure(character)
+	local head = character:FindFirstChild("Head")
+	local bill = tagOf(character)
+	if head and bill then
+		bill.StudsOffsetWorldSpace = tagOffset(character, head)
+	end
+end
+
+-- Sekali per character: status & aksesoris yang datang belakangan.
+local watched = setmetatable({}, { __mode = "k" })
+local function watchCharacter(player, character)
+	if watched[character] then return end
+	watched[character] = true
+
+	local function onStatus()
+		local bill = tagOf(character)
+		if bill then paintStatus(character, bill) end
+	end
+	character:GetAttributeChangedSignal("DT_Status"):Connect(onStatus)
+	character:GetAttributeChangedSignal("DT_StatusKind"):Connect(onStatus)
+
+	local pending = false
+	character.ChildAdded:Connect(function(child)
+		if not child:IsA("Accessory") or pending then return end
+		pending = true
+		task.delay(0.3, function()
+			pending = false
+			if character.Parent and player.Character == character then remeasure(character) end
+		end)
+	end)
+end
+
 -- ── Build tag ─────────────────────────────────────────────
 
 local function applyTag(player, character)
@@ -124,6 +240,7 @@ local function applyTag(player, character)
 	if player.Character ~= character then return end
 
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	watchCharacter(player, character)
 
 	local old = head:FindFirstChild("OverheadTag")
 	if old then old:Destroy() end
@@ -145,17 +262,39 @@ local function applyTag(player, character)
 	bill.MaxDistance    = MAX_DISTANCE
 
 	-- Naik lurus di ruang dunia, bukan ruang kamera → occlusion akurat.
-	bill.StudsOffsetWorldSpace   = Vector3.new(0, headTop(character, head) + CLEARANCE, 0)
-	-- Naikkan setengah tinggi tag sendiri → tepi bawah pas di titik acuan.
-	bill.ExtentsOffsetWorldSpace = Vector3.new(0, 0.5, 0)
+	-- Tengah tag = puncak kepala + jarak + setengah tinggi tag.
+	bill.StudsOffsetWorldSpace = tagOffset(character, head)
 
 	-- Slot title: selalu ada, diisi client. Kosong = tidak kelihatan.
 	local slot = Instance.new("Frame")
 	slot.Name                   = "TitleSlot"
 	slot.BackgroundTransparency = 1
-	slot.Position               = UDim2.fromScale(0, 0)
+	slot.Position               = UDim2.fromScale(0, TITLE_Y_NO_STATUS / TOTAL_H)
 	slot.Size                   = UDim2.fromScale(1, TITLE_H / TOTAL_H)
 	slot.Parent                 = bill
+
+	-- Pill status: lebar diatur paintStatus() sesuai teks.
+	local pill = Instance.new("Frame")
+	pill.Name             = "StatusPill"
+	pill.AnchorPoint      = Vector2.new(0.5, 0)
+	pill.Position         = UDim2.fromScale(0.5, STATUS_Y / TOTAL_H)
+	pill.Size             = UDim2.fromScale(0, STATUS_H / TOTAL_H)
+	pill.BorderSizePixel  = 0
+	pill.Visible          = false
+	pill.Parent           = bill
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)
+	corner.Parent       = pill
+	local pillText = Instance.new("TextLabel")
+	pillText.Name                   = "StatusText"
+	pillText.AnchorPoint            = Vector2.new(0.5, 0.5)
+	pillText.Position               = UDim2.fromScale(0.5, 0.5)
+	pillText.Size                   = UDim2.fromScale(1, STATUS_TEXT / STATUS_H)
+	pillText.BackgroundTransparency = 1
+	pillText.Font                   = Enum.Font.GothamBold
+	pillText.TextScaled             = true
+	pillText.Text                   = ""
+	pillText.Parent                 = pill
 
 	local function makeLabel(name, posY, h, text, color, strokeTrans)
 		local l = Instance.new("TextLabel")
@@ -179,6 +318,8 @@ local function applyTag(player, character)
 
 	makeLabel("RoleLabel", ROLE_Y, ROLE_H,
 		roleData.displayText or "GUEST", roleColor, 1)
+
+	paintStatus(character, bill)
 
 	-- Parent terakhir: billboard sampai ke client sudah lengkap isinya.
 	bill.Parent = head
@@ -209,6 +350,11 @@ local function setupPlayer(player)
 
 	addConn(player, player:GetAttributeChangedSignal("Role"):Connect(function()
 		refreshRole(player)
+	end))
+
+	-- Aksesoris sering selesai dimuat SETELAH tag dibangun → ukur ulang.
+	addConn(player, player.CharacterAppearanceLoaded:Connect(function(ch)
+		if player.Character == ch then remeasure(ch) end
 	end))
 
 	addConn(player, player.CharacterAdded:Connect(function(ch)
