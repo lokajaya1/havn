@@ -367,8 +367,6 @@ ShowMessageEvent.OnClientEvent:Connect(function(
 	robuxAmount  : number,
 	message      : string
 )
-	print(`📬 Notification: {donorName} - "{message}"`)
-
 	local data: NotificationData = {
 		donorName     = donorName,
 		donorUsername = donorUsername,

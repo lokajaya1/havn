@@ -32,6 +32,9 @@ local STRICT = {
 	"src/legacy/ServerScriptService/AnnouncementHandler.server.luau",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/AnnouncementClient.client.luau",
 	"src/legacy/ServerScriptService/LiveScreenServer.server.luau",
+	-- ruangan DONASI
+	"src/legacy/ServerScriptService/DonationServer",
+	"src/legacy/ReplicatedStorage/DonationConfig.luau",
 }
 local REPORT = { "src/legacy" }
 
