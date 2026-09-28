@@ -1,5 +1,5 @@
 -- StarterPlayerScripts/DonationClient  (LocalScript)
--- Tombol donasi di topbar (baris "info", order 24 = kiri Server List) + panel DONATE (tata letak BebeqDonare:
+-- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft) + panel DONATE (tata letak BebeqDonare:
 -- judul, grid 2 kolom kartu tier, pill DONATE) + kotak pesan opsional sebelum membeli.
 -- Alur: pilih tier → (opsional) tulis pesan → Donate → SetMessage ke server (difilter di sana) → prompt beli Roblox.
 -- Pembayaran & pengumuman sepenuhnya di server (DonationServer); client tidak pernah mengklaim donasi.
@@ -315,32 +315,47 @@ UIS.InputBegan:Connect(function(input, processed)
 	end
 end)
 
--- ── Tombol topbar (baris "info", order 24 = kiri Server List) ──────────────
+-- ── Tombol topbar: baris KIRI sebelah Info (_G.TopbarLeft dari InfoTopBar) ──────
+-- Cadangan: baris kanan _G.TopbarLayout (order 24) kalau InfoTopBar tidak ada.
+local function makeTopButton(size, parent)
+	local btn = new("TextButton", { Name = "DonateBtn", Size = UDim2.new(0, size, 0, size), BackgroundColor3 = T.CARD,
+		BorderSizePixel = 0, Text = ROBUX, Font = FONT.BOLD, TextSize = 20, TextColor3 = T.ACCENT,
+		AutoButtonColor = false, Parent = parent })
+	corner(size / 2, btn)
+	local st = stroke(btn, 0.35, T.ACCENT)
+	st.Thickness = 1
+	hover(btn, T.CARD, T.CARD_HOVER)
+	btn.Activated:Connect(toggle)
+	return btn
+end
 task.spawn(function()
 	local waited = 0
 	repeat
 		task.wait(0.1)
 		waited += 0.1
-	until _G.TopbarGui or waited >= 15
-	if not _G.TopbarGui then
-		warn("[Donation] TopbarGui tidak ditemukan, tombol donasi tidak dibuat")
-		return
+	until _G.TopbarLeft or _G.TopbarGui or waited >= 15
+	if not _G.TopbarLeft then
+		waited = 0
+		repeat -- InfoTopBar mungkin sedikit lebih lambat dari UltimateMenu
+			task.wait(0.1)
+			waited += 0.1
+		until _G.TopbarLeft or waited >= 12
 	end
-	local old = _G.TopbarGui:FindFirstChild("DonateBtn")
-	if old then
-		old:Destroy()
-	end
-	local btn = new("TextButton", { Name = "DonateBtn", Size = UDim2.new(0, BTN_SZ, 0, BTN_SZ),
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -200, 0, 13), BackgroundColor3 = T.CARD,
-		BorderSizePixel = 0, Text = ROBUX, Font = FONT.BOLD, TextSize = 20, TextColor3 = T.ACCENT,
-		AutoButtonColor = false, Parent = _G.TopbarGui })
-	corner(BTN_SZ / 2, btn)
-	local st = stroke(btn, 0.35, T.ACCENT)
-	st.Thickness = 0.5
-	hover(btn, T.CARD, T.CARD_HOVER)
-	btn.Activated:Connect(toggle)
-	if _G.TopbarLayout then
-		_G.TopbarLayout.register("donate", btn, 24, "info")
+	if _G.TopbarLeft then
+		_G.TopbarLeft.add(makeTopButton(_G.TopbarLeft.height or BTN_SZ, nil), 2)
+	elseif _G.TopbarGui then
+		local old = _G.TopbarGui:FindFirstChild("DonateBtn")
+		if old then
+			old:Destroy()
+		end
+		local btn = makeTopButton(BTN_SZ, _G.TopbarGui)
+		btn.AnchorPoint = Vector2.new(1, 0)
+		btn.Position = UDim2.new(1, -200, 0, 13)
+		if _G.TopbarLayout then
+			_G.TopbarLayout.register("donate", btn, 24, "info")
+		end
+	else
+		warn("[Donation] topbar tidak ditemukan, tombol donasi tidak dibuat")
 	end
 end)
 
