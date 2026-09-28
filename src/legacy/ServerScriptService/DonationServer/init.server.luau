@@ -16,12 +16,17 @@ local ReceiptHandler = require(SSS:WaitForChild("ReceiptHandler"))
 
 local MSG = Config.message
 local suffix = RunService:IsStudio() and Config.store.studioSuffix or ""
-local store = Store.new(
-	DataStoreService:GetDataStore(Config.store.data .. suffix),
-	DataStoreService:GetOrderedDataStore(Config.store.ordered .. suffix),
-	Config.store,
-	task.delay
-)
+local orderedStore = DataStoreService:GetOrderedDataStore(Config.store.ordered .. suffix)
+local store = Store.new(DataStoreService:GetDataStore(Config.store.data .. suffix), orderedStore, Config.store, task.delay)
+local Boards = require(script:WaitForChild("Boards"))
+local boards = Boards.new({
+	ordered = orderedStore,
+	folder = workspace:FindFirstChild("DonationBoards"),
+	services = { Players = Players, UserService = game:GetService("UserService") },
+	cfg = Config,
+	task = task,
+	warn = warn,
+})
 
 -- ── Remote (folder & nama lama dipertahankan: DonationMessageNotification mendengar ShowMessage) ──
 local function ensure(parent, className, name)
@@ -130,6 +135,10 @@ local running = false
 local function announce(item)
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, item.message, item.userId)
 	effectEvent:FireAllClients(item.userId, item.robux)
+	local okBoard, errBoard = pcall(boards.onDonation, boards, item)
+	if not okBoard then
+		warn("[Donation] papan gagal: " .. tostring(errBoard))
+	end
 	local big = item.big and bigEvents[item.big]
 	if big then
 		big:FireAllClients(item.name, Config.bigRecipient, item.robux, item.userId)
@@ -197,5 +206,7 @@ end
 for _, tier in Config.tiers do
 	ReceiptHandler.RegisterProduct(tier.productId, onReceipt)
 end
+
+boards:start()
 
 print(("[Donation] Ready | %d produk | store %s%s"):format(#Config.tiers, Config.store.data, suffix))
