@@ -2,7 +2,7 @@
 -- Struk HANYA lewat ReceiptHandler.RegisterProduct (satu ProcessReceipt per game; tidak memakai
 -- PromptProductPurchaseFinished — itu bukan bukti bayar dan ikut menyala untuk gift Shop).
 -- Alur: pemain (opsional) kirim pesan → server filter PublicChat → pemain beli produk →
--- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi semua pemain + LiveScreen.
+-- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -40,6 +40,8 @@ end
 local folder = ensure(ReplicatedStorage, "Folder", "DonationMessageSystem")
 local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName, username, robux, message, userId)
 local setMessage = ensure(folder, "RemoteFunction", "SetMessage") -- client → server: teks → true/false
+local remotes = ensure(ReplicatedStorage, "Folder", "DonationRemotes")
+local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux)
 
 local liveSystem = ReplicatedStorage:FindFirstChild("LiveSystem")
 local function screenSignal()
@@ -120,6 +122,7 @@ local running = false
 
 local function announce(item)
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, item.message, item.userId)
+	effectEvent:FireAllClients(item.userId, item.robux)
 	local sig = screenSignal()
 	if sig then
 		sig:Fire(item.name, item.robux) -- LiveScreenServer mencari anak Players berdasarkan Player.Name

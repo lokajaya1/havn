@@ -49,6 +49,9 @@
       "DonationConfig": {
         "$path": "src/legacy/ReplicatedStorage/DonationConfig.luau"
       },
+      "DonationEffects": {
+        "$path": "assets/DonationEffects.rbxm"
+      },
       "ShopConfig": {
         "$path": "src/legacy/ReplicatedStorage/ShopConfig.luau"
       },
@@ -185,6 +188,9 @@
         },
         "DonationNotif": {
           "$path": "src/client/DonationNotif.client.luau"
+        },
+        "DonationFX": {
+          "$path": "src/client/DonationFX.client.luau"
         },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"

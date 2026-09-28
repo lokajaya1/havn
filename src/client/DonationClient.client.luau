@@ -106,10 +106,10 @@ local panel = new("Frame", { Name = "Panel", AnchorPoint = Vector2.new(0.5, 0), 
 	Visible = false, Parent = gui })
 corner(14, panel)
 stroke(panel, 0.85)
-new("TextLabel", { Name = "Title", Position = UDim2.new(0, 20, 0, 14), Size = UDim2.new(1, -80, 0, 30),
+new("TextLabel", { Name = "Title", Position = UDim2.new(0, 20, 0, 14), Size = UDim2.new(1, -170, 0, 30),
 	BackgroundTransparency = 1, Text = "DONATE", Font = FONT.BOLD, TextSize = 22, TextColor3 = T.TEXT,
 	TextXAlignment = Enum.TextXAlignment.Left, Parent = panel })
-new("TextLabel", { Name = "Subtitle", Position = UDim2.new(0, 20, 0, 42), Size = UDim2.new(1, -80, 0, 18),
+new("TextLabel", { Name = "Subtitle", Position = UDim2.new(0, 20, 0, 42), Size = UDim2.new(1, -170, 0, 18),
 	BackgroundTransparency = 1, Text = "Support HAVN — thank you so much! ❤", Font = FONT.REGULAR, TextSize = 14,
 	TextColor3 = T.TEXT_DIM, TextXAlignment = Enum.TextXAlignment.Left, Parent = panel })
 local closeBtn = new("TextButton", { Name = "Close", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 16),
@@ -118,6 +118,23 @@ local closeBtn = new("TextButton", { Name = "Close", AnchorPoint = Vector2.new(1
 corner(8, closeBtn)
 stroke(closeBtn, 0.85)
 hover(closeBtn, T.CARD, T.CARD_HOVER)
+-- Efek donasi pemain lain (DonationFX) bisa dimatikan: atribut LocalPlayer "DonationFX".
+local fxBtn = new("TextButton", { Name = "FxToggle", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -56, 0, 16),
+	Size = UDim2.new(0, 88, 0, 32), BackgroundColor3 = T.CARD, Text = "", Font = FONT.BOLD, TextSize = 13,
+	TextColor3 = T.TEXT, AutoButtonColor = false, Parent = panel })
+corner(8, fxBtn)
+stroke(fxBtn, 0.85)
+hover(fxBtn, T.CARD, T.CARD_HOVER)
+local function paintFx()
+	local on = player:GetAttribute("DonationFX") ~= false
+	fxBtn.Text = on and "Effects: ON" or "Effects: OFF"
+	fxBtn.TextColor3 = on and T.ACCENT or T.TEXT_DIM
+end
+fxBtn.Activated:Connect(function()
+	player:SetAttribute("DonationFX", player:GetAttribute("DonationFX") == false)
+	paintFx()
+end)
+paintFx()
 new("Frame", { Name = "Divider", Position = UDim2.new(0, 20, 0, 70), Size = UDim2.new(1, -40, 0, 1),
 	BackgroundColor3 = T.LINE, BackgroundTransparency = 0.9, BorderSizePixel = 0, Parent = panel })
 local grid = new("ScrollingFrame", { Name = "Grid", Position = UDim2.new(0, 16, 0, 84), Size = UDim2.new(1, -32, 1, -100),
