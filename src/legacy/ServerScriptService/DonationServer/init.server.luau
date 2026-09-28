@@ -42,6 +42,13 @@ local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName
 local setMessage = ensure(folder, "RemoteFunction", "SetMessage") -- client → server: teks → true/false
 local remotes = ensure(ReplicatedStorage, "Folder", "DonationRemotes")
 local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux)
+-- Efek besar (Nuke / Smite / BlackHole): (username, penerima, robux, userId) — dipakai StarterGui.DonationBigFX.
+local bigEvents = {}
+for _, tier in Config.tiers do
+	if tier.big and not bigEvents[tier.big] then
+		bigEvents[tier.big] = ensure(remotes, "RemoteEvent", tier.big)
+	end
+end
 
 local liveSystem = ReplicatedStorage:FindFirstChild("LiveSystem")
 local function screenSignal()
@@ -123,6 +130,10 @@ local running = false
 local function announce(item)
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, item.message, item.userId)
 	effectEvent:FireAllClients(item.userId, item.robux)
+	local big = item.big and bigEvents[item.big]
+	if big then
+		big:FireAllClients(item.name, Config.bigRecipient, item.robux, item.userId)
+	end
 	local sig = screenSignal()
 	if sig then
 		sig:Fire(item.name, item.robux) -- LiveScreenServer mencari anak Players berdasarkan Player.Name
@@ -177,6 +188,7 @@ local function onReceipt(receipt, player)
 			robux = robux,
 			message = takeMessage(player),
 			gap = tier.gap,
+			big = tier.big,
 		})
 	end
 	return true

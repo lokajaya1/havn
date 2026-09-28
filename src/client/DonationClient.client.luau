@@ -1,5 +1,5 @@
 -- StarterPlayerScripts/DonationClient  (LocalScript)
--- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft) + panel DONATE (tata letak BebeqDonare:
+-- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft) + panel DONATE (tata letak:
 -- judul, grid 2 kolom kartu tier, pill DONATE) + kotak pesan opsional sebelum membeli.
 -- Alur: pilih tier → (opsional) tulis pesan → Donate → SetMessage ke server (difilter di sana) → prompt beli Roblox.
 -- Pembayaran & pengumuman sepenuhnya di server (DonationServer); client tidak pernah mengklaim donasi.
