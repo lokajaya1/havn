@@ -139,9 +139,6 @@
       "CommandPanel": {
         "$path": "src/legacy/StarterGui/CommandPanel.client.luau"
       },
-      "DonationMessageClient": {
-        "$path": "src/legacy/StarterGui/DonationMessageClient.client.luau"
-      },
       "DonationMessageNotification": {
         "$path": "src/legacy/StarterGui/DonationMessageNotification.client.luau"
       },
@@ -185,6 +182,9 @@
         "$className": "StarterPlayerScripts",
         "ServerListClient": {
           "$path": "src/client/ServerListClient.client.luau"
+        },
+        "DonationClient": {
+          "$path": "src/client/DonationClient.client.luau"
         },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
