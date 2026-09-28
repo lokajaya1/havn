@@ -40,7 +40,8 @@ return {
 		{ name = "likes", from = "AvatarLikes_v1", to = "AvatarLikes", merge = "likes" },
 		{ name = "community", from = "CommunityPref", to = "CommunityPref", merge = "keepTarget" },
 		{ name = "titles", from = "AdminTitleData_v1", to = "AdminTitles", merge = "keepTarget" },
-		{ name = "adonis", from = "Adonis_1", scope = "Adonis", to = "AdonisData", merge = "adonis" },
+		-- Adonis TIDAK disalin: DataStoreKey Adonis diganti (ruangan ADMIN AD2), entri lama
+		-- ter-encode dengan key lama sehingga tidak terbaca. Isinya hanya log & cache (A0b).
 		{ name = "donationData", from = "DonationData_v1", to = "DonationData_v1", merge = "keepTarget" },
 		{ name = "donationBoard", from = "Donation Board v4", to = "Donation Board v4", merge = "keepTarget" },
 	} :: { StandardRule },

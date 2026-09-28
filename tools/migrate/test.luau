@@ -290,10 +290,10 @@ check("musicLib gabung", eq(val("MusicLibrary", "GlobalLib"), { { Id = "a" }, { 
 check("likes", eq(val("AvatarLikes", "u_10"), { given = { 1, 2, 3 }, likes = 5, updated = 200 }))
 check("community", val("CommunityPref", "u_10") == true)
 check("titles", eq(val("AdminTitles", "10"), { title = "VIP", colorHex = "FF0000" }))
-check("adonis list gabung", eq(val("AdonisData", "K1", "Adonis"), { { User = "x" }, { User = "y" } }))
-check("adonis nilai baru tetap", val("AdonisData", "K2", "Adonis") == "baru")
-check("adonis kunci baru dibuat", eq(val("AdonisData", "K3", "Adonis"), { a = 1 }))
-check("adonis scope global diabaikan", getStd(T, "AdonisData", "global", "G") == nil)
+check("adonis TIDAK disalin (key diganti): target tetap", eq(val("AdonisData", "K1", "Adonis"), { { User = "y" } })
+	and val("AdonisData", "K2", "Adonis") == "baru")
+check("adonis TIDAK disalin: kunci baru tidak dibuat", val("AdonisData", "K3", "Adonis") == nil
+	and getStd(T, "AdonisData", "global", "G") == nil)
 check("donationData", eq(val("DonationData_v1", "10"), { total = 5 }))
 check("donation board kunci @", eq(val("Donation Board v4", "donationboard@donations"), { ["10"] = { UserId = 10 } }))
 local ordT = db[T].ord
