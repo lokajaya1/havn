@@ -2,7 +2,8 @@
 -- ID produk = Developer Product experience [NEW] (dibuat 2026-09-28). Harga dibaca Roblox; `robux` di sini
 -- hanya cadangan kalau struk tidak membawa CurrencySpent.
 -- label = nama tier di kartu panel; gap = detik jeda antrean pengumuman sebelum donasi berikutnya ditampilkan;
--- notif = detik notifikasi tampil di layar pemain; fx = efek partikel di donatur (DonationConfig.effects).
+-- notif = detik notifikasi tampil di layar pemain; fx = efek partikel di donatur (DonationConfig.effects);
+-- big = efek besar di titik tetap map (remote DonationRemotes.<big>, didengar StarterGui.DonationBigFX di Studio).
 local DonationConfig = {}
 
 DonationConfig.tiers = {
@@ -11,11 +12,11 @@ DonationConfig.tiers = {
 	{ robux = 100, label = "Shine", productId = 3715195462, gap = 4, notif = 7, fx = "Level3" },
 	{ robux = 200, label = "Blaze", productId = 3715195489, gap = 4, notif = 7, fx = "Level4" },
 	{ robux = 500, label = "Aura", productId = 3715195530, gap = 5, notif = 8, fx = "Level5" },
-	{ robux = 1000, label = "Nuke", productId = 3715195558, gap = 8, notif = 10, fx = "Level6" },
+	{ robux = 1000, label = "Nuke", productId = 3715195558, gap = 8, notif = 10, big = "FireNuke" },
 	{ robux = 2000, label = "Supernova", productId = 3715195590, gap = 6, notif = 10, fx = "Level6" },
 	{ robux = 3000, label = "Exotic", productId = 3715195610, gap = 8, notif = 12, fx = "Exotic" },
-	{ robux = 5000, label = "Hammer", productId = 3715195634, gap = 10, notif = 14, fx = "Level6" },
-	{ robux = 10000, label = "Black Hole", productId = 3715195650, gap = 12, notif = 16, fx = "Level6" },
+	{ robux = 5000, label = "Hammer", productId = 3715195634, gap = 10, notif = 14, big = "FireSmite" },
+	{ robux = 10000, label = "Black Hole", productId = 3715195650, gap = 12, notif = 16, big = "FireBlackHole" },
 }
 
 -- Pesan donatur: diketik SEBELUM membeli, difilter server (PublicChat), dipakai sekali untuk struk berikutnya.
@@ -36,8 +37,9 @@ DonationConfig.store = {
 }
 
 DonationConfig.queueMax = 50 -- antrean pengumuman maksimal per server
+DonationConfig.bigRecipient = "HAVN" -- teks "TO @…" di efek besar
 
--- Efek partikel (template di ReplicatedStorage.DonationEffects = assets/DonationEffects.rbxm, dari BebeqDonare).
+-- Efek partikel (template di ReplicatedStorage.DonationEffects = assets/DonationEffects.rbxm).
 -- time = detik emitter menyala; sound = audio Group SOLA's (izin [NEW] terbukti AU0 2026-09-29), diputar 3D di donatur.
 -- Exotic = Model utuh di kaki donatur (atribut WholeAtBase).
 DonationConfig.effects = {

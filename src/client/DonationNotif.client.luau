@@ -1,5 +1,5 @@
 -- StarterPlayerScripts/DonationNotif  (LocalScript)
--- Notifikasi donasi untuk semua pemain, tata letak BebeqDonare (avatar kiri, "TERIMA KASIH!", nama + ikon Robux,
+-- Notifikasi donasi untuk semua pemain, tata letak kartu (avatar kiri, "TERIMA KASIH!", nama + ikon Robux,
 -- pesan donatur) dengan warna tema menu HAVN. Data dari DonationServer lewat
 -- DonationMessageSystem.ShowMessage(displayName, username, robux, message, userId) — pesan sudah difilter server.
 -- Maksimal 3 kartu tampil, sisanya antre; lama tampil per tier (DonationConfig.tiers[].notif).

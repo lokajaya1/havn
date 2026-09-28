@@ -1,7 +1,7 @@
 -- StarterPlayerScripts/DonationFX  (LocalScript)
 -- Efek donasi di karakter DONATUR, dijalankan di tiap client (bisa dimatikan per pemain).
 -- Server (DonationServer) mengirim DonationRemotes.Effect(userId, robux) SETELAH donasi tersimpan.
--- Template partikel: ReplicatedStorage.DonationEffects (Level1–6 dari BebeqDonare, 0 skrip);
+-- Template partikel: ReplicatedStorage.DonationEffects (Level1–6 + Exotic, 0 skrip);
 -- Model ber-atribut WholeAtBase (Exotic) ditempatkan utuh di kaki donatur.
 -- Donatur tidak ada di server / belum punya karakter → efek dilewati (tidak jatuh ke pemain sendiri).
 
@@ -21,6 +21,22 @@ if not templates or not effectEvent then
 	warn("[Donation] DonationEffects / DonationRemotes.Effect tidak ditemukan, efek donasi tidak aktif")
 	return
 end
+
+-- Penanda posisi efek besar (Workspace.DonationMarkers, kotak neon untuk diatur di Studio) tidak terlihat di game.
+local function hideMarker(d)
+	if d:IsA("BasePart") then
+		d.LocalTransparencyModifier = 1
+	end
+end
+task.spawn(function()
+	local markers = workspace:WaitForChild("DonationMarkers", 30)
+	if markers then
+		for _, d in markers:GetDescendants() do
+			hideMarker(d)
+		end
+		markers.DescendantAdded:Connect(hideMarker)
+	end
+end)
 
 local holder = workspace:FindFirstChild("DonationFX") or Instance.new("Folder")
 holder.Name = "DonationFX"
