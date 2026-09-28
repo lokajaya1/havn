@@ -10,6 +10,7 @@
 local Players             = game:GetService("Players")
 local TweenService        = game:GetService("TweenService")
 local UIS                 = game:GetService("UserInputService")
+local GuiService          = game:GetService("GuiService")
 local GroupService        = game:GetService("GroupService")
 local AvatarEditorService = game:GetService("AvatarEditorService")
 
@@ -40,10 +41,13 @@ local BTN_H     = 42
 local BTN_PADX  = 20
 local BTN_TEXT  = 15
 
--- Posisi default (desktop / landscape)
--- Mobile portrait → diset ulang oleh updateBtnPosition() setelah topBtn dibuat
-local BTN_X = 265
-local BTN_Y = 14
+-- Posisi (desktop / landscape): baris kiri dimulai tepat setelah tombol bawaan Roblox
+-- (GuiService.TopbarInset.Min.X) + ROW_GAP. BTN_X = cadangan kalau TopbarInset tidak terbaca.
+-- Mobile portrait → baris pindah ke kanan di bawah tombol Menu (updateBtnPosition).
+local BTN_X   = 265
+local BTN_Y   = 14
+local ROW_GAP = 12   -- jarak dari tombol chat Roblox (= jarak antar tombol bawaan)
+local ROW_PAD = 8    -- jarak antar tombol di baris kiri (Info, Donate, …)
 
 -- ══════════════════════════════════════════════════════════════
 --  TEMA (sama dengan DanceClient / UltimateMenu)
@@ -222,18 +226,33 @@ sg.Parent         = playerGui
 -- ══════════════════════════════════════════════════════════════
 --  TOPBAR BUTTON  (dibuat dulu, baru updateBtnPosition dipanggil)
 -- ══════════════════════════════════════════════════════════════
+-- Baris kiri: Info + tombol lain (mis. Donate lewat _G.TopbarLeft.add) berjajar rapi.
+local leftRow = Instance.new("Frame")
+leftRow.Name                   = "LeftRow"
+leftRow.AutomaticSize          = Enum.AutomaticSize.X
+leftRow.Size                   = UDim2.new(0, 0, 0, BTN_H)
+leftRow.Position               = UDim2.new(0, BTN_X, 0, BTN_Y)
+leftRow.BackgroundTransparency = 1
+leftRow.Parent                 = sg
+
+local rowList = Instance.new("UIListLayout")
+rowList.FillDirection     = Enum.FillDirection.Horizontal
+rowList.VerticalAlignment = Enum.VerticalAlignment.Center
+rowList.Padding           = UDim.new(0, ROW_PAD)
+rowList.SortOrder         = Enum.SortOrder.LayoutOrder
+rowList.Parent            = leftRow
+
 local topBtn = Instance.new("TextButton")
 topBtn.Name                   = "InfoTopbarButton"
+topBtn.LayoutOrder            = 1
 topBtn.AutomaticSize          = Enum.AutomaticSize.X
 topBtn.Size                   = UDim2.new(0, 0, 0, BTN_H)
-topBtn.Position               = UDim2.new(0, BTN_X, 0, BTN_Y)  -- default dulu
-topBtn.AnchorPoint            = Vector2.new(0, 0)
 topBtn.BackgroundColor3       = C.Black
 topBtn.BackgroundTransparency = T.Btn
 topBtn.BorderSizePixel        = 0
 topBtn.Text                   = ""
 topBtn.AutoButtonColor        = false
-topBtn.Parent                 = sg
+topBtn.Parent                 = leftRow
 pill(topBtn)
 
 local btnPad = Instance.new("UIPadding")
@@ -267,14 +286,22 @@ btnLabel.Parent                 = topBtn
 --  Mobile portrait → di bawah tombol Menu (UltimateMenu ada di Y=13, H=42)
 --  Anchor UltimateMenu btn: Position(1, -92, 0, 13) → kita ikuti X-nya
 -- ══════════════════════════════════════════════════════════════
+local function rowStartX()
+	local ok, inset = pcall(function() return GuiService.TopbarInset end)
+	if ok and inset and inset.Min.X > 0 then
+		return inset.Min.X + ROW_GAP
+	end
+	return BTN_X
+end
+
 local function updateBtnPosition()
 	local vp = workspace.CurrentCamera.ViewportSize
 	if vp.Y > vp.X then
-		topBtn.AnchorPoint = Vector2.new(1, 0)
-		topBtn.Position    = UDim2.new(1, -10, 0, 62)  -- sisi kanan sejajar Menu
+		leftRow.AnchorPoint = Vector2.new(1, 0)
+		leftRow.Position    = UDim2.new(1, -10, 0, 62)  -- sisi kanan sejajar Menu
 	else
-		topBtn.AnchorPoint = Vector2.new(0, 0)
-		topBtn.Position    = UDim2.new(0, BTN_X, 0, BTN_Y)
+		leftRow.AnchorPoint = Vector2.new(0, 0)
+		leftRow.Position    = UDim2.new(0, rowStartX(), 0, BTN_Y)
 	end
 end
 
@@ -294,6 +321,10 @@ local function bindCamera()
 end
 
 bindCamera()
+-- Lebar tombol bawaan Roblox bisa berubah (chat dimatikan, perangkat lain) → ikut geser.
+pcall(function()
+	GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(updateBtnPosition)
+end)
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
 	task.wait()  -- tunggu kamera baru siap
 	bindCamera()
@@ -700,7 +731,7 @@ _G.PanelCoordinator.Register("Info", closeMain)
 --  tombol tidak diubah sama sekali — hanya properti Visible.
 -- ══════════════════════════════════════════════════════════════
 local function setBtnHidden(hidden)
-	topBtn.Visible = not hidden
+	leftRow.Visible = not hidden
 end
 
 if type(_G.PanelCoordinator.OnChange) == "function" then
@@ -757,5 +788,14 @@ dcOvBtn.MouseButton1Click:Connect(closeDC)
 
 commClose.MouseButton1Click:Connect(closeComm)
 commOvBtn.MouseButton1Click:Connect(closeComm)
+
+-- API baris kiri untuk skrip lain (mis. DonationClient): tombol diberi tinggi BTN_H.
+_G.TopbarLeft = {
+	height = BTN_H,
+	add = function(btn, order)
+		btn.LayoutOrder = order or 10
+		btn.Parent      = leftRow
+	end,
+}
 
 print("[InfoTopbar] Ready ✓ (+ Community)")
