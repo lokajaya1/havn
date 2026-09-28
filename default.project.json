@@ -139,9 +139,6 @@
       "CommandPanel": {
         "$path": "src/legacy/StarterGui/CommandPanel.client.luau"
       },
-      "DonationMessageNotification": {
-        "$path": "src/legacy/StarterGui/DonationMessageNotification.client.luau"
-      },
       "Flyingbroomui": {
         "$path": "src/legacy/StarterGui/Flyingbroomui.client.luau"
       },
@@ -185,6 +182,9 @@
         },
         "DonationClient": {
           "$path": "src/client/DonationClient.client.luau"
+        },
+        "DonationNotif": {
+          "$path": "src/client/DonationNotif.client.luau"
         },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
