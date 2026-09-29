@@ -43,6 +43,32 @@ local boards = Boards.new({
 	end,
 })
 
+-- LIVE DONATIONS = donasi hari ini (WIB) lintas server & tahan restart (Feed, opsional; gagal → papan memori saja).
+local feed
+local feedModule = script:FindFirstChild("Feed")
+if feedModule and Config.feed and Config.feed.enabled then
+	local okF, errF = pcall(function()
+		local Feed = require(feedModule)
+		feed = Feed.new({
+			cfg = Config,
+			memory = game:GetService("MemoryStoreService"),
+			descending = Enum.SortDirection.Descending,
+			suffix = suffix,
+			now = function()
+				return workspace:GetServerTimeNow()
+			end,
+			warn = warn,
+		})
+		boards.feedSource = function(kind)
+			return feed:read(kind)
+		end
+	end)
+	if not okF then
+		feed = nil
+		warn("[Donation] feed harian tidak aktif: " .. tostring(errF))
+	end
+end
+
 -- ── Remote (folder & nama lama dipertahankan: src/client/DonationNotif mendengar ShowMessage) ──
 local function ensure(parent, className, name)
 	local inst = parent:FindFirstChild(name)
@@ -215,6 +241,9 @@ local function pump()
 end
 
 local function enqueue(item)
+	if feed and not item.remote and not item.test then
+		task.spawn(feed.record, feed, item) -- server asal: simpan ke feed harian (latar, tidak menahan antrean)
+	end
 	if #queue >= Config.queueMax then
 		warn("[Donation] antrean penuh, pengumuman " .. item.name .. " dilewati (data tetap tersimpan)")
 		return
