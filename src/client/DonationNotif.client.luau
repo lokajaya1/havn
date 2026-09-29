@@ -1,7 +1,8 @@
 -- StarterPlayerScripts/DonationNotif  (LocalScript)
 -- Notifikasi donasi untuk semua pemain, tata letak kartu (avatar kiri, "TERIMA KASIH!", nama + ikon Robux,
 -- pesan donatur) dengan warna tema menu HAVN. Data dari DonationServer lewat
--- DonationMessageSystem.ShowMessage(displayName, username, robux, message, userId) — pesan sudah difilter server.
+-- DonationMessageSystem.ShowMessage(displayName, username, robux, message, userId, gold) — pesan sudah difilter server.
+-- robux 0 = donasi luar (bagibagi): nominal poin GOLD (bukan Rupiah), tanpa @akun.
 -- Maksimal 3 kartu tampil, sisanya antre; lama tampil per tier (DonationConfig.tiers[].notif).
 
 local Players = game:GetService("Players")
@@ -120,8 +121,8 @@ local function card(d)
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = text })
 	new("TextLabel", { Name = "NBody", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
-		-- robux 0 = donasi luar (bagibagi): nominal & @akun tidak ditampilkan
 		Text = d.robux > 0 and ("%s (@%s) donated %s %d"):format(d.display, d.name, ROBUX, d.robux)
+			or d.gold > 0 and ("%s donated %s GOLD"):format(d.display, (tostring(d.gold):reverse():gsub("(%d%d%d)", "%1."):reverse():gsub("^%.", "")))
 			or (d.display .. " sent support " .. utf8.char(0x2764)),
 		Font = FONT.MEDIUM, TextSize = 15, TextColor3 = T.TEXT, TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = text })
@@ -154,13 +155,14 @@ show = function(d)
 	end)
 end
 
-showMessage.OnClientEvent:Connect(function(display, name, robux, message, userId)
+showMessage.OnClientEvent:Connect(function(display, name, robux, message, userId, gold)
 	local d = {
 		display = typeof(display) == "string" and display or "?",
 		name = typeof(name) == "string" and name or "?",
 		robux = math.floor(tonumber(robux) or 0),
 		message = typeof(message) == "string" and message or "",
 		userId = tonumber(userId),
+		gold = math.max(0, math.floor(tonumber(gold) or 0)),
 	}
 	table.insert(queue, d)
 	nextInQueue()

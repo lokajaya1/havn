@@ -52,8 +52,9 @@ DonationConfig.global = {
 
 -- Donasi luar dari bagibagi.co (jembatan Google Apps Script: tools/bagibagi-bridge/Code.gs).
 -- Satu server (lease MemoryStore) menarik donasi baru tiap `poll` detik lalu menyiarkannya ke semua server.
--- Nominal Rupiah & nama situs TIDAK pernah ditampilkan (aturan Roblox soal pembayaran luar platform);
--- nominal hanya memilih tier efek (t = harga tier Robux di atas, nil = notifikasi saja).
+-- Nominal ditampilkan sebagai poin GOLD (keputusan user 2026-09-29, risiko moderasi diterima): Rupiah diubah di server
+-- (rpPerGold), tanpa "Rp", tanpa nama situs/tautan; client & server lain hanya menerima Gold.
+-- Nominal juga memilih tier efek (t = harga tier Robux di atas, nil = notifikasi saja).
 -- Kunci baca = Roblox Secret `secret` (Creator Hub → Secrets, domain script.google.com; Studio: Local Secrets).
 DonationConfig.bagibagi = {
 	enabled = true,
@@ -65,6 +66,7 @@ DonationConfig.bagibagi = {
 	memory = "DonationBagibagi", -- MemoryStore SortedMap pemimpin (+ _studio di Studio)
 	keepIds = 100, -- ID donasi terakhir yang diingat (anti dobel)
 	gap = 3, -- jeda antrean untuk donasi tanpa efek
+	rpPerGold = 1000, -- 1 GOLD = Rp1.000 (angka yang tampil bukan Rupiah)
 	summaryEvery = 60, -- detik antar ambil peringkat Gold (?mode=summary, jembatan v3; juga segera setelah donasi baru)
 	summaryTtl = 600, -- detik peringkat Gold bertahan di MemoryStore tanpa diperbarui
 	tiers = { -- rp minimal → t (tier Robux yang efeknya dipakai)
@@ -111,7 +113,7 @@ DonationConfig.boards = {
 		live = "CashLiveBoard",
 		rigs = "CashMannequins",
 		rank = "Gold",
-		label = "GOLD", -- teks di bawah judul papan (file: CASH)
+		label = "GOLD", -- teks di bawah judul papan (file: CASH) + satuan nominal ("100.000 GOLD")
 		soon = 20, -- detik tunda baca ulang peringkat Gold setelah donasi (pemimpin perlu mengambilnya dulu)
 		accent = Color3.fromRGB(139, 255, 42),
 	},

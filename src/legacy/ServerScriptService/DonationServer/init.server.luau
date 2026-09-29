@@ -5,7 +5,7 @@
 -- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen,
 -- lalu dikirim ke server lain (Global): di sana notifikasi, papan & efek besar (tanpa partikel/LiveScreen).
 -- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi.
--- Donasi luar bagibagi (Bagibagi): tanpa nominal (robux = 0), efek dari tier `fxRobux`, tampil di papan Gold (bukan Robux).
+-- Donasi luar bagibagi (Bagibagi): robux = 0 + poin `gold`, efek dari tier `fxRobux`, tampil di papan Gold (bukan Robux).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -51,7 +51,7 @@ local function ensure(parent, className, name)
 	return inst
 end
 local folder = ensure(ReplicatedStorage, "Folder", "DonationMessageSystem")
-local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName, username, robux, message, userId)
+local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName, username, robux, message, userId, gold)
 local setMessage = ensure(folder, "RemoteFunction", "SetMessage") -- client → server: teks → true/false
 local remotes = ensure(ReplicatedStorage, "Folder", "DonationRemotes")
 local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux)
@@ -150,7 +150,7 @@ local function announce(item)
 	if item.test then
 		message = message ~= "" and (Config.test.prefix .. " " .. message) or Config.test.prefix
 	end
-	showMessage:FireAllClients(item.displayName, item.name, item.robux, message, item.userId)
+	showMessage:FireAllClients(item.displayName, item.name, item.robux, message, item.userId, item.gold)
 	-- donasi luar: donatur hanya "ada" kalau namanya akun Roblox yang sedang di server ini
 	local donor = item.external and item.userId > 0 and Players:GetPlayerByUserId(item.userId)
 	if item.external then
@@ -235,6 +235,7 @@ local function onReceipt(receipt, player)
 	end
 	if isNew then
 		print(("[Donation] %s +%d R$ (total %d)"):format(player.Name, robux, total))
+		pcall(player.SetAttribute, player, "DonationTotal", total)
 		local item = {
 			displayName = player.DisplayName,
 			name = player.Name,
@@ -325,6 +326,21 @@ end)
 
 boards:start()
 global:start()
+
+-- Baris "You" di papan (src/client/DonationBoards): peringkat dari Boards + total donasi Robux sendiri.
+local function onJoin(player)
+	boards:applyRank(player)
+	local ok, total = pcall(orderedStore.GetAsync, orderedStore, tostring(player.UserId))
+	if ok and player.Parent then
+		pcall(player.SetAttribute, player, "DonationTotal", tonumber(total) or 0)
+	end
+end
+Players.PlayerAdded:Connect(function(player)
+	task.spawn(onJoin, player)
+end)
+for _, player in Players:GetPlayers() do
+	task.spawn(onJoin, player)
+end
 
 -- ── Donasi luar bagibagi (opsional; gagal dipasang → donasi Robux tetap jalan) ──
 local bagibagiModule = script:FindFirstChild("Bagibagi")
