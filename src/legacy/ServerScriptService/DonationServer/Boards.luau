@@ -2,10 +2,12 @@
 -- Dua set papan (nama model di DonationConfig.boards.robux / .cash):
 --   Robux : TopBoard (TOP DONATION dari PlayerDonations_v1: podium #1–#3 + baris #4–#10), TopMannequins Top1–3
 --           (avatar + emote dance + papan nama), FeedBoard (kartu donasi terbaru), LiveBoard (pesan donasi terakhir).
---   Gold  : donasi bagibagi (tanpa nominal): CashFeedBoard + CashLiveBoard, CashTopBoard + CashMannequins dari
+--   Gold  : donasi bagibagi (nominal = poin GOLD, "100.000 GOLD"; bukan Rupiah): CashFeedBoard + CashLiveBoard, CashTopBoard + CashMannequins dari
 --           peringkat Gold (goldSource = Bagibagi:readSummary; nama → akun Roblox → avatar patung; bukan akun → patung
 --           disembunyikan, podium huruf awal).
 -- Papan yang tidak ada di map dilewati diam-diam; semua panggilan web di-pcall.
+-- Atribut pemain untuk baris "You" (src/client/DonationBoards): DonationRank (peringkat Robux, top 50) dan
+-- GoldRank + GoldTotal (peringkat & poin Gold, akun yang cocok); 0 = belum masuk peringkat.
 -- Struktur tiap papan: <Model>.Board.SurfaceGui { Panel, RowTemplate }.
 
 -- ── Tampilan (tanpa layanan, tanpa yield) ────────────────────
@@ -14,6 +16,7 @@
 local Ui = {}
 
 Ui.HEART = utf8.char(0x2764)
+Ui.ROBUX = utf8.char(0xE002) -- ikon Robux (font Roblox)
 local FONT = "rbxasset://fonts/families/BuilderSans.json"
 local WHITE = Color3.fromRGB(248, 244, 244)
 
@@ -24,7 +27,12 @@ function Ui.commas(n)
 end
 
 function Ui.robux(n)
-	return "R$ " .. Ui.commas(n)
+	return Ui.ROBUX .. " " .. Ui.commas(n)
+end
+
+-- Poin GOLD dengan titik ribuan: 100000 → "100.000 GOLD"
+function Ui.gold(n)
+	return (Ui.commas(n):gsub(",", ".")) .. " GOLD"
 end
 
 function Ui.initial(name)
@@ -190,6 +198,9 @@ function Boards.new(deps)
 	self.goldSig = nil
 	self.goldSource = nil -- function() → { {name, uid} } (dipasang DonationServer kalau bagibagi aktif)
 	self.pending = {} -- ["robux" | "gold"] = baca ulang sudah dijadwalkan
+	self.ranks = {} -- [userId] = peringkat Robux (top 50)
+	self.goldRanks = {} -- [userId] = peringkat Gold
+	self.goldTotals = {} -- [userId] = poin Gold
 	self.feed = {} -- donasi terakhir yang masuk papan (terbaru di depan, maks feedCount; Robux & Gold)
 	self.seq = 0
 	self.refreshing = false
@@ -326,6 +337,24 @@ function Boards:updateRigs(set, rows)
 	end
 end
 
+-- ── Atribut peringkat pemain ─────────────────────────────────
+function Boards:applyRank(player)
+	pcall(function()
+		player:SetAttribute("DonationRank", self.ranks[player.UserId] or 0)
+		player:SetAttribute("GoldRank", self.goldRanks[player.UserId] or 0)
+		player:SetAttribute("GoldTotal", self.goldTotals[player.UserId] or 0)
+	end)
+end
+
+function Boards:applyRanks()
+	local ok, list = pcall(function()
+		return self.deps.services.Players:GetPlayers()
+	end)
+	for _, player in ok and list or {} do
+		self:applyRank(player)
+	end
+end
+
 -- ── TOP DONATION (Robux) ─────────────────────────────────────
 -- Baca ulang peringkat dari ordered store → papan + patung.
 function Boards:refresh()
@@ -350,6 +379,11 @@ function Boards:refresh()
 			end
 		end
 		self:resolveNames(ids)
+		self.ranks = {}
+		for rank, e in entries do
+			self.ranks[e.id] = rank
+		end
+		self:applyRanks()
 		local rows, sig = {}, {}
 		for rank, e in entries do
 			if rank > B.showCount then
@@ -386,12 +420,20 @@ function Boards:refreshGold()
 	local B = self.cfg.boards
 	local set = B.cash
 	local rows, sig = {}, {}
+	self.goldRanks, self.goldTotals = {}, {}
+	for rank, e in list do
+		if e.uid > 0 and not self.goldRanks[e.uid] then
+			self.goldRanks[e.uid] = rank
+			self.goldTotals[e.uid] = e.gold or 0
+		end
+	end
+	self:applyRanks()
 	for rank, e in list do
 		if rank > B.showCount then
 			break
 		end
-		rows[rank] = { userId = e.uid, display = e.name, handle = e.uid > 0 and e.name or "", amount = Ui.HEART }
-		table.insert(sig, e.uid .. "=" .. e.name)
+		rows[rank] = { userId = e.uid, display = e.name, handle = e.uid > 0 and e.name or "", amount = Ui.gold(e.gold or 0) }
+		table.insert(sig, ("%d=%s=%d"):format(e.uid, e.name, e.gold or 0))
 	end
 	local sg, panel = Ui.surface(self:part(set.top))
 	if panel then
@@ -440,7 +482,7 @@ function Boards:onDonation(item)
 			userId = item.userId,
 			display = item.displayName,
 			handle = item.userId > 0 and item.name or "",
-			amount = item.external and Ui.HEART or Ui.robux(item.robux),
+			amount = item.external and Ui.gold(item.gold or 0) or Ui.robux(item.robux),
 			message = item.message,
 			ts = self.deps.now(),
 		}, self.seq, B.feedCount)

@@ -8,7 +8,7 @@
 -- Gagal kirim/terima hanya memengaruhi tampilan di server lain; data donasi sudah tersimpan.
 -- Tes admin (item.test) dikirim sebagai v = 2: server versi lama (hanya kenal v = 1) mengabaikannya,
 -- jadi donasi tes tidak pernah tampil sebagai donasi asli di sana.
--- Donasi luar (bagibagi, item.external) dikirim sebagai v = 3: tanpa nominal (robux = 0), uid boleh 0
+-- Donasi luar (bagibagi, item.external) dikirim sebagai v = 3: robux = 0 + poin `gold` (bukan Rupiah), uid boleh 0
 -- (nama bukan akun Roblox), tier efek boleh kosong (hanya notifikasi). Server versi lama mengabaikannya.
 local Global = {}
 Global.__index = Global
@@ -42,6 +42,7 @@ function Global.encode(item, jobId)
 		robux = item.robux,
 		t = item.tier,
 		msg = item.message,
+		gold = item.external and item.gold or nil,
 	}
 end
 
@@ -76,6 +77,10 @@ function Global.decode(data, cfg)
 		if uid < 0 or robux ~= 0 then
 			return nil
 		end
+		local gold = data.gold
+		if gold ~= nil and not (type(gold) == "number" and gold % 1 == 0 and gold >= 0 and gold <= 1e12) then
+			return nil
+		end
 	elseif uid <= 0 or robux <= 0 then
 		return nil
 	end
@@ -101,6 +106,7 @@ function Global.decode(data, cfg)
 		tier = tier and tier.robux,
 		fxRobux = isExternal and tier and tier.robux or nil,
 		message = msg,
+		gold = isExternal and (tonumber(data.gold) or 0) or nil,
 		gap = tier and tier.gap or cfg.bagibagi.gap,
 		big = tier and tier.big,
 		remote = true,

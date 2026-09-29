@@ -192,6 +192,9 @@
         "DonationFX": {
           "$path": "src/client/DonationFX.client.luau"
         },
+        "DonationBoards": {
+          "$path": "src/client/DonationBoards.client.luau"
+        },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
         },

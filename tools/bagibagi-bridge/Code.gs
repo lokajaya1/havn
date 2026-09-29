@@ -23,8 +23,9 @@
 //   → { ok, next, items: [{ row, id, name, amount, message, created, test }] } maksimal MAX_ITEMS baris.
 //   Tanpa `after` → { ok, next: <baris terakhir>, items: [] } (titik mulai; riwayat lama tidak dikirim).
 // GET (Roblox):     ?key=<READ_KEY>&mode=summary   (v3)
-//   → { ok, top: [{ name }] } maksimal TOP_MAX nama, urut total donasi terbesar (nama sama = satu donatur,
-//   huruf besar/kecil diabaikan; tes & "Anonim" tidak dihitung). Nominal TIDAK pernah dikirim ke Roblox.
+//   → { ok, top: [{ name, total }] } maksimal TOP_MAX nama, urut total donasi terbesar (nama sama = satu donatur,
+//   huruf besar/kecil diabaikan; tes & "Anonim" tidak dihitung). Server Roblox mengubah total jadi poin GOLD
+//   (DonationConfig.bagibagi.rpPerGold) sebelum ditampilkan / dikirim ke server lain; Rupiah tidak pernah tampil.
 // =====================================================================
 
 var SHEET_NAME = "Sheet1";
@@ -122,7 +123,7 @@ function doPost(e) {
   }
 }
 
-// Peringkat donatur per nama (total Rupiah dihitung di sini saja; yang dikirim hanya urutan nama).
+// Peringkat donatur per nama.
 function summary(sheet) {
   var last = sheet.getLastRow();
   var byKey = {};
@@ -146,7 +147,7 @@ function summary(sheet) {
     return byKey[b].total - byKey[a].total || byKey[a].first - byKey[b].first;
   });
   var top = [];
-  for (var j = 0; j < keys.length && j < TOP_MAX; j++) top.push({ name: byKey[keys[j]].name });
+  for (var j = 0; j < keys.length && j < TOP_MAX; j++) top.push({ name: byKey[keys[j]].name, total: byKey[keys[j]].total });
   return { ok: true, top: top };
 }
 

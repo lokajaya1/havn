@@ -7,7 +7,8 @@
 -- Tarikan pertama tanpa cursor hanya mencatat titik mulai (riwayat lama tidak diumumkan).
 -- Nama & pesan bebas dari donatur difilter (PublicChat, broadcast) atas nama pemain di server ini;
 -- tanpa pemain / filter gagal → "Seseorang" & tanpa pesan (fail-closed). Nominal Rupiah tidak ditampilkan.
--- Peringkat Gold (jembatan v3, ?mode=summary): pemimpin mengambil urutan NAMA (tanpa nominal) tiap `summaryEvery`
+-- Nominal tampil sebagai poin GOLD (Rupiah / cfg.rpPerGold, dibulatkan ke bawah); Rupiah tidak pernah tampil / dikirim.
+-- Peringkat Gold (jembatan v3, ?mode=summary): pemimpin mengambil urutan nama + total tiap `summaryEvery`
 -- detik & segera setelah donasi baru, mencocokkan nama → akun Roblox (avatar patung), menyaring nama non-akun,
 -- lalu menaruhnya di MemoryStore "summary" → semua server membacanya untuk papan TOP & patung Gold.
 local Bagibagi = {}
@@ -88,24 +89,29 @@ function Bagibagi.parse(data)
 	return { next = data.next, items = items }
 end
 
--- Murni: jawaban ?mode=summary → daftar nama (urut peringkat) atau nil (jembatan belum v3 / tidak sah).
+-- Murni: Rupiah → poin GOLD.
+function Bagibagi.toGold(rp, rpPerGold)
+	return math.floor((tonumber(rp) or 0) / rpPerGold)
+end
+
+-- Murni: jawaban ?mode=summary → { {name, total} } (urut peringkat) atau nil (jembatan belum v3 / tidak sah).
 function Bagibagi.parseSummary(data)
 	if type(data) ~= "table" or data.ok ~= true or type(data.top) ~= "table" then
 		return nil
 	end
-	local names = {}
+	local list = {}
 	for i, it in data.top do
 		if i > MAX_TOP then
 			break
 		end
 		if type(it) == "table" and type(it.name) == "string" and #it.name > 0 and #it.name <= 400 then
-			table.insert(names, it.name)
+			table.insert(list, { name = it.name, total = isInt(it.total, 0, 1e12) and it.total or 0 })
 		end
 	end
-	return names
+	return list
 end
 
--- Murni: isi MemoryStore "summary" → { {name, uid} } tervalidasi atau nil.
+-- Murni: isi MemoryStore "summary" → { {name, uid, gold} } tervalidasi atau nil.
 function Bagibagi.validTop(v)
 	if type(v) ~= "table" or type(v.top) ~= "table" then
 		return nil
@@ -116,7 +122,7 @@ function Bagibagi.validTop(v)
 			break
 		end
 		if type(e) == "table" and type(e.name) == "string" and #e.name > 0 and #e.name <= 200 and isInt(e.uid, 0, 1e12) then
-			table.insert(top, { name = e.name, uid = e.uid })
+			table.insert(top, { name = e.name, uid = e.uid, gold = isInt(e.gold, 0, 1e12) and e.gold or 0 })
 		end
 	end
 	return top
@@ -202,7 +208,7 @@ function Bagibagi:failed(why)
 	self.lastFail = why
 end
 
--- GET ?mode=summary → daftar nama atau nil. Gagal tidak mengganggu tarikan donasi (tanpa warn berulang).
+-- GET ?mode=summary → { {name, total} } atau nil. Gagal tidak mengganggu tarikan donasi (tanpa warn berulang).
 function Bagibagi:requestSummary()
 	local d, cfg = self.deps, self.cfg
 	local ok, res = pcall(function()
@@ -213,12 +219,12 @@ function Bagibagi:requestSummary()
 		return nil
 	end
 	local okJ, data = pcall(d.http.JSONDecode, d.http, res.Body)
-	local names = okJ and Bagibagi.parseSummary(data)
-	if not names and not self.oldBridge then
+	local list = okJ and Bagibagi.parseSummary(data)
+	if not list and not self.oldBridge then
 		self.oldBridge = true
 		d.print("[Donation] bagibagi: jembatan belum v3 (?mode=summary) → peringkat Gold kosong")
 	end
-	return names or nil
+	return list or nil
 end
 
 -- Nama bebas → nama tampil: akun Roblox apa adanya, selain itu disaring (fail-closed → "Seseorang").
@@ -238,18 +244,19 @@ end
 
 -- Pemimpin: peringkat Gold → MemoryStore "summary" (semua server membacanya lewat readSummary).
 function Bagibagi:pullSummary()
-	local names = self:requestSummary()
-	if not names then
+	local list = self:requestSummary()
+	if not list then
 		return
 	end
 	local d = self.deps
 	local from = d.players:GetPlayers()[1]
 	local top = {}
-	for _, n in names do
-		local raw = cutChars(trim(n), NAME_CHARS) or ""
+	for _, e in list do
+		local raw = cutChars(trim(e.name), NAME_CHARS) or ""
 		if raw ~= "" then
 			local uid = self:userIdFor(raw)
-			table.insert(top, { name = self:displayFor(raw, uid, from), uid = uid })
+			local gold = Bagibagi.toGold(e.total, self.cfg.rpPerGold)
+			table.insert(top, { name = self:displayFor(raw, uid, from), uid = uid, gold = gold })
 		end
 	end
 	self.top = top
@@ -299,7 +306,8 @@ function Bagibagi:announce(it)
 		displayName = name,
 		name = name,
 		userId = rawName ~= "" and self:userIdFor(rawName) or 0,
-		robux = 0, -- nominal tidak ditampilkan
+		robux = 0,
+		gold = Bagibagi.toGold(it.amount, self.cfg.rpPerGold), -- poin GOLD (Rupiah tidak dikirim)
 		message = message,
 		gap = tier and tier.gap or self.cfg.gap,
 		big = tier and tier.big,
