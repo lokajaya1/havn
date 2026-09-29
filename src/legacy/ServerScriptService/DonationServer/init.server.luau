@@ -59,9 +59,9 @@ local folder = ensure(ReplicatedStorage, "Folder", "DonationMessageSystem")
 local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName, username, robux, message, userId, gold)
 local setMessage = ensure(folder, "RemoteFunction", "SetMessage") -- client → server: teks → true/false
 local remotes = ensure(ReplicatedStorage, "Folder", "DonationRemotes")
-local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux)
+local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux, cam?, fxName?)
 local testFn = ensure(remotes, "RemoteFunction", "TestDonation") -- admin: (robux, pesan, semuaServer, targetUserId?) → ok, alasan
-local testFxFn = ensure(remotes, "RemoteFunction", "TestEffect") -- admin: (robux, targetUserId?) → ok, alasan
+local testFxFn = ensure(remotes, "RemoteFunction", "TestEffect") -- admin: (fx?, cam?, big?, targetUserId?) → ok, alasan
 -- Efek besar (Nuke / Smite / BlackHole): (username, penerima, robux, userId) — dipakai StarterGui.DonationBigFX.
 local bigEvents = {}
 for _, tier in Config.tiers do
@@ -159,12 +159,14 @@ local function announce(item)
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, message, item.userId, item.gold)
 	-- donasi luar: donatur hanya "ada" kalau namanya akun Roblox yang sedang di server ini
 	local donor = item.external and item.userId > 0 and Players:GetPlayerByUserId(item.userId)
+	local fxTier = Config.tierForRobux(item.fxRobux or item.robux)
+	local cam = fxTier and fxTier.cam -- kamera sinematik tier (bawaan: tidak ada)
 	if item.external then
 		if donor and item.fxRobux then
-			effectEvent:FireAllClients(item.userId, item.fxRobux)
+			effectEvent:FireAllClients(item.userId, item.fxRobux, cam)
 		end
 	elseif not item.remote then
-		effectEvent:FireAllClients(item.userId, item.robux)
+		effectEvent:FireAllClients(item.userId, item.robux, cam)
 	end
 	if not item.test then
 		local okBoard, errBoard = pcall(boards.onDonation, boards, item)
@@ -344,10 +346,14 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere, targetUserId)
 	return true
 end
 
--- Tes efek (Admin panel): hanya visual tier itu — partikel di target / efek besar di map. Tanpa notifikasi, data, papan.
+-- Tes efek (Admin panel): hanya visual — partikel (fx) dan/atau kamera sinematik (cam) di target, atau efek besar (big)
+-- di map. Tanpa notifikasi, data, papan. Nama divalidasi dari Config (effects, cinematic.modes, tier.big).
 local lastFx = {} -- [Player] = os.clock()
-testFxFn.OnServerInvoke = function(player, robux, targetUserId)
-	if type(robux) ~= "number" then
+testFxFn.OnServerInvoke = function(player, fx, cam, big, targetUserId)
+	local okFx = fx == nil or (type(fx) == "string" and Config.effects[fx] ~= nil)
+	local okCam = cam == nil or Config.isCamMode(cam)
+	local okBig = big == nil or (type(big) == "string" and bigEvents[big] ~= nil)
+	if not (okFx and okCam and okBig) or (fx == nil and cam == nil and big == nil) then
 		return false, "invalid"
 	end
 	local now = os.clock()
@@ -355,15 +361,6 @@ testFxFn.OnServerInvoke = function(player, robux, targetUserId)
 		return false, "cooldown"
 	end
 	lastFx[player] = now
-	local tier
-	for _, t in Config.tiers do
-		if t.robux == robux then
-			tier = t
-		end
-	end
-	if not tier then
-		return false, "invalid"
-	end
 	if not isAdmin(player) then
 		return false, "admin"
 	end
@@ -371,13 +368,25 @@ testFxFn.OnServerInvoke = function(player, robux, targetUserId)
 	if not target then
 		return false, "target"
 	end
-	local big = tier.big and bigEvents[tier.big]
 	if big then
-		big:FireAllClients(target.Name, Config.bigRecipient, tier.robux, target.UserId)
-	else
-		effectEvent:FireAllClients(target.UserId, tier.robux)
+		local robux = 0
+		for _, t in Config.tiers do
+			if t.big == big then
+				robux = t.robux
+			end
+		end
+		bigEvents[big]:FireAllClients(target.Name, Config.bigRecipient, robux, target.UserId)
 	end
-	print(("[Donation] TES efek oleh %s: %s di %s"):format(player.Name, tier.fx or tier.big, target.Name))
+	if fx or cam then
+		effectEvent:FireAllClients(target.UserId, 0, cam, fx)
+	end
+	local what = {}
+	for _, part in { fx or false, cam and ("kamera " .. cam) or false, big or false } do
+		if part then
+			table.insert(what, part)
+		end
+	end
+	print(("[Donation] TES efek oleh %s: %s di %s"):format(player.Name, table.concat(what, " + "), target.Name))
 	return true
 end
 

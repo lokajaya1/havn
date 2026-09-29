@@ -4,6 +4,8 @@
 -- label = nama tier di kartu panel; gap = detik jeda antrean pengumuman sebelum donasi berikutnya ditampilkan;
 -- notif = detik notifikasi tampil di layar pemain; fx = efek partikel di donatur (DonationConfig.effects);
 -- big = efek besar di titik tetap map (remote DonationRemotes.<big>, didengar StarterGui.DonationBigFX di Studio).
+-- cam = kamera sinematik ke donatur (opsional, salah satu cinematic.modes; bawaan: tidak ada = OFF, keputusan user
+-- 2026-09-29 — dinyalakan per tier lewat Admin panel).
 local DonationConfig = {}
 
 DonationConfig.tiers = {
@@ -139,6 +141,40 @@ DonationConfig.fx = {
 	fadeOut = 1, -- detik suara dipudar setelah efek selesai
 	cleanup = 3, -- detik sisa partikel memudar sebelum dihapus
 }
+
+-- Kamera sinematik (tier dengan `cam`, atau pilihan admin di Test Effect): letterbox + vignette, kamera mengikuti
+-- donatur dari depan lalu kembali. Server mengirim mode di DonationRemotes.Effect(userId, robux, cam).
+-- Dilewati kalau Effects OFF, kamera pemain sedang Scriptable (FreeCam/360/LiveScreen), atau donatur tidak di server.
+DonationConfig.cinematic = {
+	hold = 6, -- detik kamera bergerak
+	back = 0.8, -- detik kembali ke kamera pemain
+	fade = 0.6, -- detik letterbox/vignette masuk-keluar
+	bars = 0.12, -- tinggi letterbox (bagian layar)
+	vignette = 0.35, -- transparansi vignette saat tampil (kecil = gelap)
+	modes = { "Hero", "Push", "Arc", "Crane", "Orbit" }, -- src/client/DonationCinematic
+}
+
+-- Daftar efek untuk Admin panel (urut tier): partikel {name, label} & efek besar {name, label}.
+function DonationConfig.effectList()
+	local fx, big, seen = {}, {}, {}
+	for _, t in DonationConfig.tiers do
+		local name = t.fx or t.big
+		if name and not seen[name] then
+			seen[name] = true
+			table.insert(t.fx and fx or big, { name = name, label = t.label or name })
+		end
+	end
+	return fx, big
+end
+
+function DonationConfig.isCamMode(cam)
+	for _, m in DonationConfig.cinematic.modes do
+		if m == cam then
+			return true
+		end
+	end
+	return false
+end
 
 local byProduct = {}
 for _, tier in DonationConfig.tiers do
