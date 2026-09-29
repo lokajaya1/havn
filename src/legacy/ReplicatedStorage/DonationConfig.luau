@@ -32,6 +32,7 @@ DonationConfig.store = {
 	data = "DonationData_v1", -- <uid> → { total, r = { purchaseId terakhir } }
 	ordered = "PlayerDonations_v1", -- <uid> → total (cermin untuk papan)
 	studioSuffix = "_studio",
+	studioReadsLive = true, -- Studio: papan & baris You MEMBACA data live (tanpa menulis); beli uji tetap ke _studio
 	recent = 50, -- jumlah purchaseId terakhir yang diingat per pemain (anti dobel)
 	retry = { 5, 20, 60 }, -- detik coba ulang tulis ordered
 }
