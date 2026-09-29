@@ -210,14 +210,8 @@
         "DanceClient": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DanceClient.client.luau"
         },
-        "DonationVFX": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/DonationVFX.client.luau"
-        },
         "InteractPlayer": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/InteractPlayer"
-        },
-        "LeaderboardClient": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/LeaderboardClient.client.luau"
         },
         "Likeeffects": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Likeeffects.client.luau"

@@ -32,7 +32,7 @@ local boards = Boards.new({
 	warn = warn,
 })
 
--- ── Remote (folder & nama lama dipertahankan: DonationMessageNotification mendengar ShowMessage) ──
+-- ── Remote (folder & nama lama dipertahankan: src/client/DonationNotif mendengar ShowMessage) ──
 local function ensure(parent, className, name)
 	local inst = parent:FindFirstChild(name)
 	if inst and not inst:IsA(className) then
