@@ -1,5 +1,5 @@
 // =====================================================================
-// HAVN — jembatan donasi bagibagi.co → Roblox (Google Apps Script) — v2
+// HAVN — jembatan donasi bagibagi.co → Roblox (Google Apps Script) — v3
 // ---------------------------------------------------------------------
 // Pengganti ScriptGas (Bebeq). Sheet & data lama TIDAK diubah: baris baru tetap ditambah
 // ke tab "Sheet1" dengan kolom yang sama (ID | Username | Amount | Message | Tanggal | Provider).
@@ -22,12 +22,16 @@
 // GET (Roblox):     ?key=<READ_KEY>&after=<nomor baris terakhir yang sudah diambil>
 //   → { ok, next, items: [{ row, id, name, amount, message, created, test }] } maksimal MAX_ITEMS baris.
 //   Tanpa `after` → { ok, next: <baris terakhir>, items: [] } (titik mulai; riwayat lama tidak dikirim).
+// GET (Roblox):     ?key=<READ_KEY>&mode=summary   (v3)
+//   → { ok, top: [{ name }] } maksimal TOP_MAX nama, urut total donasi terbesar (nama sama = satu donatur,
+//   huruf besar/kecil diabaikan; tes & "Anonim" tidak dihitung). Nominal TIDAK pernah dikirim ke Roblox.
 // =====================================================================
 
 var SHEET_NAME = "Sheet1";
 var LOG_SHEET = "Logs";
 var HEADERS = ["ID", "Username", "Amount", "Message", "Tanggal", "Provider"];
 var MAX_ITEMS = 20;
+var TOP_MAX = 10; // nama di peringkat Gold (papan TOP + patung)
 var LOG_KEEP = 300; // baris Logs terakhir yang disimpan
 var TEST_ID = "bagibagi-965b3d64-1f5e-4361-a01b-5b58df37190c"; // ID tetap tombol "Send Webhook Test" bagibagi
 
@@ -118,9 +122,38 @@ function doPost(e) {
   }
 }
 
+// Peringkat donatur per nama (total Rupiah dihitung di sini saja; yang dikirim hanya urutan nama).
+function summary(sheet) {
+  var last = sheet.getLastRow();
+  var byKey = {};
+  var keys = [];
+  if (last >= 2) {
+    var rows = sheet.getRange(2, 1, last - 1, 3).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      var id = String(rows[i][0] || "");
+      var name = clip(String(rows[i][1] || "").trim(), 50);
+      var key = name.toLowerCase();
+      var amount = toAmount(rows[i][2]);
+      if (!id || id === TEST_ID || !name || key === "anonim" || amount <= 0) continue;
+      if (!byKey[key]) {
+        byKey[key] = { name: name, total: 0, first: i };
+        keys.push(key);
+      }
+      byKey[key].total += amount;
+    }
+  }
+  keys.sort(function (a, b) {
+    return byKey[b].total - byKey[a].total || byKey[a].first - byKey[b].first;
+  });
+  var top = [];
+  for (var j = 0; j < keys.length && j < TOP_MAX; j++) top.push({ name: byKey[keys[j]].name });
+  return { ok: true, top: top };
+}
+
 function doGet(e) {
   var p = (e && e.parameter) || {};
   if (!sameKey(p.key, prop("READ_KEY"))) return json({ ok: false, error: "unauthorized" });
+  if (p.mode === "summary") return json(summary(getSheet(SHEET_NAME, HEADERS)));
   var sheet = getSheet(SHEET_NAME, HEADERS);
   var last = sheet.getLastRow();
   if (p.after === undefined || p.after === "") return json({ ok: true, next: last, items: [] });

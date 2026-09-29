@@ -332,7 +332,7 @@ if bagibagiModule and Config.bagibagi and Config.bagibagi.enabled then
 	local okB, errB = pcall(function()
 		local Bagibagi = require(bagibagiModule)
 		local BB = Config.bagibagi
-		Bagibagi.new({
+		local bb = Bagibagi.new({
 			cfg = Config,
 			http = HttpService,
 			store = DataStoreService:GetDataStore(BB.store .. suffix),
@@ -347,7 +347,11 @@ if bagibagiModule and Config.bagibagi and Config.bagibagi.enabled then
 			task = task,
 			warn = warn,
 			print = print,
-		}):start()
+		})
+		bb:start()
+		boards.goldSource = function()
+			return bb:readSummary() -- peringkat Gold (papan TOP & patung Gold)
+		end
 	end)
 	if not okB then
 		warn("[Donation] bagibagi tidak aktif: " .. tostring(errB))
