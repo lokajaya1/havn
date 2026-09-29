@@ -83,13 +83,34 @@ DonationConfig.test = {
 	prefix = "[TES]",
 }
 
--- Papan di map (Workspace.DonationBoards: TopBoard, FeedBoard, LiveBoard, TopMannequins/Top1–3; diatur di Studio).
+-- Papan di map desain v1.5 (Workspace.DonationBoards, dipasang di Studio; posisi bebas digeser, NAMA jangan diubah).
+-- Dua set: Robux dan Gold (donasi bagibagi, nominal tidak ditampilkan). Nama di bawah = nama model di folder itu.
 DonationConfig.boards = {
-	every = 60, -- detik baca ulang peringkat
+	every = 60, -- detik baca ulang peringkat (juga atribut RefreshRate papan TOP untuk timer)
 	soon = 5, -- detik tunda baca ulang setelah donasi
-	topCount = 50, -- baris di TOP DONATORS
-	feedCount = 10, -- baris di LIST DONATIONS
-	danceAnims = { 507771019, 507772104, 507776043 }, -- emote dance resmi Roblox untuk manekin #1–#3
+	topCount = 50, -- peringkat yang dibaca dari PlayerDonations_v1
+	showCount = 10, -- tampil di TOP DONATION: podium #1–#3 + baris #4–#10
+	feedCount = 10, -- kartu di LIVE DONATIONS
+	danceAnims = { 507771019, 507772104, 507776043 }, -- emote dance resmi Roblox untuk patung #1–#3
+	overhead = "OverheadTemplate", -- BillboardGui papan nama patung
+	robux = {
+		top = "TopBoard",
+		feed = "FeedBoard",
+		live = "LiveBoard",
+		rigs = "TopMannequins", -- Top1–Top3 + Decoration
+		rank = "Robux", -- papan nama patung "#1 Robux"
+		feedScope = "L I V E", -- label LIVE DONATIONS (file: TODAY · LIVE → dipakai lagi setelah feed harian DN13d)
+		accent = Color3.fromRGB(255, 157, 0),
+	},
+	cash = {
+		top = "CashTopBoard",
+		feed = "CashFeedBoard",
+		live = "CashLiveBoard",
+		rigs = "CashMannequins",
+		rank = "Gold",
+		label = "GOLD", -- teks di bawah judul papan (file: CASH)
+		accent = Color3.fromRGB(139, 255, 42),
+	},
 }
 
 -- Efek partikel (template di ReplicatedStorage.DonationEffects = assets/DonationEffects.rbxm).

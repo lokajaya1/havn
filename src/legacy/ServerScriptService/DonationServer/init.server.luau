@@ -5,7 +5,7 @@
 -- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen,
 -- lalu dikirim ke server lain (Global): di sana notifikasi, papan & efek besar (tanpa partikel/LiveScreen).
 -- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi.
--- Donasi luar bagibagi (Bagibagi): tanpa nominal (robux = 0), efek dari tier `fxRobux`, tidak masuk TOP DONATORS.
+-- Donasi luar bagibagi (Bagibagi): tanpa nominal (robux = 0), efek dari tier `fxRobux`, tampil di papan Gold (bukan Robux).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -31,6 +31,9 @@ local boards = Boards.new({
 	cfg = Config,
 	task = task,
 	warn = warn,
+	now = function()
+		return workspace:GetServerTimeNow()
+	end,
 })
 
 -- ── Remote (folder & nama lama dipertahankan: src/client/DonationNotif mendengar ShowMessage) ──
