@@ -195,6 +195,9 @@
         "DonationBoards": {
           "$path": "src/client/DonationBoards.client.luau"
         },
+        "DonationAdmin": {
+          "$path": "src/client/DonationAdmin.client.luau"
+        },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
         },
