@@ -4,7 +4,8 @@
 -- Alur: pemain (opsional) kirim pesan → server filter PublicChat → pemain beli produk →
 -- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen,
 -- lalu dikirim ke server lain (Global): di sana notifikasi, papan & efek besar (tanpa partikel/LiveScreen).
--- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi.
+-- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi;
+-- donatur boleh pemain lain di server ini (Admin panel). TestEffect: efek tier saja (tanpa notifikasi/data/papan).
 -- Donasi luar bagibagi (Bagibagi): robux = 0 + poin `gold`, efek dari tier `fxRobux`, tampil di papan Gold (bukan Robux).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -59,7 +60,8 @@ local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName
 local setMessage = ensure(folder, "RemoteFunction", "SetMessage") -- client → server: teks → true/false
 local remotes = ensure(ReplicatedStorage, "Folder", "DonationRemotes")
 local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux)
-local testFn = ensure(remotes, "RemoteFunction", "TestDonation") -- admin: (robux, pesan, semuaServer) → ok, alasan
+local testFn = ensure(remotes, "RemoteFunction", "TestDonation") -- admin: (robux, pesan, semuaServer, targetUserId?) → ok, alasan
+local testFxFn = ensure(remotes, "RemoteFunction", "TestEffect") -- admin: (robux, targetUserId?) → ok, alasan
 -- Efek besar (Nuke / Smite / BlackHole): (username, penerima, robux, userId) — dipakai StarterGui.DonationBigFX.
 local bigEvents = {}
 for _, tier in Config.tiers do
@@ -275,7 +277,18 @@ local function isAdmin(player)
 	return ok and type(rank) == "number" and rank >= RankConfig.ADMIN_MIN_RANK
 end
 
-testFn.OnServerInvoke = function(player, robux, text, everywhere)
+-- Donatur tes: diri sendiri, atau pemain lain yang sedang di server ini (targetUserId dari Admin panel).
+local function testDonor(player, targetUserId)
+	if targetUserId == nil then
+		return player
+	end
+	if type(targetUserId) ~= "number" or targetUserId % 1 ~= 0 then
+		return nil
+	end
+	return Players:GetPlayerByUserId(targetUserId)
+end
+
+testFn.OnServerInvoke = function(player, robux, text, everywhere, targetUserId)
 	if type(robux) ~= "number" or type(text) ~= "string" or type(everywhere) ~= "boolean" then
 		return false, "invalid"
 	end
@@ -296,6 +309,10 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere)
 	if not isAdmin(player) then
 		return false, "admin"
 	end
+	local donor = testDonor(player, targetUserId)
+	if not donor then
+		return false, "target"
+	end
 	text = string.gsub(string.gsub(text, "^%s+", ""), "%s+$", "")
 	local message = ""
 	if text ~= "" then
@@ -307,9 +324,9 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere)
 	end
 	testCount += 1
 	local item = {
-		displayName = player.DisplayName,
-		name = player.Name,
-		userId = player.UserId,
+		displayName = donor.DisplayName,
+		name = donor.Name,
+		userId = donor.UserId,
 		robux = tier.robux,
 		message = message,
 		gap = tier.gap,
@@ -318,7 +335,8 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere)
 		purchaseId = ("test-%s-%d"):format(jobId, testCount),
 		test = true,
 	}
-	print(("[Donation] TES oleh %s: %d R$ (%s)"):format(player.Name, tier.robux, everywhere and "semua server" or "server ini"))
+	print(("[Donation] TES oleh %s: %d R$%s (%s)"):format(player.Name, tier.robux,
+		donor ~= player and (" atas nama " .. donor.Name) or "", everywhere and "semua server" or "server ini"))
 	enqueue(item)
 	if everywhere then
 		global:publish(item)
@@ -326,8 +344,46 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere)
 	return true
 end
 
+-- Tes efek (Admin panel): hanya visual tier itu — partikel di target / efek besar di map. Tanpa notifikasi, data, papan.
+local lastFx = {} -- [Player] = os.clock()
+testFxFn.OnServerInvoke = function(player, robux, targetUserId)
+	if type(robux) ~= "number" then
+		return false, "invalid"
+	end
+	local now = os.clock()
+	if lastFx[player] and now - lastFx[player] < Config.test.cooldown then
+		return false, "cooldown"
+	end
+	lastFx[player] = now
+	local tier
+	for _, t in Config.tiers do
+		if t.robux == robux then
+			tier = t
+		end
+	end
+	if not tier then
+		return false, "invalid"
+	end
+	if not isAdmin(player) then
+		return false, "admin"
+	end
+	local target = testDonor(player, targetUserId)
+	if not target then
+		return false, "target"
+	end
+	local big = tier.big and bigEvents[tier.big]
+	if big then
+		big:FireAllClients(target.Name, Config.bigRecipient, tier.robux, target.UserId)
+	else
+		effectEvent:FireAllClients(target.UserId, tier.robux)
+	end
+	print(("[Donation] TES efek oleh %s: %s di %s"):format(player.Name, tier.fx or tier.big, target.Name))
+	return true
+end
+
 Players.PlayerRemoving:Connect(function(player)
 	lastTest[player] = nil
+	lastFx[player] = nil
 end)
 
 boards:start()
