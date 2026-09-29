@@ -154,17 +154,47 @@ DonationConfig.cinematic = {
 	modes = { "Hero", "Push", "Arc", "Crane", "Orbit" }, -- src/client/DonationCinematic
 }
 
--- Daftar efek untuk Admin panel (urut tier): partikel {name, label} & efek besar {name, label}.
+-- Urutan partikel di Admin panel (kunci DonationConfig.effects) & efek besar (nama remote → label).
+DonationConfig.effectOrder = { "Level1", "Level2", "Level3", "Level4", "Level5", "Level6", "Exotic" }
+DonationConfig.bigList = {
+	{ name = "FireNuke", label = "Nuke" },
+	{ name = "FireSmite", label = "Hammer" },
+	{ name = "FireBlackHole", label = "Black Hole" },
+}
+
+-- Setelan per Developer Product yang diubah admin di Admin panel (tab Produk): nama, partikel, kamera, efek besar,
+-- tampil/sembunyi, tambah produk baru (dibuat di Creator Hub → tempel ID; harga dibaca dari Roblox).
+-- Disimpan di DataStore `store` (+ _studio di Studio), disiarkan ke server lain lewat `topic`. Tier bawaan di atas =
+-- cadangan kalau store kosong / gagal dibaca. Hanya rank grup >= `rank` (keputusan user 2026-09-29).
+DonationConfig.tierEdit = {
+	rank = 254,
+	store = "DonationSettings_v1",
+	key = "tiers",
+	topic = "DonationSettings",
+	maxTiers = 20,
+	labelChars = 20,
+	saveDelay = 2, -- detik jeda sebelum menyimpan (klik beruntun = satu tulisan)
+	cooldown = 0.25, -- detik antar perubahan per admin
+}
+
+-- Daftar efek untuk tab Test Effect: partikel & efek besar { name, label }.
 function DonationConfig.effectList()
-	local fx, big, seen = {}, {}, {}
-	for _, t in DonationConfig.tiers do
-		local name = t.fx or t.big
-		if name and not seen[name] then
-			seen[name] = true
-			table.insert(t.fx and fx or big, { name = name, label = t.label or name })
+	local fx = {}
+	for _, name in DonationConfig.effectOrder do
+		if DonationConfig.effects[name] then
+			table.insert(fx, { name = name, label = name })
 		end
 	end
-	return fx, big
+	return fx, DonationConfig.bigList
+end
+
+function DonationConfig.isBig(name)
+	for _, b in DonationConfig.bigList do
+		if b.name == name then
+			return true
+		end
+	end
+	return false
 end
 
 function DonationConfig.isCamMode(cam)
@@ -176,13 +206,57 @@ function DonationConfig.isCamMode(cam)
 	return false
 end
 
+-- Salinan tier bawaan (sebelum diubah admin) — dasar penggabungan setelan tersimpan.
+DonationConfig.defaultTiers = {}
+for _, tier in DonationConfig.tiers do
+	table.insert(DonationConfig.defaultTiers, table.clone(tier))
+end
+
 local byProduct = {}
 for _, tier in DonationConfig.tiers do
 	byProduct[tier.productId] = tier
 end
 
+-- Ganti isi DonationConfig.tiers (tabel yang sama, jadi semua pemakai ikut) dengan daftar baru, urut harga.
+-- Dipakai server (setelan admin) & client (atribut DonationRemotes.Tiers).
+function DonationConfig.applyTiers(list)
+	local sorted = table.clone(list)
+	table.sort(sorted, function(a, b)
+		if a.robux ~= b.robux then
+			return a.robux < b.robux
+		end
+		return a.productId < b.productId
+	end)
+	table.clear(DonationConfig.tiers)
+	table.clear(byProduct)
+	for _, tier in sorted do
+		table.insert(DonationConfig.tiers, tier)
+		byProduct[tier.productId] = tier
+	end
+end
+
 function DonationConfig.tierForProduct(productId)
 	return byProduct[productId]
+end
+
+-- Tier untuk harga `robux` (bagibagi.tiers t / tier dari server lain): harga sekarang, atau produk bawaan yang di
+-- Config berharga itu (harga di Creator Hub boleh berubah tanpa memutus pemetaan bagibagi).
+function DonationConfig.tierForPrice(robux)
+	local found
+	for _, tier in DonationConfig.tiers do
+		if tier.robux == robux then
+			found = tier
+		end
+	end
+	if found then
+		return found
+	end
+	for _, d in DonationConfig.defaultTiers do
+		if d.robux == robux then
+			return byProduct[d.productId]
+		end
+	end
+	return nil
 end
 
 -- Tier tertinggi yang harganya <= robux (CurrencySpent bisa beda dari harga tier).

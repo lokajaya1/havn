@@ -87,12 +87,7 @@ function Global.decode(data, cfg)
 	if (utf8.len(msg) or 0) > cfg.message.maxChars then
 		return nil
 	end
-	local tier
-	for _, candidate in cfg.tiers do
-		if candidate.robux == t then
-			tier = candidate
-		end
-	end
+	local tier = t ~= nil and cfg.tierForPrice(t) or nil
 	if t ~= nil and not tier then
 		return nil
 	end

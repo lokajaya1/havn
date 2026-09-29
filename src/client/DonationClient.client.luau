@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local TweenSvc = game:GetService("TweenService")
 local Market = game:GetService("MarketplaceService")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -456,7 +457,7 @@ local function runTest(everywhere)
 	status.Text = "…"
 	local text = string.gsub(string.gsub(box.Text, "^%s+", ""), "%s+$", "")
 	local ok, res, reason = pcall(function()
-		return testFn:InvokeServer(chosen.robux, text, everywhere)
+		return testFn:InvokeServer(chosen.productId, text, everywhere)
 	end)
 	busy = false
 	if ok and res == true then
@@ -481,7 +482,21 @@ task.spawn(function()
 end)
 closeBtn.Activated:Connect(close)
 
-for i, tier in Config.tiers do
+-- Kartu tier: dari Config.tiers (setelan admin tiba lewat atribut DonationRemotes.Tiers → dibangun ulang).
+local makeCard
+local function buildCards()
+	for _, c in grid:GetChildren() do
+		if c:IsA("TextButton") then
+			c:Destroy()
+		end
+	end
+	for i, tier in Config.tiers do
+		if not tier.hidden then
+			makeCard(i, tier)
+		end
+	end
+end
+makeCard = function(i, tier)
 	local card = new("TextButton", { Name = "Tier" .. tier.robux, LayoutOrder = i, BackgroundColor3 = T.CARD,
 		Text = "", AutoButtonColor = false, Parent = grid })
 	corner(12, card)
@@ -501,6 +516,27 @@ for i, tier in Config.tiers do
 		openModal(tier)
 	end)
 end
+buildCards()
+task.spawn(function()
+	local folder = RS:WaitForChild("DonationRemotes", 30)
+	if not folder then
+		return
+	end
+	local function sync()
+		local raw = folder:GetAttribute("Tiers")
+		local ok, list = pcall(function()
+			return HttpService:JSONDecode(raw)
+		end)
+		if ok and type(list) == "table" and #list > 0 then
+			Config.applyTiers(list)
+			buildCards()
+		end
+	end
+	folder:GetAttributeChangedSignal("Tiers"):Connect(sync)
+	if folder:GetAttribute("Tiers") then
+		sync()
+	end
+end)
 
 local resizeGen = 0
 local function onResize()

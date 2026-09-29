@@ -18,6 +18,12 @@ if not effectEvent then
 	return
 end
 local C = Config.cinematic
+local STUDIO = RunService:IsStudio()
+local function trace(msg) -- diagnosa uji Studio (tidak tampil di server live)
+	if STUDIO then
+		print("[Donation] sinematik " .. msg)
+	end
+end
 
 local function smooth(a)
 	return a * a * (3 - 2 * a)
@@ -126,17 +132,25 @@ local active = false
 local function run(userId, mode)
 	local shot = type(mode) == "string" and SHOTS[mode]
 	local cam = workspace.CurrentCamera
-	if active or not shot or not cam or player:GetAttribute("DonationFX") == false then
+	if not shot then
+		return -- produk tanpa kamera
+	end
+	if active or not cam or player:GetAttribute("DonationFX") == false then
+		trace(mode .. " dilewati: " .. (active and "sinematik lain masih jalan" or not cam and "tidak ada kamera"
+			or "Effects OFF di setelan pemain"))
 		return
 	end
 	if cam.CameraType == Enum.CameraType.Scriptable then
-		return -- kamera sedang dipakai skrip lain (FreeCam / 360 / LiveScreen)
+		trace(mode .. " dilewati: kamera sedang Scriptable (FreeCam / 360 / skrip lain)")
+		return
 	end
 	local donor = Players:GetPlayerByUserId(tonumber(userId) or 0)
 	local char = donor and donor.Character
 	if not (char and char:FindFirstChild("HumanoidRootPart")) then
+		trace(mode .. " dilewati: donatur / karakternya tidak ada di server ini")
 		return
 	end
+	trace(mode .. " jalan → " .. tostring(donor.Name))
 	active = true
 	local prevType, prevCFrame = cam.CameraType, cam.CFrame
 	cam.CameraType = Enum.CameraType.Scriptable
