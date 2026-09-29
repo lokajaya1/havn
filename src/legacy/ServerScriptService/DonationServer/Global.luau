@@ -8,12 +8,16 @@
 -- Gagal kirim/terima hanya memengaruhi tampilan di server lain; data donasi sudah tersimpan.
 -- Tes admin (item.test) dikirim sebagai v = 2: server versi lama (hanya kenal v = 1) mengabaikannya,
 -- jadi donasi tes tidak pernah tampil sebagai donasi asli di sana.
+-- Donasi luar (bagibagi, item.external) dikirim sebagai v = 3: tanpa nominal (robux = 0), uid boleh 0
+-- (nama bukan akun Roblox), tier efek boleh kosong (hanya notifikasi). Server versi lama mengabaikannya.
 local Global = {}
 Global.__index = Global
 
 Global.VERSION = 1
 Global.TEST_VERSION = 2
+Global.EXTERNAL_VERSION = 3
 local NAME_BYTES = 60
+local EXTERNAL_NAME_BYTES = 200 -- nama bebas donatur luar (≤ 50 karakter UTF-8)
 local ID_BYTES = 100
 local MAX_ROBUX = 1e7
 
@@ -27,8 +31,9 @@ end
 -- Murni: item pengumuman → data pesan.
 function Global.encode(item, jobId)
 	return {
-		v = item.test and Global.TEST_VERSION or Global.VERSION,
+		v = item.external and Global.EXTERNAL_VERSION or (item.test and Global.TEST_VERSION or Global.VERSION),
 		test = item.test or nil,
+		ext = item.external or nil,
 		job = jobId,
 		pid = item.purchaseId,
 		uid = item.userId,
@@ -46,18 +51,32 @@ function Global.decode(data, cfg)
 	if type(data) ~= "table" then
 		return nil
 	end
-	local isTest = data.v == Global.TEST_VERSION and data.test == true
-	if data.v ~= Global.VERSION and not isTest then
-		return nil
+	local isExternal = data.v == Global.EXTERNAL_VERSION and data.ext == true
+	local isTest
+	if isExternal then
+		isTest = data.test == true
+	else
+		isTest = data.v == Global.TEST_VERSION and data.test == true
+		if data.v ~= Global.VERSION and not isTest then
+			return nil
+		end
 	end
+	local nameBytes = isExternal and EXTERNAL_NAME_BYTES or NAME_BYTES
 	local job, pid = str(data.job, ID_BYTES), str(data.pid, ID_BYTES)
-	local name, display = str(data.name, NAME_BYTES), str(data.display, NAME_BYTES)
+	local name, display = str(data.name, nameBytes), str(data.display, nameBytes)
 	local msg = str(data.msg, cfg.message.maxBytes)
 	local uid, robux, t = tonumber(data.uid), tonumber(data.robux), tonumber(data.t)
-	if not (job and pid and name and display and msg and uid and robux and t) then
+	if not (job and pid and name and display and msg and uid and robux) or (t == nil and not isExternal) then
 		return nil
 	end
-	if uid <= 0 or uid % 1 ~= 0 or robux <= 0 or robux > MAX_ROBUX or robux % 1 ~= 0 then
+	if uid % 1 ~= 0 or robux > MAX_ROBUX or robux % 1 ~= 0 then
+		return nil
+	end
+	if isExternal then
+		if uid < 0 or robux ~= 0 then
+			return nil
+		end
+	elseif uid <= 0 or robux <= 0 then
 		return nil
 	end
 	if (utf8.len(msg) or 0) > cfg.message.maxChars then
@@ -69,7 +88,7 @@ function Global.decode(data, cfg)
 			tier = candidate
 		end
 	end
-	if not tier then
+	if t ~= nil and not tier then
 		return nil
 	end
 	return {
@@ -79,11 +98,13 @@ function Global.decode(data, cfg)
 		name = name,
 		displayName = display,
 		robux = robux,
-		tier = tier.robux,
+		tier = tier and tier.robux,
+		fxRobux = isExternal and tier and tier.robux or nil,
 		message = msg,
-		gap = tier.gap,
-		big = tier.big,
+		gap = tier and tier.gap or cfg.bagibagi.gap,
+		big = tier and tier.big,
 		remote = true,
+		external = isExternal or nil,
 		test = isTest or nil,
 	}
 end
@@ -113,7 +134,7 @@ end
 
 -- Dipanggil server asal setelah donasi tersimpan. Tidak menunggu (task.spawn).
 function Global:publish(item)
-	if not self.cfg.enabled or item.robux < self.cfg.minRobux then
+	if not self.cfg.enabled or (not item.external and item.robux < self.cfg.minRobux) then
 		return
 	end
 	local d = self.deps
