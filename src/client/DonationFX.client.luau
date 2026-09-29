@@ -1,6 +1,6 @@
 -- StarterPlayerScripts/DonationFX  (LocalScript)
 -- Efek donasi di karakter DONATUR, dijalankan di tiap client (bisa dimatikan per pemain).
--- Server (DonationServer) mengirim DonationRemotes.Effect(userId, robux) SETELAH donasi tersimpan.
+-- Server (DonationServer) mengirim DonationRemotes.Effect(userId, robux, cam?, fxName?) SETELAH donasi tersimpan.
 -- Template partikel: ReplicatedStorage.DonationEffects (Level1–6 + Exotic, 0 skrip);
 -- Model ber-atribut WholeAtBase (Exotic) ditempatkan utuh di kaki donatur.
 -- Donatur tidak ada di server / belum punya karakter → efek dilewati (tidak jatuh ke pemain sendiri).
@@ -157,12 +157,12 @@ local function build(src, char, hrp)
 	return host, emitters, host
 end
 
-local function play(userId, robux)
+local function play(userId, robux, fxName)
 	if not enabled() or active >= FX.maxActive then
 		return
 	end
 	local tier = Config.tierForRobux(robux)
-	local name = tier and tier.fx
+	local name = (type(fxName) == "string" and Config.effects[fxName] and fxName) or (tier and tier.fx)
 	local spec = name and Config.effects[name]
 	local src = name and templates:FindFirstChild(name)
 	if not spec or not src then
@@ -212,9 +212,10 @@ local function play(userId, robux)
 	end)
 end
 
-effectEvent.OnClientEvent:Connect(function(userId, robux)
+-- (userId, robux, cam?, fxName?) — fxName = tes efek dari Admin panel (tanpa tier); cam = DonationCinematic.
+effectEvent.OnClientEvent:Connect(function(userId, robux, _cam, fxName)
 	userId, robux = tonumber(userId), tonumber(robux)
 	if userId and robux then
-		play(userId, robux)
+		play(userId, robux, fxName)
 	end
 end)

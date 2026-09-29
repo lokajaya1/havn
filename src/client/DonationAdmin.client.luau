@@ -2,7 +2,7 @@
 -- "Donate Admin Panel" (desain v1.5, logika sendiri): tombol ADMIN di panel donasi, hanya untuk IsAdmin.
 --   Tab Donation   : donasi TES atas nama pemain di server ini (tier, pesan, opsional semua server)
 --                    → DonationRemotes.TestDonation — tanpa Marketplace, TIDAK disimpan / masuk TOP / papan, pesan [TES].
---   Tab Test Effect: efek tier saja di pemain target / di map → DonationRemotes.TestEffect.
+--   Tab Test Effect: tombol per efek (partikel / kamera / partikel+kamera / efek besar) → DonationRemotes.TestEffect.
 -- Server mengecek rank grup, cooldown & target lagi; panel ini hanya tampilan.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -266,22 +266,58 @@ sendBtn.Activated:Connect(function()
 end)
 
 -- ── Tab Test Effect ────────────────────────────────────────────────────────
+-- Semua opsi = tombol sekali klik, dikelompokkan per jenis. Hanya visual (tanpa notifikasi/data/papan).
 local ep = pages["Test Effect"]
-label("TARGET PLAYER (efek partikel menempel ke pemain ini; efek besar di map)", { LayoutOrder = 1,
+label("TARGET PLAYER (partikel & kamera ke pemain ini; efek besar di map)", { LayoutOrder = 1,
 	Size = UDim2.new(1, 0, 0, 16), Parent = ep })
 local fxTarget, fxRebuild = playerPicker(ep, 2)
-label("AVAILABLE EFFECTS (klik untuk tes)", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 16), Parent = ep })
-local fxGrid = new("Frame", { Name = "Effects", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-	BackgroundTransparency = 1, Parent = ep })
-new("UIGridLayout", { CellSize = UDim2.new(0.5, -3, 0, 30), CellPadding = UDim2.new(0, 6, 0, 4),
-	SortOrder = Enum.SortOrder.LayoutOrder, Parent = fxGrid })
-for i, t in Config.tiers do
-	local b = button(("%s  (%s)"):format(tierName(t), t.fx or t.big or "-"), { Name = "Fx" .. t.robux, LayoutOrder = i,
-		Font = FONT.MEDIUM, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, Parent = fxGrid })
+local order = 2
+local function section(title, cols)
+	order += 1
+	label(title, { LayoutOrder = order, Size = UDim2.new(1, 0, 0, 18), Font = FONT.BOLD, TextColor3 = T.ACCENT, Parent = ep })
+	order += 1
+	local grid = new("Frame", { Name = "Sec" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = ep })
+	new("UIGridLayout", { CellSize = UDim2.new(1 / cols, -6 * (cols - 1) / cols, 0, 32), CellPadding = UDim2.new(0, 6, 0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
+	return grid
+end
+local function fxButton(grid, i, name, text, fx, cam, big)
+	local b = button(text, { Name = name, LayoutOrder = i, Font = FONT.MEDIUM, TextSize = 12,
+		TextTruncate = Enum.TextTruncate.AtEnd, Parent = grid })
 	b.Activated:Connect(function()
-		call(fxFn, t.robux, fxTarget())
+		call(fxFn, fx, cam, big, fxTarget())
 	end)
 end
+local fxList, bigList = Config.effectList()
+local robuxOf = {}
+for _, t in Config.tiers do
+	robuxOf[t.fx or t.big or ""] = t.robux
+end
+local function fxText(e)
+	return ("%s %d · %s"):format(ROBUX, robuxOf[e.name] or 0, e.label)
+end
+local g = section("PARTIKEL", 3)
+for i, e in fxList do
+	fxButton(g, i, "Fx" .. e.name, fxText(e), e.name, nil, nil)
+end
+g = section("KAMERA SINEMATIK (kamera saja)", 3)
+for i, m in Config.cinematic.modes do
+	fxButton(g, i, "Cam" .. m, "🎥 " .. m, nil, m, nil)
+end
+g = section("PARTIKEL + KAMERA", 2)
+for i, m in Config.cinematic.modes do
+	local e = fxList[math.min(#fxList, math.max(1, math.round(i * #fxList / #Config.cinematic.modes)))]
+	if e then
+		fxButton(g, i, "Combo" .. m, e.label .. " + 🎥 " .. m, e.name, m, nil)
+	end
+end
+g = section("EFEK BESAR (di map)", 3)
+for i, e in bigList do
+	fxButton(g, i, "Big" .. e.name, fxText(e), nil, nil, e.name)
+end
+label("Tiap tombol langsung jalan · jeda " .. Config.test.cooldown .. " detik antar tes", { LayoutOrder = order + 1,
+	Size = UDim2.new(1, 0, 0, 16), TextSize = 11, Parent = ep })
 
 -- ── Buka / tutup ───────────────────────────────────────────────────────────
 local function layout()
