@@ -3,6 +3,7 @@
 -- judul, grid 2 kolom kartu tier, pill DONATE) + kotak pesan opsional sebelum membeli.
 -- Alur: pilih tier → (opsional) tulis pesan → Donate → SetMessage ke server (difilter di sana) → prompt beli Roblox.
 -- Pembayaran & pengumuman sepenuhnya di server (DonationServer); client tidak pernah mengklaim donasi.
+-- Admin (atribut IsAdmin) melihat tombol TES di kotak pesan → DonationRemotes.TestDonation (server mengecek rank lagi).
 
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -182,6 +183,20 @@ local payBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 1), Position = U
 	Size = UDim2.new(0.5, -25, 0, 40), BackgroundColor3 = T.ACCENT, Text = "Donate", Font = FONT.BOLD, TextSize = 16,
 	TextColor3 = ON_ACCENT, AutoButtonColor = false, ZIndex = 5, Parent = modal })
 corner(10, payBtn)
+-- Tes donasi admin: di atas tombol Cancel/Donate, hanya terlihat untuk IsAdmin.
+local testRow = new("Frame", { Name = "AdminTest", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -68),
+	Size = UDim2.new(1, -40, 0, 32), BackgroundTransparency = 1, Visible = false, ZIndex = 5, Parent = modal })
+local function testButton(text, x)
+	local b = new("TextButton", { Position = UDim2.new(x, x > 0 and 5 or 0, 0, 0), Size = UDim2.new(0.5, -5, 1, 0),
+		BackgroundColor3 = T.CARD, Text = text, Font = FONT.BOLD, TextSize = 13, TextColor3 = T.ACCENT,
+		AutoButtonColor = false, ZIndex = 5, Parent = testRow })
+	corner(8, b)
+	stroke(b, 0.6, T.ACCENT)
+	hover(b, T.CARD, T.CARD_HOVER)
+	return b
+end
+local testHere = testButton("TES · server ini", 0)
+local testAll = testButton("TES · semua server", 0.5)
 
 local function cut(text)
 	local len = utf8.len(text)
@@ -278,6 +293,48 @@ payBtn.Activated:Connect(function()
 	end
 end)
 cancelBtn.Activated:Connect(closeModal)
+
+local testFn -- DonationRemotes.TestDonation (dicari di latar)
+local TEST_REASON = {
+	cooldown = "tunggu " .. Config.test.cooldown .. " detik",
+	admin = "khusus admin",
+	filter = "pesan tidak lolos filter",
+	invalid = "data tidak sah",
+}
+local function paintAdmin()
+	testRow.Visible = testFn ~= nil and player:GetAttribute("IsAdmin") == true
+end
+local function runTest(everywhere)
+	if busy or not chosen or not testFn then
+		return
+	end
+	busy = true
+	status.Text = "…"
+	local text = string.gsub(string.gsub(box.Text, "^%s+", ""), "%s+$", "")
+	local ok, res, reason = pcall(function()
+		return testFn:InvokeServer(chosen.robux, text, everywhere)
+	end)
+	busy = false
+	if ok and res == true then
+		box.Text = ""
+		close()
+		return
+	end
+	local why = ok and reason or res
+	status.Text = "Tes ditolak: " .. (TEST_REASON[why] or tostring(why))
+end
+testHere.Activated:Connect(function()
+	runTest(false)
+end)
+testAll.Activated:Connect(function()
+	runTest(true)
+end)
+player:GetAttributeChangedSignal("IsAdmin"):Connect(paintAdmin)
+task.spawn(function()
+	local folder = RS:WaitForChild("DonationRemotes", 30)
+	testFn = folder and folder:WaitForChild("TestDonation", 30)
+	paintAdmin()
+end)
 closeBtn.Activated:Connect(close)
 
 for i, tier in Config.tiers do

@@ -50,6 +50,13 @@ DonationConfig.global = {
 	recent = 50, -- purchaseId terakhir yang diingat (pesan kembar dibuang)
 }
 
+-- Tes donasi admin (panel donasi → tombol TES): rank grup >= RankConfig.ADMIN_MIN_RANK.
+-- Tanpa Marketplace & tanpa menulis data; papan LIST/LIVE tidak diisi; pesan diberi awalan agar tidak dikira asli.
+DonationConfig.test = {
+	cooldown = 3, -- detik antar tes per pemain (juga membatasi non-admin yang men-spam remote)
+	prefix = "[TES]",
+}
+
 -- Papan di map (Workspace.DonationBoards: TopBoard, FeedBoard, LiveBoard, TopMannequins/Top1–3; diatur di Studio).
 DonationConfig.boards = {
 	every = 60, -- detik baca ulang peringkat

@@ -4,6 +4,7 @@
 -- Alur: pemain (opsional) kirim pesan → server filter PublicChat → pemain beli produk →
 -- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen,
 -- lalu dikirim ke server lain (Global): di sana notifikasi, papan & efek besar (tanpa partikel/LiveScreen).
+-- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -50,6 +51,7 @@ local showMessage = ensure(folder, "RemoteEvent", "ShowMessage") -- (displayName
 local setMessage = ensure(folder, "RemoteFunction", "SetMessage") -- client → server: teks → true/false
 local remotes = ensure(ReplicatedStorage, "Folder", "DonationRemotes")
 local effectEvent = ensure(remotes, "RemoteEvent", "Effect") -- server → client: (userId, robux)
+local testFn = ensure(remotes, "RemoteFunction", "TestDonation") -- admin: (robux, pesan, semuaServer) → ok, alasan
 -- Efek besar (Nuke / Smite / BlackHole): (username, penerima, robux, userId) — dipakai StarterGui.DonationBigFX.
 local bigEvents = {}
 for _, tier in Config.tiers do
@@ -136,14 +138,21 @@ local queue = {}
 local running = false
 
 -- item.remote = donasi dari server lain: partikel & LiveScreen dilewati (donatur tidak ada di server ini).
+-- item.test = tes admin: pesan berawalan [TES], papan tidak diisi.
 local function announce(item)
-	showMessage:FireAllClients(item.displayName, item.name, item.robux, item.message, item.userId)
+	local message = item.message
+	if item.test then
+		message = message ~= "" and (Config.test.prefix .. " " .. message) or Config.test.prefix
+	end
+	showMessage:FireAllClients(item.displayName, item.name, item.robux, message, item.userId)
 	if not item.remote then
 		effectEvent:FireAllClients(item.userId, item.robux)
 	end
-	local okBoard, errBoard = pcall(boards.onDonation, boards, item)
-	if not okBoard then
-		warn("[Donation] papan gagal: " .. tostring(errBoard))
+	if not item.test then
+		local okBoard, errBoard = pcall(boards.onDonation, boards, item)
+		if not okBoard then
+			warn("[Donation] papan gagal: " .. tostring(errBoard))
+		end
 	end
 	local big = item.big and bigEvents[item.big]
 	if big then
@@ -230,6 +239,73 @@ end
 for _, tier in Config.tiers do
 	ReceiptHandler.RegisterProduct(tier.productId, onReceipt)
 end
+
+-- ── Tes donasi admin ─────────────────────────────────────────
+-- Admin = rank grup >= RankConfig.ADMIN_MIN_RANK (sama dengan /global); rank gagal dibaca → ditolak.
+local lastTest = {} -- [Player] = os.clock()
+local testCount = 0
+
+local RankConfig -- dimuat saat tes pertama (jalur donasi tidak bergantung padanya)
+local function isAdmin(player)
+	RankConfig = RankConfig or require(SSS:WaitForChild("RankConfig"))
+	local ok, rank = pcall(player.GetRankInGroup, player, RankConfig.GROUP_ID)
+	return ok and type(rank) == "number" and rank >= RankConfig.ADMIN_MIN_RANK
+end
+
+testFn.OnServerInvoke = function(player, robux, text, everywhere)
+	if type(robux) ~= "number" or type(text) ~= "string" or type(everywhere) ~= "boolean" then
+		return false, "invalid"
+	end
+	local now = os.clock()
+	if lastTest[player] and now - lastTest[player] < Config.test.cooldown then
+		return false, "cooldown"
+	end
+	lastTest[player] = now -- dicatat sebelum cek rank (yield) supaya spam tetap terbatas
+	local tier
+	for _, t in Config.tiers do
+		if t.robux == robux then
+			tier = t
+		end
+	end
+	if not tier or #text > MSG.maxBytes then
+		return false, "invalid"
+	end
+	if not isAdmin(player) then
+		return false, "admin"
+	end
+	text = string.gsub(string.gsub(text, "^%s+", ""), "%s+$", "")
+	local message = ""
+	if text ~= "" then
+		local cut = cutChars(text, MSG.maxChars)
+		message = cut and filterPublic(cut, player.UserId)
+		if not message then
+			return false, "filter"
+		end
+	end
+	testCount += 1
+	local item = {
+		displayName = player.DisplayName,
+		name = player.Name,
+		userId = player.UserId,
+		robux = tier.robux,
+		message = message,
+		gap = tier.gap,
+		big = tier.big,
+		tier = tier.robux,
+		purchaseId = ("test-%s-%d"):format(jobId, testCount),
+		test = true,
+	}
+	print(("[Donation] TES oleh %s: %d R$ (%s)"):format(player.Name, tier.robux, everywhere and "semua server" or "server ini"))
+	enqueue(item)
+	if everywhere then
+		global:publish(item)
+	end
+	return true
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	lastTest[player] = nil
+end)
 
 boards:start()
 global:start()
