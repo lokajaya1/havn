@@ -23,9 +23,13 @@ local MSG = Config.message
 local suffix = RunService:IsStudio() and Config.store.studioSuffix or ""
 local orderedStore = DataStoreService:GetOrderedDataStore(Config.store.ordered .. suffix)
 local store = Store.new(DataStoreService:GetDataStore(Config.store.data .. suffix), orderedStore, Config.store, task.delay)
+-- Papan & baris "You": di Studio boleh MEMBACA peringkat live (Config.store.studioReadsLive) — hanya GetSortedAsync /
+-- GetAsync; semua tulisan (beli uji) tetap ke store _studio di atas.
+local boardsLive = suffix ~= "" and Config.store.studioReadsLive == true
+local boardOrdered = boardsLive and DataStoreService:GetOrderedDataStore(Config.store.ordered) or orderedStore
 local Boards = require(script:WaitForChild("Boards"))
 local boards = Boards.new({
-	ordered = orderedStore,
+	ordered = boardOrdered,
 	folder = workspace:FindFirstChild("DonationBoards"),
 	services = { Players = Players, UserService = game:GetService("UserService") },
 	cfg = Config,
@@ -235,7 +239,9 @@ local function onReceipt(receipt, player)
 	end
 	if isNew then
 		print(("[Donation] %s +%d R$ (total %d)"):format(player.Name, robux, total))
-		pcall(player.SetAttribute, player, "DonationTotal", total)
+		if not boardsLive then
+			pcall(player.SetAttribute, player, "DonationTotal", total)
+		end
 		local item = {
 			displayName = player.DisplayName,
 			name = player.Name,
@@ -330,7 +336,7 @@ global:start()
 -- Baris "You" di papan (src/client/DonationBoards): peringkat dari Boards + total donasi Robux sendiri.
 local function onJoin(player)
 	boards:applyRank(player)
-	local ok, total = pcall(orderedStore.GetAsync, orderedStore, tostring(player.UserId))
+	local ok, total = pcall(boardOrdered.GetAsync, boardOrdered, tostring(player.UserId))
 	if ok and player.Parent then
 		pcall(player.SetAttribute, player, "DonationTotal", tonumber(total) or 0)
 	end
