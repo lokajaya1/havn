@@ -106,15 +106,12 @@ function Ui.renderTop(sg, panel, rows, show)
 end
 
 -- ── LIVE DONATIONS ───────────────────────────────────────────
--- Kartu baru di atas (LayoutOrder = −seq); lebih dari `max` kartu → yang terlama dihapus.
--- Atribut Ts (waktu server) & Handle dipakai client untuk teks "@handle · Xs ago".
-function Ui.pushFeed(sg, panel, card, seq, max)
-	local row = sg.RowTemplate:Clone()
-	row.Name = "Feed"
-	row.LayoutOrder = -seq
-	row.Visible = true
+-- Atribut Ts (waktu server) & Handle dipakai client untuk teks "@handle · Xs ago"; Pid = purchaseId (kartu kembar dibuang).
+-- Isi kartu yang sudah ada (dipakai renderFeed; kartu = { pid, userId, display, handle, amount, message, ts }).
+local function fillFeedRow(row, card)
 	row:SetAttribute("Ts", card.ts)
 	row:SetAttribute("Handle", card.handle)
+	row:SetAttribute("Pid", card.pid)
 	local body = row.Content.Body
 	body.DonorName.Text = card.display
 	body.Meta.Text = (card.handle ~= "" and (handleText(card.handle) .. " · ") or "") .. "0s ago"
@@ -123,19 +120,40 @@ function Ui.pushFeed(sg, panel, card, seq, max)
 	local hasMsg = Ui.hasMessage(card.message)
 	row.MessageWrap.Visible = hasMsg
 	row.MessageWrap.MessageBox.Inner.MessageText.Text = hasMsg and card.message or ""
+end
+
+-- Gambar ulang LIVE DONATIONS dari daftar kartu (terbaru di depan). Kartu yang sudah ada (atribut Pid) dipakai lagi
+-- supaya avatar tidak berkedip; kartu yang tidak ada lagi dihapus.
+function Ui.renderFeed(sg, panel, cards)
 	local list = panel.ListContainer
-	row.Parent = list
-	local rows = {}
+	local byPid = {}
 	for _, c in list:GetChildren() do
 		if c.Name == "Feed" then
-			table.insert(rows, c)
+			local pid = c:GetAttribute("Pid")
+			if pid and not byPid[pid] then
+				byPid[pid] = c
+			else
+				c:Destroy()
+			end
 		end
 	end
-	table.sort(rows, function(a, b)
-		return a.LayoutOrder < b.LayoutOrder
-	end)
-	for i = max + 1, #rows do
-		rows[i]:Destroy()
+	local keep = {}
+	for i, card in cards do
+		local row = byPid[card.pid]
+		if not row then
+			row = sg.RowTemplate:Clone()
+			row.Name = "Feed"
+			row.Visible = true
+			fillFeedRow(row, card)
+			row.Parent = list
+		end
+		row.LayoutOrder = i
+		keep[card.pid] = true
+	end
+	for pid, row in byPid do
+		if not keep[pid] then
+			row:Destroy()
+		end
 	end
 end
 
@@ -203,6 +221,8 @@ function Boards.new(deps)
 	self.goldRanks = {} -- [userId] = peringkat Gold
 	self.goldTotals = {} -- [userId] = poin Gold
 	self.feed = {} -- donasi terakhir yang masuk papan (terbaru di depan, maks feedCount; Robux & Gold)
+	self.feedCards = { robux = {}, gold = {} } -- [pid] = kartu LIVE DONATIONS hari ini (lokal + dari Feed)
+	self.feedSource = nil -- function(kind) → kartu hari ini dari MemoryStore atau nil (dipasang DonationServer)
 	self.seq = 0
 	self.refreshing = false
 	return self
@@ -467,6 +487,64 @@ function Boards:refreshSoon(kind)
 	end)
 end
 
+-- ── LIVE DONATIONS hari ini ───────────────────────────────────
+-- Kartu tanggal lain (lewat 00:00 WIB) dibuang; sisanya diurutkan terbaru, maks boards.feedCount.
+function Boards:renderFeed(kind)
+	local B = self.cfg.boards
+	local set = kind == "gold" and B.cash or B.robux
+	local today = self.cfg.dayKey(self.deps.now())
+	local list = {}
+	for pid, card in self.feedCards[kind] do
+		if self.cfg.dayKey(card.ts) == today then
+			table.insert(list, card)
+		else
+			self.feedCards[kind][pid] = nil
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.ts ~= b.ts then
+			return a.ts > b.ts
+		end
+		if (a.seq or 0) ~= (b.seq or 0) then
+			return (a.seq or 0) > (b.seq or 0) -- waktu sama: yang masuk belakangan di atas
+		end
+		return a.pid > b.pid
+	end)
+	local cards = {}
+	for i = 1, math.min(#list, B.feedCount) do
+		local c = list[i]
+		table.insert(cards, {
+			pid = c.pid,
+			userId = c.userId,
+			display = c.display,
+			handle = c.userId > 0 and c.name or "",
+			amount = kind == "gold" and Ui.gold(c.amount) or Ui.robux(c.amount),
+			message = c.message,
+			ts = c.ts,
+		})
+	end
+	local sg, panel = Ui.surface(self:part(set.feed))
+	if panel then
+		Ui.renderFeed(sg, panel, cards)
+	end
+end
+
+-- Baca kartu hari ini dari Feed (semua server) → gabung dengan yang sudah tampil (pid kembar dibuang).
+function Boards:syncFeed()
+	for _, kind in { "robux", "gold" } do
+		local cards = self.feedSource and self.feedSource(kind)
+		if type(cards) == "table" then
+			for _, c in cards do
+				local old = self.feedCards[kind][c.pid]
+				if not old or old.ts > c.ts then
+					self.feedCards[kind][c.pid] = c
+				end
+			end
+		end
+		self:renderFeed(kind)
+	end
+end
+
 -- ── Donasi baru ──────────────────────────────────────────────
 -- Dipanggil DonationServer setelah donasi tersimpan (item = data pengumuman). Donasi luar (bagibagi) → set Gold.
 function Boards:onDonation(item)
@@ -476,18 +554,22 @@ function Boards:onDonation(item)
 	while #self.feed > B.feedCount do
 		table.remove(self.feed)
 	end
-	local sg, panel = Ui.surface(self:part(set.feed))
-	if panel then
-		self.seq += 1
-		Ui.pushFeed(sg, panel, {
+	self.seq += 1
+	local kind = item.external and "gold" or "robux"
+	local pid = type(item.purchaseId) == "string" and item.purchaseId or ("local-" .. self.seq)
+	if not self.feedCards[kind][pid] then
+		self.feedCards[kind][pid] = {
+			pid = pid,
 			userId = item.userId,
+			name = item.name,
 			display = item.displayName,
-			handle = item.userId > 0 and item.name or "",
-			amount = item.external and Ui.gold(item.gold or 0) or Ui.robux(item.robux),
+			amount = item.external and (item.gold or 0) or item.robux,
 			message = item.message,
 			ts = self.deps.now(),
-		}, self.seq, B.feedCount)
+			seq = self.seq,
+		}
 	end
+	self:renderFeed(kind)
 	local _, live = Ui.surface(self:part(set.live))
 	if live and Ui.hasMessage(item.message) then
 		Ui.showLive(live, item.message, item.displayName, set.accent)
@@ -495,7 +577,7 @@ function Boards:onDonation(item)
 	self:refreshSoon(item.external and "gold" or "robux")
 end
 
--- Teks label papan dari Config (Gold: "GOLD"; LIST Robux: "LIVE" sampai feed harian ada).
+-- Teks label papan dari Config (Gold: "GOLD"; LIVE DONATIONS: "TODAY · LIVE").
 function Boards:applyLabels()
 	for _, set in { self.cfg.boards.robux, self.cfg.boards.cash } do
 		for _, name in { set.top, set.feed } do
@@ -533,6 +615,10 @@ function Boards:start()
 			local okG, errG = pcall(self.refreshGold, self)
 			if not okG then
 				self.deps.warn("[Donation] papan Gold gagal diperbarui: " .. tostring(errG))
+			end
+			local okF, errF = pcall(self.syncFeed, self)
+			if not okF then
+				self.deps.warn("[Donation] LIVE DONATIONS gagal diperbarui: " .. tostring(errF))
 			end
 			self.deps.task.wait(self.cfg.boards.every)
 		end

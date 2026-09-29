@@ -83,6 +83,22 @@ DonationConfig.bagibagi = {
 	},
 }
 
+-- Papan LIVE DONATIONS = donasi HARI INI (WIB) lintas server & tahan restart (DonationServer/Feed): MemoryStore
+-- `<memory>_<robux|gold>_<YYYYMMDD>` (+ _studio), ditulis server asal, dibaca tiap boards.every detik.
+DonationConfig.feed = {
+	enabled = true,
+	memory = "DonationFeed",
+	utcOffset = 7, -- jam; "hari ini" = tanggal WIB (reset 00:00 WIB)
+	ttl = 172800, -- detik entri bertahan (48 jam)
+	fetch = 40, -- entri terbaru yang dibaca per jenis
+}
+
+-- Murni: tanggal "YYYYMMDD" waktu `t` (detik UTC) di zona feed.utcOffset. (Roblox os.date hanya "*t"/"!*t".)
+function DonationConfig.dayKey(t)
+	local d = os.date("!*t", math.floor(t + DonationConfig.feed.utcOffset * 3600))
+	return ("%04d%02d%02d"):format(d.year, d.month, d.day)
+end
+
 -- Tes donasi admin (panel donasi → tombol TES): rank grup >= RankConfig.ADMIN_MIN_RANK.
 -- Tanpa Marketplace & tanpa menulis data; papan LIST/LIVE tidak diisi; pesan diberi awalan agar tidak dikira asli.
 DonationConfig.test = {
@@ -107,7 +123,7 @@ DonationConfig.boards = {
 		live = "LiveBoard",
 		rigs = "TopMannequins", -- Top1–Top3 + Decoration
 		rank = "Robux", -- papan nama patung "#1 Robux"
-		feedScope = "L I V E", -- label LIVE DONATIONS (file: TODAY · LIVE → dipakai lagi setelah feed harian DN13d)
+		feedScope = "T O D A Y   ·   L I V E", -- label LIVE DONATIONS (donasi hari ini WIB, DonationServer/Feed)
 		accent = Color3.fromRGB(255, 157, 0),
 	},
 	cash = {
@@ -117,6 +133,7 @@ DonationConfig.boards = {
 		rigs = "CashMannequins",
 		rank = "Gold",
 		label = "GOLD", -- teks di bawah judul papan (file: CASH) + satuan nominal ("100.000 GOLD")
+		feedScope = "T O D A Y   ·   L I V E",
 		soon = 20, -- detik tunda baca ulang peringkat Gold setelah donasi (pemimpin perlu mengambilnya dulu)
 		accent = Color3.fromRGB(139, 255, 42),
 	},
