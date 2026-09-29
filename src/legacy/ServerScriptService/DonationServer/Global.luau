@@ -6,10 +6,13 @@
 --   lalu masuk antrean pengumuman yang sama dengan `remote = true` (tanpa partikel & LiveScreen,
 --   keduanya butuh karakter donatur di server ini).
 -- Gagal kirim/terima hanya memengaruhi tampilan di server lain; data donasi sudah tersimpan.
+-- Tes admin (item.test) dikirim sebagai v = 2: server versi lama (hanya kenal v = 1) mengabaikannya,
+-- jadi donasi tes tidak pernah tampil sebagai donasi asli di sana.
 local Global = {}
 Global.__index = Global
 
 Global.VERSION = 1
+Global.TEST_VERSION = 2
 local NAME_BYTES = 60
 local ID_BYTES = 100
 local MAX_ROBUX = 1e7
@@ -24,7 +27,8 @@ end
 -- Murni: item pengumuman → data pesan.
 function Global.encode(item, jobId)
 	return {
-		v = Global.VERSION,
+		v = item.test and Global.TEST_VERSION or Global.VERSION,
+		test = item.test or nil,
 		job = jobId,
 		pid = item.purchaseId,
 		uid = item.userId,
@@ -39,7 +43,11 @@ end
 -- Murni: data pesan → item pengumuman, atau nil kalau tidak sah.
 -- Tier dipilih dari harga tier (t) yang dikirim server asal, bukan dari robux (CurrencySpent bisa beda).
 function Global.decode(data, cfg)
-	if type(data) ~= "table" or data.v ~= Global.VERSION then
+	if type(data) ~= "table" then
+		return nil
+	end
+	local isTest = data.v == Global.TEST_VERSION and data.test == true
+	if data.v ~= Global.VERSION and not isTest then
 		return nil
 	end
 	local job, pid = str(data.job, ID_BYTES), str(data.pid, ID_BYTES)
@@ -76,6 +84,7 @@ function Global.decode(data, cfg)
 		gap = tier.gap,
 		big = tier.big,
 		remote = true,
+		test = isTest or nil,
 	}
 end
 
