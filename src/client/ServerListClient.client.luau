@@ -404,6 +404,9 @@ task.spawn(function()
 	btn.Activated:Connect(toggle)
 	-- order 22 di baris "info": selalu tepat di kiri tombol "/" (order 20).
 	if _G.TopbarLayout then _G.TopbarLayout.register("serverlist", btn, 22, "info") end
+	-- disembunyikan sementara selama tertutup panel lain (mis. panel Menu di portrait)
+	local okC, Cover = pcall(require, RS:WaitForChild("TopbarCover", 10))
+	if okC and Cover then Cover.watch(btn) end
 end)
 
 print("[ServerList] UI siap")

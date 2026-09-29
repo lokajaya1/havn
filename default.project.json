@@ -43,6 +43,9 @@
       "CommandShared": {
         "$path": "src/legacy/ReplicatedStorage/CommandShared.luau"
       },
+      "TopbarCover": {
+        "$path": "src/legacy/ReplicatedStorage/TopbarCover.luau"
+      },
       "MusicShared": {
         "$path": "src/legacy/ReplicatedStorage/MusicShared.luau"
       },

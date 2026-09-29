@@ -1,5 +1,5 @@
 -- StarterPlayerScripts/DonationClient  (LocalScript)
--- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft) + panel DONATE desain v1.5 (judul, kartu PROFILE di
+-- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft): pill "Donate" → [✕][⬡ Robux][💰 Komunitas] → panel DONATE desain v1.5 (judul, kartu PROFILE di
 -- kiri: avatar 3D sendiri + total donasi + peringkat; grid 2 kolom kartu tier di kanan) + kotak pesan sebelum membeli.
 -- Layar sempit (panel < PROFILE_MIN px, mis. HP portrait): kartu Profile disembunyikan, grid selebar panel.
 -- Alur: pilih tier → (opsional) tulis pesan → Donate → SetMessage ke server (difilter di sana) → prompt beli Roblox.
@@ -12,6 +12,8 @@ local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local TweenSvc = game:GetService("TweenService")
 local Market = game:GetService("MarketplaceService")
+local GroupService = game:GetService("GroupService")
+local AvatarEditorService = game:GetService("AvatarEditorService")
 local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
@@ -482,6 +484,70 @@ task.spawn(function()
 end)
 closeBtn.Activated:Connect(close)
 
+-- ── Popup 💰 Komunitas (tanpa link: Social Links resmi di halaman game) ─────────────────────────
+local CM = Config.community
+local commOverlay = new("TextButton", { Name = "CommunityOverlay", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0),
+	BackgroundTransparency = 0.45, Text = "", AutoButtonColor = false, Visible = false, ZIndex = 20, Parent = gui })
+local commPop = new("Frame", { Name = "Community", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 340, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.BG, Active = true, ZIndex = 21,
+	Parent = commOverlay })
+corner(14, commPop)
+stroke(commPop, 0.8, T.ACCENT)
+new("UIPadding", { PaddingTop = UDim.new(0, 16), PaddingBottom = UDim.new(0, 16), PaddingLeft = UDim.new(0, 18),
+	PaddingRight = UDim.new(0, 18), Parent = commPop })
+new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = commPop })
+new("TextLabel", { Name = "Title", LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1,
+	Text = "💰  " .. CM.title, Font = FONT.BOLD, TextSize = 20, TextColor3 = T.ACCENT, TextXAlignment = Enum.TextXAlignment.Left,
+	ZIndex = 22, Parent = commPop })
+new("TextLabel", { Name = "Body", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundTransparency = 1, Text = CM.body, Font = FONT.REGULAR, TextSize = 14, TextColor3 = T.TEXT, TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 22, Parent = commPop })
+local function commButton(order, name, text, color)
+	local b = new("TextButton", { Name = name, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = T.CARD,
+		Text = text, Font = FONT.BOLD, TextSize = 15, TextColor3 = color, AutoButtonColor = false, ZIndex = 22, Parent = commPop })
+	corner(10, b)
+	stroke(b, 0.85)
+	hover(b, T.CARD, T.CARD_HOVER)
+	return b
+end
+local groupBtn = commButton(3, "JoinGroup", "👥  Gabung Group", T.ACCENT)
+local favBtn = commButton(4, "Favorite", "⭐  Favorite Game", T.TEXT)
+local commClose = commButton(5, "Close", "Tutup", T.TEXT_DIM)
+local function paintGroup()
+	task.spawn(function()
+		local ok, inGroup = pcall(player.IsInGroup, player, CM.groupId)
+		groupBtn.Text = (ok and inGroup) and "👥  Sudah Gabung ✓" or "👥  Gabung Group"
+		groupBtn.TextColor3 = (ok and inGroup) and T.SUCCESS or T.ACCENT
+	end)
+end
+local function openCommunity()
+	commPop.Size = UDim2.new(0, math.min(340, viewport().X - 24), 0, 0) -- HP sempit: selebar layar − 24
+	commOverlay.Visible = true
+	paintGroup()
+end
+local function closeCommunity()
+	commOverlay.Visible = false
+end
+groupBtn.Activated:Connect(function()
+	pcall(function()
+		GroupService:PromptJoinAsync(CM.groupId)
+	end)
+	paintGroup()
+end)
+favBtn.Activated:Connect(function()
+	pcall(function()
+		AvatarEditorService:PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true)
+	end)
+end)
+commClose.Activated:Connect(closeCommunity)
+commOverlay.Activated:Connect(closeCommunity) -- klik di luar popup
+
+UIS.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.Escape then
+		closeCommunity()
+	end
+end)
+
 -- Kartu tier: dari Config.tiers (setelan admin tiba lewat atribut DonationRemotes.Tiers → dibangun ulang).
 local makeCard
 local function buildCards()
@@ -571,17 +637,82 @@ end)
 
 -- ── Tombol topbar: baris KIRI sebelah Info (_G.TopbarLeft dari InfoTopBar) ──────
 -- Cadangan: baris kanan _G.TopbarLayout (order 24) kalau InfoTopBar tidak ada.
+-- Tombol topbar = pill "Donate" (gaya tombol Info). Klik → pill melebar jadi [✕] [⬡ Robux] [💰 Komunitas];
+-- Robux = panel DONATE, 💰 = popup Komunitas, ✕ / Escape = kembali "Donate". Lebar ikut isi (AutomaticSize X),
+-- jadi baris topbar (InfoTopBar LeftRow) ikut bergeser rapi di semua perangkat.
+local collapseTop -- function() (diisi makeTopButton)
 local function makeTopButton(size, parent)
-	local btn = new("TextButton", { Name = "DonateBtn", Size = UDim2.new(0, size, 0, size), BackgroundColor3 = T.CARD,
-		BorderSizePixel = 0, Text = ROBUX, Font = FONT.BOLD, TextSize = 20, TextColor3 = T.ACCENT,
-		AutoButtonColor = false, Parent = parent })
-	corner(size / 2, btn)
-	local st = stroke(btn, 0.35, T.ACCENT)
+	local pillF = new("Frame", { Name = "DonateBtn", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, size),
+		BackgroundColor3 = T.CARD, BorderSizePixel = 0, Parent = parent })
+	corner(size / 2, pillF)
+	local st = stroke(pillF, 0.35, T.ACCENT)
 	st.Thickness = 1
-	hover(btn, T.CARD, T.CARD_HOVER)
-	btn.Activated:Connect(toggle)
-	return btn
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = pillF })
+	new("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), Parent = pillF })
+	local pop = new("UIScale", { Scale = 1, Parent = pillF })
+	local main = new("TextButton", { Name = "Main", LayoutOrder = 0, AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, 0), BackgroundTransparency = 1, Text = "Donate", Font = FONT.BOLD, TextSize = 15,
+		TextColor3 = T.TEXT, AutoButtonColor = false, Parent = pillF })
+	new("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16), Parent = main })
+	local ICON = size - 10
+	local function icon(order, name, text, color)
+		local b = new("TextButton", { Name = name, LayoutOrder = order, Size = UDim2.new(0, ICON, 0, ICON),
+			BackgroundColor3 = T.BG, Text = text, Font = FONT.BOLD, TextSize = 18, TextColor3 = color, AutoButtonColor = false,
+			Visible = false, Parent = pillF })
+		corner(ICON / 2, b)
+		hover(b, T.BG, T.CARD_HOVER)
+		return b
+	end
+	local closeI = icon(1, "Close", "✕", T.TEXT)
+	local robuxI = icon(2, "Robux", ROBUX, T.ACCENT)
+	local commI = icon(3, "Community", "💰", T.ACCENT)
+	local expanded = false
+	local function setExpanded(on)
+		expanded = on
+		main.Visible = not on
+		closeI.Visible, robuxI.Visible, commI.Visible = on, on, on
+		pop.Scale = 0.92
+		TweenSvc:Create(pop, TF, { Scale = 1 }):Play()
+	end
+	collapseTop = function()
+		if expanded then
+			setExpanded(false)
+		end
+	end
+	main.MouseEnter:Connect(function()
+		tw(main, { TextColor3 = T.ACCENT })
+	end)
+	main.MouseLeave:Connect(function()
+		tw(main, { TextColor3 = T.TEXT })
+	end)
+	main.Activated:Connect(function()
+		setExpanded(true)
+	end)
+	closeI.Activated:Connect(function()
+		setExpanded(false)
+	end)
+	robuxI.Activated:Connect(function()
+		setExpanded(false)
+		closeCommunity()
+		if not panel.Visible then
+			toggle()
+		end
+	end)
+	commI.Activated:Connect(function()
+		setExpanded(false)
+		if panel.Visible then
+			toggle()
+		end
+		openCommunity()
+	end)
+	return pillF
 end
+UIS.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.Escape and collapseTop then
+		collapseTop()
+	end
+end)
 task.spawn(function()
 	local waited = 0
 	repeat
