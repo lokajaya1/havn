@@ -1,12 +1,14 @@
 -- StarterPlayerScripts/DonationClient  (LocalScript)
--- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft) + panel DONATE (tata letak:
--- judul, grid 2 kolom kartu tier, pill DONATE) + kotak pesan opsional sebelum membeli.
+-- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft) + panel DONATE desain v1.5 (judul, kartu PROFILE di
+-- kiri: avatar 3D sendiri + total donasi + peringkat; grid 2 kolom kartu tier di kanan) + kotak pesan sebelum membeli.
+-- Layar sempit (panel < PROFILE_MIN px, mis. HP portrait): kartu Profile disembunyikan, grid selebar panel.
 -- Alur: pilih tier → (opsional) tulis pesan → Donate → SetMessage ke server (difilter di sana) → prompt beli Roblox.
 -- Pembayaran & pengumuman sepenuhnya di server (DonationServer); client tidak pernah mengklaim donasi.
 -- Admin (atribut IsAdmin) melihat tombol TES di kotak pesan → DonationRemotes.TestDonation (server mengecek rank lagi).
 
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local TweenSvc = game:GetService("TweenService")
 local Market = game:GetService("MarketplaceService")
@@ -45,7 +47,10 @@ local TF = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local ROBUX = utf8.char(0xE002)
 
 local BTN_SZ = 40
-local PANEL_W, PANEL_H = 460, 440
+local PANEL_W, PANEL_H = 760, 440
+local PROFILE_W, PROFILE_MIN = 270, 620 -- lebar kartu Profile; panel lebih sempit dari PROFILE_MIN → Profile disembunyikan
+local CAM_FOV, CAM_DIST, HEAD_AT = 30, 9.5, 0.28 -- kamera avatar Profile (kepala di 28% dari atas)
+local HAIR = utf8.char(0x200A)
 local CARD_H = 104
 local HOTBAR_SPACE = 96
 local MSG_GAP = Config.message.cooldown + 0.1 -- jeda antar SetMessage (server menolak < cooldown)
@@ -90,6 +95,17 @@ local function panelTop()
 		end
 	end
 	return 64
+end
+local function track(s) -- huruf berjarak (gaya papan donasi)
+	local out = {}
+	for _, cp in utf8.codes(s) do
+		table.insert(out, utf8.char(cp))
+	end
+	return table.concat(out, HAIR)
+end
+local function commas(n)
+	local s = tostring(math.floor(tonumber(n) or 0))
+	return (s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", ""))
 end
 local function hover(btn, base, over)
 	btn.MouseEnter:Connect(function()
@@ -145,6 +161,125 @@ new("UIGridLayout", { CellSize = UDim2.new(0.5, -5, 0, CARD_H), CellPadding = UD
 	SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
 new("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingTop = UDim.new(0, 4),
 	PaddingBottom = UDim.new(0, 4), Parent = grid })
+
+-- ── Kartu Profile (kiri): avatar 3D sendiri + total donasi Robux + peringkat (atribut dari DonationServer) ──
+local profile = new("Frame", { Name = "Profile", Position = UDim2.new(0, 16, 0, 84), Size = UDim2.new(0, PROFILE_W, 1, -100),
+	BackgroundColor3 = T.CARD, ClipsDescendants = true, ZIndex = 2, Parent = panel })
+corner(12, profile)
+stroke(profile, 0.88)
+local view = new("ViewportFrame", { Name = "AvatarView", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+	Ambient = Color3.fromRGB(150, 152, 158), LightColor = Color3.fromRGB(255, 255, 255), ZIndex = 2, Parent = profile })
+local world = new("WorldModel", { Parent = view })
+local viewCam = new("Camera", { FieldOfView = CAM_FOV, Parent = view })
+view.CurrentCamera = viewCam
+local fade = new("Frame", { Name = "Fade", Position = UDim2.new(0, 0, 0.45, 0), Size = UDim2.new(1, 0, 0.55, 0),
+	BackgroundColor3 = T.CARD, BorderSizePixel = 0, ZIndex = 2, Parent = profile })
+new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.55, 0.15), NumberSequenceKeypoint.new(1, 0),
+}), Parent = fade })
+local function profileText(name, text, y, h, size, font, color, x, w, align)
+	return new("TextLabel", { Name = name, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(x or 0, x and -18 or 18, 1, y),
+		Size = UDim2.new(w or 1, w and 0 or -36, 0, h), BackgroundTransparency = 1, Text = text, Font = font, TextSize = size,
+		TextColor3 = color, TextXAlignment = align or Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 3, Parent = profile })
+end
+local pName = profileText("DisplayName", player.DisplayName, -106, 26, 20, FONT.BOLD, T.TEXT)
+profileText("Handle", "@" .. player.Name, -88, 16, 13, FONT.REGULAR, T.TEXT_DIM)
+new("Frame", { Name = "Line1", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 18, 1, -78), Size = UDim2.new(1, -36, 0, 2),
+	BackgroundColor3 = T.ACCENT, BorderSizePixel = 0, ZIndex = 3, Parent = profile })
+profileText("TotalLabel", track("YOUR TOTAL DONATED"), -56, 14, 11, FONT.MEDIUM, T.TEXT_DIM, nil, nil)
+local pTotal = profileText("TotalAmount", ROBUX .. " 0", -16, 38, 30, FONT.BOLD, T.ACCENT)
+profileText("RankLabel", track("RANK"), -56, 14, 11, FONT.MEDIUM, T.TEXT_DIM, 1, nil, Enum.TextXAlignment.Right).Size =
+	UDim2.new(0, 70, 0, 14)
+local pRank = profileText("RankValue", "#—", -16, 38, 30, FONT.BOLD, T.TEXT, 1, nil, Enum.TextXAlignment.Right)
+pRank.Size = UDim2.new(0, 80, 0, 38)
+for _, l in { profile.RankLabel, pRank } do
+	l.AnchorPoint = Vector2.new(1, 1)
+end
+pTotal.Size = UDim2.new(1, -120, 0, 38)
+
+local function paintProfile()
+	pName.Text = player.DisplayName
+	pTotal.Text = ROBUX .. " " .. commas(player:GetAttribute("DonationTotal"))
+	local rank = tonumber(player:GetAttribute("DonationRank")) or 0
+	pRank.Text = rank > 0 and ("#" .. rank) or "#—"
+end
+player:GetAttributeChangedSignal("DonationTotal"):Connect(paintProfile)
+player:GetAttributeChangedSignal("DonationRank"):Connect(paintProfile)
+paintProfile()
+
+-- Avatar: salinan karakter sendiri di WorldModel (skrip/suara dibuang), emote resmi berulang, kamera ikut kepala.
+local rig, head, builtFor, focus, camConnP
+local function clearRig()
+	if rig then
+		rig:Destroy()
+	end
+	rig, head, focus = nil, nil, nil
+end
+local function buildRig()
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not (char and hum and char:FindFirstChild("HumanoidRootPart")) then
+		return
+	end
+	local was = char.Archivable
+	char.Archivable = true
+	local ok, clone = pcall(char.Clone, char)
+	char.Archivable = was
+	if not ok or not clone then
+		return
+	end
+	clearRig()
+	for _, d in clone:GetDescendants() do
+		if d:IsA("LuaSourceContainer") or d:IsA("Sound") or d:IsA("ForceField") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.Anchored = false
+			d.CanCollide = false
+		end
+	end
+	clone.HumanoidRootPart.Anchored = true
+	local h = clone:FindFirstChildOfClass("Humanoid")
+	h.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	h.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	clone:PivotTo(CFrame.new())
+	clone.Parent = world
+	rig, head, builtFor = clone, clone:FindFirstChild("Head"), char
+	local animId = Config.boards.danceAnims[1]
+	pcall(function()
+		local animator = h:FindFirstChildOfClass("Animator") or new("Animator", { Parent = h })
+		local a = new("Animation", { AnimationId = "rbxassetid://" .. animId })
+		local t = animator:LoadAnimation(a)
+		t.Looped = true
+		t:Play()
+	end)
+end
+local function followHead()
+	if not (head and head.Parent) then
+		return
+	end
+	local viewH = 2 * CAM_DIST * math.tan(math.rad(CAM_FOV / 2))
+	local p = head.Position - Vector3.new(0, viewH * (0.5 - HEAD_AT), 0)
+	local target = Vector3.new(p.X, p.Y, 0)
+	focus = focus and focus:Lerp(target, 0.18) or target
+	viewCam.CFrame = CFrame.lookAt(focus + Vector3.new(0, 0, -CAM_DIST), focus)
+end
+local function syncProfile()
+	local active = panel.Visible and profile.Visible
+	if active and (not rig or builtFor ~= player.Character) then
+		buildRig()
+	end
+	if active and not camConnP then
+		camConnP = RunService.RenderStepped:Connect(followHead)
+	elseif not active and camConnP then
+		camConnP:Disconnect()
+		camConnP = nil
+	end
+end
+player.CharacterAppearanceLoaded:Connect(function()
+	builtFor = nil
+	task.delay(0.5, syncProfile)
+end)
 
 -- ── Kotak pesan (menutupi panel) ───────────────────────────────────────────
 local modal = new("Frame", { Name = "Modal", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = T.BG,
@@ -223,8 +358,15 @@ local lastInvoke = -math.huge
 local function layout()
 	local vp = viewport()
 	local top = panelTop()
-	panel.Size = UDim2.new(0, math.min(PANEL_W, vp.X - 24), 0, math.max(260, math.min(PANEL_H, vp.Y - top - HOTBAR_SPACE)))
+	local w = math.min(PANEL_W, vp.X - 24)
+	panel.Size = UDim2.new(0, w, 0, math.max(260, math.min(PANEL_H, vp.Y - top - HOTBAR_SPACE)))
 	panel.Position = UDim2.new(0.5, 0, 0, top)
+	local wide = w >= PROFILE_MIN
+	profile.Visible = wide
+	local left = wide and (PROFILE_W + 30) or 16
+	grid.Position = UDim2.new(0, left, 0, 84)
+	grid.Size = UDim2.new(1, -left - 16, 1, -100)
+	syncProfile()
 end
 local function closeModal()
 	modal.Visible = false
@@ -235,10 +377,12 @@ end
 local function close()
 	closeModal()
 	panel.Visible = false
+	syncProfile()
 end
 local function open()
-	layout()
 	panel.Visible = true
+	paintProfile()
+	layout()
 end
 local function toggle()
 	if panel.Visible then
