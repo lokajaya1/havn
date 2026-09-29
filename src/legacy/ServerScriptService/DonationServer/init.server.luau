@@ -7,6 +7,8 @@
 -- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi;
 -- donatur boleh pemain lain di server ini (Admin panel). TestEffect: efek tier saja (tanpa notifikasi/data/papan).
 -- Donasi luar bagibagi (Bagibagi): robux = 0 + poin `gold`, efek dari tier `fxRobux`, tampil di papan Gold (bukan Robux).
+-- Setelan produk (Tiers, opsional): admin rank >= Config.tierEdit.rank mengubah nama/partikel/kamera/efek besar per
+-- Developer Product & menambah produk lewat DonationRemotes.TierEdit; daftar tier ke client lewat atribut DonationRemotes.Tiers.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -64,10 +66,8 @@ local testFn = ensure(remotes, "RemoteFunction", "TestDonation") -- admin: (robu
 local testFxFn = ensure(remotes, "RemoteFunction", "TestEffect") -- admin: (fx?, cam?, big?, targetUserId?) → ok, alasan
 -- Efek besar (Nuke / Smite / BlackHole): (username, penerima, robux, userId) — dipakai StarterGui.DonationBigFX.
 local bigEvents = {}
-for _, tier in Config.tiers do
-	if tier.big and not bigEvents[tier.big] then
-		bigEvents[tier.big] = ensure(remotes, "RemoteEvent", tier.big)
-	end
+for _, b in Config.bigList do
+	bigEvents[b.name] = ensure(remotes, "RemoteEvent", b.name)
 end
 
 local liveSystem = ReplicatedStorage:FindFirstChild("LiveSystem")
@@ -159,14 +159,24 @@ local function announce(item)
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, message, item.userId, item.gold)
 	-- donasi luar: donatur hanya "ada" kalau namanya akun Roblox yang sedang di server ini
 	local donor = item.external and item.userId > 0 and Players:GetPlayerByUserId(item.userId)
-	local fxTier = Config.tierForRobux(item.fxRobux or item.robux)
-	local cam = fxTier and fxTier.cam -- kamera sinematik tier (bawaan: tidak ada)
+	-- partikel & kamera: dari produk yang dibeli (item.fx/cam, false = OFF) atau tier harga (bagibagi)
+	local fx, cam
+	if item.fx ~= nil or item.cam ~= nil then
+		fx, cam = item.fx or nil, item.cam or nil
+	else
+		local fxTier = Config.tierForRobux(item.fxRobux or item.robux)
+		fx, cam = fxTier and fxTier.fx, fxTier and fxTier.cam
+	end
+	if not item.remote then
+		print(("[Donation] efek %s: partikel %s · kamera %s · efek besar %s"):format(item.name, fx or "OFF", cam or "OFF",
+			item.big or "OFF"))
+	end
 	if item.external then
 		if donor and item.fxRobux then
-			effectEvent:FireAllClients(item.userId, item.fxRobux, cam)
+			effectEvent:FireAllClients(item.userId, item.fxRobux, cam, fx)
 		end
 	elseif not item.remote then
-		effectEvent:FireAllClients(item.userId, item.robux, cam)
+		effectEvent:FireAllClients(item.userId, item.robux, cam, fx)
 	end
 	if not item.test then
 		local okBoard, errBoard = pcall(boards.onDonation, boards, item)
@@ -228,14 +238,15 @@ local global = Global.new({
 })
 
 -- ── Struk ────────────────────────────────────────────────────
+-- Produk tambahan yang sudah dihapus admin tetap diterima (tanpa efek) supaya struk tidak menggantung.
 local function onReceipt(receipt, player)
-	local tier = Config.tierForProduct(receipt.ProductId)
-	if not tier then
-		return false
-	end
+	local tier = Config.tierForProduct(receipt.ProductId) or { robux = 0, gap = Config.bagibagi.gap }
 	local robux = math.floor(tonumber(receipt.CurrencySpent) or 0)
 	if robux <= 0 then
 		robux = tier.robux
+	end
+	if robux <= 0 then
+		return false
 	end
 	local ok, total, isNew = store:record(receipt.PlayerId, receipt.PurchaseId, robux)
 	if not ok then
@@ -254,7 +265,9 @@ local function onReceipt(receipt, player)
 			message = takeMessage(player),
 			gap = tier.gap,
 			big = tier.big,
-			tier = tier.robux,
+			fx = tier.fx or false,
+			cam = tier.cam or false,
+			tier = tier.robux ~= 0 and tier.robux or nil,
 			purchaseId = tostring(receipt.PurchaseId),
 		}
 		enqueue(item)
@@ -299,10 +312,12 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere, targetUserId)
 		return false, "cooldown"
 	end
 	lastTest[player] = now -- dicatat sebelum cek rank (yield) supaya spam tetap terbatas
-	local tier
-	for _, t in Config.tiers do
-		if t.robux == robux then
-			tier = t
+	local tier = Config.tierForProduct(robux) -- Admin panel mengirim productId; panel lama mengirim harga
+	if not tier then
+		for _, t in Config.tiers do
+			if t.robux == robux then
+				tier = t
+			end
 		end
 	end
 	if not tier or #text > MSG.maxBytes then
@@ -333,6 +348,8 @@ testFn.OnServerInvoke = function(player, robux, text, everywhere, targetUserId)
 		message = message,
 		gap = tier.gap,
 		big = tier.big,
+		fx = tier.fx or false,
+		cam = tier.cam or false,
 		tier = tier.robux,
 		purchaseId = ("test-%s-%d"):format(jobId, testCount),
 		test = true,
@@ -352,7 +369,7 @@ local lastFx = {} -- [Player] = os.clock()
 testFxFn.OnServerInvoke = function(player, fx, cam, big, targetUserId)
 	local okFx = fx == nil or (type(fx) == "string" and Config.effects[fx] ~= nil)
 	local okCam = cam == nil or Config.isCamMode(cam)
-	local okBig = big == nil or (type(big) == "string" and bigEvents[big] ~= nil)
+	local okBig = big == nil or (type(big) == "string" and Config.isBig(big))
 	if not (okFx and okCam and okBig) or (fx == nil and cam == nil and big == nil) then
 		return false, "invalid"
 	end
@@ -398,9 +415,88 @@ end)
 boards:start()
 global:start()
 
+local function hasRank(player, minRank)
+	RankConfig = RankConfig or require(SSS:WaitForChild("RankConfig"))
+	local ok, rank = pcall(player.GetRankInGroup, player, RankConfig.GROUP_ID)
+	return ok and type(rank) == "number" and rank >= minRank
+end
+
+-- ── Setelan produk dari Admin panel (opsional; gagal → tier bawaan Config) ──
+local tierEditFn = ensure(remotes, "RemoteFunction", "TierEdit") -- (op, productId, field, value) → ok, alasan
+local tiersModule = script:FindFirstChild("Tiers")
+local tierSettings
+if tiersModule and Config.tierEdit then
+	local okT, errT = pcall(function()
+		local Tiers = require(tiersModule)
+		local E = Config.tierEdit
+		local Market = game:GetService("MarketplaceService")
+		tierSettings = Tiers.new({
+			cfg = Config,
+			store = DataStoreService:GetDataStore(E.store .. suffix),
+			messaging = MessagingService,
+			jobId = jobId,
+			suffix = suffix,
+			products = function() -- { [ProductId] = { price, name } } semua Developer Product experience ini
+				local map = {}
+				local pages = Market:GetDeveloperProductsAsync()
+				for _ = 1, 20 do
+					for _, p in pages:GetCurrentPage() do
+						local id = tonumber(p.ProductId)
+						if id then
+							map[id] = { price = tonumber(p.PriceInRobux), name = p.Name }
+						end
+					end
+					if pages.IsFinished then
+						break
+					end
+					pages:AdvancePageAsync()
+				end
+				return map
+			end,
+			isForeign = function(id)
+				local h = ReceiptHandler.ProductHandlers and ReceiptHandler.ProductHandlers[id]
+				return h ~= nil and h ~= onReceipt
+			end,
+			register = function(id)
+				ReceiptHandler.RegisterProduct(id, onReceipt)
+			end,
+			publish = function(list)
+				remotes:SetAttribute("Tiers", HttpService:JSONEncode(list))
+			end,
+			filter = filterPublic,
+			isEditor = function(player)
+				return hasRank(player, E.rank)
+			end,
+			clock = os.clock,
+			task = task,
+			warn = warn,
+			print = print,
+		})
+		tierEditFn.OnServerInvoke = function(player, ...)
+			return tierSettings:edit(player, ...)
+		end
+		Players.PlayerRemoving:Connect(function(player)
+			tierSettings.last[player] = nil
+		end)
+		task.spawn(tierSettings.start, tierSettings)
+	end)
+	if not okT then
+		warn("[Donation] setelan produk tidak aktif: " .. tostring(errT))
+	end
+end
+if not tierSettings then
+	tierEditFn.OnServerInvoke = function()
+		return false, "notready"
+	end
+end
+
 -- Baris "You" di papan (src/client/DonationBoards): peringkat dari Boards + total donasi Robux sendiri.
+-- DonationEditor = boleh mengubah setelan produk (tab Produk di Admin panel; server tetap mengecek rank lagi).
 local function onJoin(player)
 	boards:applyRank(player)
+	if Config.tierEdit and hasRank(player, Config.tierEdit.rank) and player.Parent then
+		pcall(player.SetAttribute, player, "DonationEditor", true)
+	end
 	local ok, total = pcall(boardOrdered.GetAsync, boardOrdered, tostring(player.UserId))
 	if ok and player.Parent then
 		pcall(player.SetAttribute, player, "DonationTotal", tonumber(total) or 0)

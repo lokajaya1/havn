@@ -296,12 +296,7 @@ function Bagibagi:announce(it)
 		message = d.filter(rawMsg, from.UserId) or ""
 	end
 	local t = Bagibagi.tierFor(it.amount, self.cfg.tiers)
-	local tier
-	for _, candidate in cfg.tiers do
-		if candidate.robux == t then
-			tier = candidate
-		end
-	end
+	local tier = t and cfg.tierForPrice(t)
 	local item = {
 		displayName = name,
 		name = name,

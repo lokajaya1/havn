@@ -9,6 +9,12 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local ContentProvider = game:GetService("ContentProvider")
+local STUDIO = game:GetService("RunService"):IsStudio()
+local function trace(msg) -- diagnosa uji Studio (tidak tampil di server live)
+	if STUDIO then
+		print("[Donation] partikel " .. msg)
+	end
+end
 
 local player = Players.LocalPlayer
 local Config = require(RS:WaitForChild("DonationConfig"))
@@ -157,23 +163,30 @@ local function build(src, char, hrp)
 	return host, emitters, host
 end
 
-local function play(userId, robux, fxName)
-	if not enabled() or active >= FX.maxActive then
+local function play(userId, fxName)
+	-- nama partikel dikirim server (setelan produk di Admin panel); tidak ada = tanpa partikel
+	local name = type(fxName) == "string" and Config.effects[fxName] and fxName or nil
+	if not name then
 		return
 	end
-	local tier = Config.tierForRobux(robux)
-	local name = (type(fxName) == "string" and Config.effects[fxName] and fxName) or (tier and tier.fx)
-	local spec = name and Config.effects[name]
-	local src = name and templates:FindFirstChild(name)
-	if not spec or not src then
+	if not enabled() or active >= FX.maxActive then
+		trace(name .. " dilewati: " .. (enabled() and "terlalu banyak efek bersamaan" or "Effects OFF di setelan pemain"))
+		return
+	end
+	local spec = Config.effects[name]
+	local src = templates:FindFirstChild(name)
+	if not src then
+		trace(name .. " dilewati: template tidak ada di ReplicatedStorage.DonationEffects")
 		return
 	end
 	local donor = Players:GetPlayerByUserId(userId)
 	local char = donor and donor.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if not hrp then
+		trace(name .. " dilewati: donatur / karakternya tidak ada di server ini")
 		return
 	end
+	trace(name .. " jalan → " .. tostring(donor.Name))
 
 	active += 1
 	local ok, root, emitters, soundHost = pcall(build, src, char, hrp)
@@ -212,10 +225,10 @@ local function play(userId, robux, fxName)
 	end)
 end
 
--- (userId, robux, cam?, fxName?) — fxName = tes efek dari Admin panel (tanpa tier); cam = DonationCinematic.
+-- (userId, robux, cam?, fxName?) — fxName = partikel produk yang dibeli / tes Admin panel; cam = DonationCinematic.
 effectEvent.OnClientEvent:Connect(function(userId, robux, _cam, fxName)
 	userId, robux = tonumber(userId), tonumber(robux)
 	if userId and robux then
-		play(userId, robux, fxName)
+		play(userId, fxName)
 	end
 end)
