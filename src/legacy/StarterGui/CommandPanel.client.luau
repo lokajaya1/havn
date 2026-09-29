@@ -839,6 +839,9 @@ local function init()
 		if _G.TopbarLayout then
 			_G.TopbarLayout.register("command", btn, 20, "info")
 		end
+		-- disembunyikan sementara selama tertutup panel lain (mis. panel Menu di portrait)
+		local okC, Cover = pcall(require, RepStorage:WaitForChild("TopbarCover", 10))
+		if okC and Cover then Cover.watch(btn) end
 	end
 end
 

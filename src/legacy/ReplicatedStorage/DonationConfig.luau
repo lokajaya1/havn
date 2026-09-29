@@ -99,6 +99,15 @@ function DonationConfig.dayKey(t)
 	return ("%04d%02d%02d"):format(d.year, d.month, d.day)
 end
 
+-- Menu tombol donasi di topbar: "Robux" (panel DONATE) & "💰" (popup komunitas). Keputusan user 08:28: popup TANPA kata
+-- donasi/emas/"ungu" dan TANPA link (URL di dalam game dilarang) → arahkan ke Social Links resmi di halaman game.
+DonationConfig.community = {
+	groupId = 277580244, -- grup HAVN (sama dengan RankConfig.GROUP_ID)
+	menuLabel = "Komunitas",
+	title = "Komunitas HAVN",
+	body = "Link resmi komunitas HAVN ada di halaman game ini, bagian Social Links (di bawah tombol Play).",
+}
+
 -- Tes donasi admin (panel donasi → tombol TES): rank grup >= RankConfig.ADMIN_MIN_RANK.
 -- Tanpa Marketplace & tanpa menulis data; papan LIST/LIVE tidak diisi; pesan diberi awalan agar tidak dikira asli.
 DonationConfig.test = {

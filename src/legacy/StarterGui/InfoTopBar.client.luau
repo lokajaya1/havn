@@ -43,7 +43,7 @@ local BTN_TEXT  = 15
 
 -- Posisi (desktop / landscape): baris kiri dimulai tepat setelah tombol bawaan Roblox
 -- (GuiService.TopbarInset.Min.X) + ROW_GAP. BTN_X = cadangan kalau TopbarInset tidak terbaca.
--- Mobile portrait → baris pindah ke kanan di bawah tombol Menu (updateBtnPosition).
+-- Info selalu di kiri (sebelah tombol Roblox); tombol tambahan (Donate) di portrait pindah ke kanan bawah Menu.
 local BTN_X   = 265
 local BTN_Y   = 14
 local ROW_GAP = 12   -- jarak dari tombol chat Roblox (= jarak antar tombol bawaan)
@@ -283,7 +283,7 @@ btnLabel.Parent                 = topBtn
 
 -- ══════════════════════════════════════════════════════════════
 --  POSISI TOMBOL  (dipanggil SETELAH topBtn ada)
---  Mobile portrait → di bawah tombol Menu (UltimateMenu ada di Y=13, H=42)
+--  Info: sebelah tombol bawaan Roblox; Donate portrait: kanan di bawah Menu (updateBtnPosition)
 --  Anchor UltimateMenu btn: Position(1, -92, 0, 13) → kita ikuti X-nya
 -- ══════════════════════════════════════════════════════════════
 local function rowStartX()
@@ -294,19 +294,96 @@ local function rowStartX()
 	return BTN_X
 end
 
+-- Info SELALU di baris kiri sebelah tombol bawaan Roblox (semua orientasi, seperti landscape).
+-- Tombol tambahan (_G.TopbarLeft.add, mis. Donate): landscape = di baris kiri setelah Info; portrait = baris KANAN
+-- rata kanan, DI BAWAH tombol _G.TopbarGui (Menu, dance, 🌐, "/"), supaya tidak ada yang saling menimpa.
+local extras = {} -- tombol dari _G.TopbarLeft.add
+local panelHidden = false -- panel lain (mis. Menu) terbuka → baris kiri & kanan disembunyikan (setBtnHidden)
+
+local rightRow = Instance.new("Frame")
+rightRow.Name                   = "RightRow"
+rightRow.AutomaticSize          = Enum.AutomaticSize.X
+rightRow.Size                   = UDim2.new(0, 0, 0, BTN_H)
+rightRow.AnchorPoint            = Vector2.new(1, 0)
+rightRow.Position               = UDim2.new(1, -10, 0, 112)
+rightRow.BackgroundTransparency = 1
+rightRow.Parent                 = sg
+local rightList = Instance.new("UIListLayout")
+rightList.FillDirection       = Enum.FillDirection.Horizontal
+rightList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+rightList.VerticalAlignment   = Enum.VerticalAlignment.Center
+rightList.Padding             = UDim.new(0, ROW_PAD)
+rightList.SortOrder           = Enum.SortOrder.LayoutOrder
+rightList.Parent              = rightRow
+
+-- Tombol _G.TopbarGui (ruang layar sg): batas kiri pada baris y, dan dasar terbawah semua tombol baris atas.
+local ROW2_Y = 62 -- baris kedua topbar (sama dengan baris 🌐 / "/" di portrait)
+local function topbarButtons()
+	local tg = _G.TopbarGui
+	local out = {}
+	if not tg then return out end
+	local base = sg.AbsolutePosition
+	for _, c in ipairs(tg:GetChildren()) do
+		if c:IsA("GuiObject") and c.Visible and c.AbsoluteSize.X > 0 and c.AbsoluteSize.Y <= 60 then
+			local top = c.AbsolutePosition.Y - base.Y
+			if top < 160 then -- hanya tombol topbar, bukan panel
+				table.insert(out, { x = c.AbsolutePosition.X - base.X, y = top, h = c.AbsoluteSize.Y })
+			end
+		end
+	end
+	return out
+end
+local function rightEdgeLimit(y, buttons)
+	local limit
+	for _, b in ipairs(buttons) do
+		if b.y < y + BTN_H and b.y + b.h > y then
+			limit = math.min(limit or math.huge, b.x)
+		end
+	end
+	return limit
+end
+
 local function updateBtnPosition()
 	local vp = workspace.CurrentCamera.ViewportSize
-	if vp.Y > vp.X then
-		leftRow.AnchorPoint = Vector2.new(1, 0)
-		leftRow.Position    = UDim2.new(1, -10, 0, 62)  -- sisi kanan sejajar Menu
-	else
-		leftRow.AnchorPoint = Vector2.new(0, 0)
-		leftRow.Position    = UDim2.new(0, rowStartX(), 0, BTN_Y)
+	local portrait = vp.Y > vp.X
+	for _, btn in ipairs(extras) do
+		local want = portrait and rightRow or leftRow
+		if btn.Parent ~= want then btn.Parent = want end
 	end
+	local buttons = topbarButtons()
+	-- baris kiri (Info [+ Donate di landscape]): baris 1; tertabrak tombol kanan → baris 2 / 3 di X yang sama
+	local x = rowStartX()
+	local width = leftRow.AbsoluteSize.X
+	local y = BTN_Y
+	for _, rowY in ipairs({ BTN_Y, ROW2_Y, ROW2_Y + BTN_H + 6 }) do
+		y = rowY
+		local limit = rightEdgeLimit(rowY, buttons)
+		if not limit or x + width + ROW_PAD <= limit then
+			break
+		end
+	end
+	leftRow.AnchorPoint = Vector2.new(0, 0)
+	leftRow.Position    = UDim2.new(0, x, 0, y)
+	-- baris kanan (portrait): di bawah tombol _G.TopbarGui yang paling bawah
+	local bottom
+	for _, b in ipairs(buttons) do
+		bottom = math.max(bottom or 0, b.y + b.h)
+	end
+	rightRow.Visible  = portrait and not panelHidden
+	rightRow.Position = UDim2.new(1, -10, 0, bottom and (bottom + 8) or 112)
 end
 
 -- Panggil sekali saat load
 updateBtnPosition()
+-- Tombol kanan bisa muncul/pindah (dance ditempel ke topbar, tool, panel) & lebar baris berubah (Donate melebar)
+-- → cek ulang saat lebar berubah dan ringan tiap 0,5 dtk.
+leftRow:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateBtnPosition)
+task.spawn(function()
+	while sg.Parent do
+		task.wait(0.5)
+		updateBtnPosition()
+	end
+end)
 
 -- Reaktif saat orientasi berubah.
 -- FIX kecil: koneksi lama di-disconnect dulu. Versi sebelumnya menambah
@@ -731,7 +808,10 @@ _G.PanelCoordinator.Register("Info", closeMain)
 --  tombol tidak diubah sama sekali — hanya properti Visible.
 -- ══════════════════════════════════════════════════════════════
 local function setBtnHidden(hidden)
+	panelHidden = hidden
 	leftRow.Visible = not hidden
+	local vp = workspace.CurrentCamera.ViewportSize
+	rightRow.Visible = (vp.Y > vp.X) and not hidden -- Donate portrait ikut sembunyi selama panel lain terbuka
 end
 
 if type(_G.PanelCoordinator.OnChange) == "function" then
@@ -790,11 +870,14 @@ commClose.MouseButton1Click:Connect(closeComm)
 commOvBtn.MouseButton1Click:Connect(closeComm)
 
 -- API baris kiri untuk skrip lain (mis. DonationClient): tombol diberi tinggi BTN_H.
+-- add: tombol ikut baris kiri (landscape) / baris kanan di bawah tombol Menu (portrait), lihat updateBtnPosition.
 _G.TopbarLeft = {
 	height = BTN_H,
 	add = function(btn, order)
 		btn.LayoutOrder = order or 10
-		btn.Parent      = leftRow
+		table.insert(extras, btn)
+		btn.Parent = leftRow
+		updateBtnPosition() -- portrait → langsung pindah ke baris kanan
 	end,
 }
 
