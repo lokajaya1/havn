@@ -169,6 +169,7 @@ function Ui.overhead(template, man, rankText, row, accent)
 		gui.Name = "DonateOverhead"
 		gui.Parent = root
 	end
+	gui.Enabled = true -- template sendiri dimatikan (tanpa Adornee → tergambar di titik 0,0,0 map)
 	local head = man:FindFirstChild("Head") -- ApplyDescription bisa mengganti Head → Adornee diperbarui tiap kali
 	if head and head:IsA("BasePart") then
 		gui.Adornee = head
@@ -512,6 +513,10 @@ end
 
 function Boards:start()
 	local okL, errL = pcall(function()
+		local template = self:part(self.cfg.boards.overhead)
+		if template and template:IsA("BillboardGui") then
+			template.Enabled = false
+		end
 		self:applyLabels()
 		self:updateRigs(self.cfg.boards.cash, {}) -- sampai peringkat Gold pertama terbaca
 	end)
