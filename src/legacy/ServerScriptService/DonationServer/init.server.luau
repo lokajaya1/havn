@@ -5,6 +5,7 @@
 -- struk: total disimpan tepat sekali (Store) → antrean pengumuman: notifikasi + efek semua pemain + LiveScreen,
 -- lalu dikirim ke server lain (Global): di sana notifikasi, papan & efek besar (tanpa partikel/LiveScreen).
 -- Tes admin (TestDonation): pengumuman yang sama tanpa Marketplace & tanpa data, pesan berawalan [TES], papan tidak diisi.
+-- Donasi luar bagibagi (Bagibagi): tanpa nominal (robux = 0), efek dari tier `fxRobux`, tidak masuk TOP DONATORS.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -139,13 +140,21 @@ local running = false
 
 -- item.remote = donasi dari server lain: partikel & LiveScreen dilewati (donatur tidak ada di server ini).
 -- item.test = tes admin: pesan berawalan [TES], papan tidak diisi.
+-- item.external = donasi luar (bagibagi): partikel & LiveScreen di SEMUA server kalau donatur (nama akun
+-- Roblox) ada di server itu; nominal tidak ditampilkan (robux = 0).
 local function announce(item)
 	local message = item.message
 	if item.test then
 		message = message ~= "" and (Config.test.prefix .. " " .. message) or Config.test.prefix
 	end
 	showMessage:FireAllClients(item.displayName, item.name, item.robux, message, item.userId)
-	if not item.remote then
+	-- donasi luar: donatur hanya "ada" kalau namanya akun Roblox yang sedang di server ini
+	local donor = item.external and item.userId > 0 and Players:GetPlayerByUserId(item.userId)
+	if item.external then
+		if donor and item.fxRobux then
+			effectEvent:FireAllClients(item.userId, item.fxRobux)
+		end
+	elseif not item.remote then
 		effectEvent:FireAllClients(item.userId, item.robux)
 	end
 	if not item.test then
@@ -158,8 +167,12 @@ local function announce(item)
 	if big then
 		big:FireAllClients(item.name, Config.bigRecipient, item.robux, item.userId)
 	end
-	local sig = not item.remote and screenSignal()
-	if sig then
+	local sig = screenSignal()
+	if sig and item.external then
+		if donor and item.fxRobux then
+			sig:Fire(donor.Name, item.fxRobux)
+		end
+	elseif sig and not item.remote then
 		sig:Fire(item.name, item.robux) -- LiveScreenServer mencari anak Players berdasarkan Player.Name
 	end
 end
@@ -309,5 +322,33 @@ end)
 
 boards:start()
 global:start()
+
+-- ── Donasi luar bagibagi (opsional; gagal dipasang → donasi Robux tetap jalan) ──
+local bagibagiModule = script:FindFirstChild("Bagibagi")
+if bagibagiModule and Config.bagibagi and Config.bagibagi.enabled then
+	local okB, errB = pcall(function()
+		local Bagibagi = require(bagibagiModule)
+		local BB = Config.bagibagi
+		Bagibagi.new({
+			cfg = Config,
+			http = HttpService,
+			store = DataStoreService:GetDataStore(BB.store .. suffix),
+			memory = game:GetService("MemoryStoreService"):GetSortedMap(BB.memory .. suffix),
+			jobId = jobId,
+			players = Players,
+			filter = filterPublic,
+			enqueue = enqueue,
+			publish = function(item)
+				global:publish(item)
+			end,
+			task = task,
+			warn = warn,
+			print = print,
+		}):start()
+	end)
+	if not okB then
+		warn("[Donation] bagibagi tidak aktif: " .. tostring(errB))
+	end
+end
 
 print(("[Donation] Ready | %d produk | store %s%s"):format(#Config.tiers, Config.store.data, suffix))

@@ -50,6 +50,32 @@ DonationConfig.global = {
 	recent = 50, -- purchaseId terakhir yang diingat (pesan kembar dibuang)
 }
 
+-- Donasi luar dari bagibagi.co (jembatan Google Apps Script: tools/bagibagi-bridge/Code.gs).
+-- Satu server (lease MemoryStore) menarik donasi baru tiap `poll` detik lalu menyiarkannya ke semua server.
+-- Nominal Rupiah & nama situs TIDAK pernah ditampilkan (aturan Roblox soal pembayaran luar platform);
+-- nominal hanya memilih tier efek (t = harga tier Robux di atas, nil = notifikasi saja).
+-- Kunci baca = Roblox Secret `secret` (Creator Hub → Secrets, domain script.google.com; Studio: Local Secrets).
+DonationConfig.bagibagi = {
+	enabled = true,
+	url = "https://script.google.com/macros/s/AKfycbxVX0QKP-6opQs3sy8jkmSEO6Jh-Wwz4GjEu_ZhvQatNLoqKsTbpSaSqZ8T4-4gB7xUGA/exec",
+	secret = "bagibagi_read",
+	poll = 10, -- detik antar tarikan (server pemimpin)
+	lease = 30, -- detik masa pemimpin tanpa diperbarui (server mati → server lain mengambil alih)
+	store = "DonationBagibagi_v1", -- DataStore { cursor, ids } (+ _studio di Studio)
+	memory = "DonationBagibagi", -- MemoryStore SortedMap pemimpin (+ _studio di Studio)
+	keepIds = 100, -- ID donasi terakhir yang diingat (anti dobel)
+	gap = 3, -- jeda antrean untuk donasi tanpa efek
+	tiers = { -- rp minimal → t (tier Robux yang efeknya dipakai)
+		{ rp = 10000, t = 10 }, -- Level1
+		{ rp = 25000, t = 50 }, -- Level2
+		{ rp = 50000, t = 100 }, -- Level3
+		{ rp = 100000, t = 500 }, -- Level5
+		{ rp = 250000, t = 2000 }, -- Level6
+		{ rp = 500000, t = 1000 }, -- Nuke
+		{ rp = 1000000, t = 10000 }, -- Black Hole
+	},
+}
+
 -- Tes donasi admin (panel donasi → tombol TES): rank grup >= RankConfig.ADMIN_MIN_RANK.
 -- Tanpa Marketplace & tanpa menulis data; papan LIST/LIVE tidak diisi; pesan diberi awalan agar tidak dikira asli.
 DonationConfig.test = {

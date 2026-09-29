@@ -16,7 +16,18 @@ end
 Boards.commas = commas
 
 local function headshot(userId, size)
+	if not userId or userId <= 0 then
+		return "" -- donatur luar tanpa akun Roblox
+	end
 	return ("rbxthumb://type=AvatarHeadShot&id=%d&w=%d&h=%d"):format(userId, size, size)
+end
+
+-- Donasi luar (bagibagi) datang dengan robux = 0: nominal tidak ditampilkan.
+local function amountText(robux)
+	if robux <= 0 then
+		return "sent support " .. utf8.char(0x2764)
+	end
+	return "donated " .. ROBUX .. " " .. commas(robux)
 end
 
 -- deps: { ordered, folder, services = {Players, UserService}, cfg, task, warn }
@@ -225,7 +236,7 @@ function Boards:renderFeed()
 		r.Name = "Feed_" .. i
 		r.LayoutOrder = i
 		r.Visible = true
-		local text = ("%s donated %s %s"):format(item.displayName, ROBUX, commas(item.robux))
+		local text = ("%s %s"):format(item.displayName, amountText(item.robux))
 		if item.message ~= "" then
 			text ..= '\n"' .. item.message .. '"'
 		end
@@ -243,7 +254,7 @@ function Boards:renderLive(item)
 	end
 	content.Avatar.Image = headshot(item.userId, 420)
 	content.NameLabel.Text = ("%s (@%s)"):format(item.displayName, item.name)
-	content.AmountLabel.Text = "donated " .. ROBUX .. " " .. commas(item.robux)
+	content.AmountLabel.Text = amountText(item.robux)
 	content.MessageHolder.MessageLabel.Text = item.message ~= "" and ('"' .. item.message .. '"') or ""
 end
 

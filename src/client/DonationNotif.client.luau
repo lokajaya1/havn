@@ -107,7 +107,8 @@ local function card(d)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center,
 		Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder, Parent = c })
 	local avatar = new("ImageLabel", { Name = "Avatar", LayoutOrder = 1, Size = UDim2.new(0, 46, 0, 46),
-		BackgroundColor3 = T.CARD, Image = d.userId and ("rbxthumb://type=AvatarHeadShot&id=%d&w=48&h=48"):format(d.userId) or "",
+		BackgroundColor3 = T.CARD,
+		Image = (d.userId and d.userId > 0) and ("rbxthumb://type=AvatarHeadShot&id=%d&w=48&h=48"):format(d.userId) or "",
 		Parent = c })
 	new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = avatar })
 	new("UIStroke", { Color = T.ACCENT, Thickness = 1.5, Transparency = 0.3, Parent = avatar })
@@ -118,7 +119,10 @@ local function card(d)
 		Text = "TERIMA KASIH!", Font = FONT.BOLD, TextSize = 18, TextColor3 = T.ACCENT,
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = text })
 	new("TextLabel", { Name = "NBody", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1, Text = ("%s (@%s) donated %s %d"):format(d.display, d.name, ROBUX, d.robux),
+		BackgroundTransparency = 1,
+		-- robux 0 = donasi luar (bagibagi): nominal & @akun tidak ditampilkan
+		Text = d.robux > 0 and ("%s (@%s) donated %s %d"):format(d.display, d.name, ROBUX, d.robux)
+			or (d.display .. " sent support " .. utf8.char(0x2764)),
 		Font = FONT.MEDIUM, TextSize = 15, TextColor3 = T.TEXT, TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = text })
 	if d.message ~= "" then
