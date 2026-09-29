@@ -7,10 +7,14 @@
 -- Tarikan pertama tanpa cursor hanya mencatat titik mulai (riwayat lama tidak diumumkan).
 -- Nama & pesan bebas dari donatur difilter (PublicChat, broadcast) atas nama pemain di server ini;
 -- tanpa pemain / filter gagal → "Seseorang" & tanpa pesan (fail-closed). Nominal Rupiah tidak ditampilkan.
+-- Peringkat Gold (jembatan v3, ?mode=summary): pemimpin mengambil urutan NAMA (tanpa nominal) tiap `summaryEvery`
+-- detik & segera setelah donasi baru, mencocokkan nama → akun Roblox (avatar patung), menyaring nama non-akun,
+-- lalu menaruhnya di MemoryStore "summary" → semua server membacanya untuk papan TOP & patung Gold.
 local Bagibagi = {}
 Bagibagi.__index = Bagibagi
 
 local MAX_ITEMS = 50
+local MAX_TOP = 10
 local NAME_CHARS = 50
 local FALLBACK_NAME = "Seseorang"
 
@@ -84,6 +88,40 @@ function Bagibagi.parse(data)
 	return { next = data.next, items = items }
 end
 
+-- Murni: jawaban ?mode=summary → daftar nama (urut peringkat) atau nil (jembatan belum v3 / tidak sah).
+function Bagibagi.parseSummary(data)
+	if type(data) ~= "table" or data.ok ~= true or type(data.top) ~= "table" then
+		return nil
+	end
+	local names = {}
+	for i, it in data.top do
+		if i > MAX_TOP then
+			break
+		end
+		if type(it) == "table" and type(it.name) == "string" and #it.name > 0 and #it.name <= 400 then
+			table.insert(names, it.name)
+		end
+	end
+	return names
+end
+
+-- Murni: isi MemoryStore "summary" → { {name, uid} } tervalidasi atau nil.
+function Bagibagi.validTop(v)
+	if type(v) ~= "table" or type(v.top) ~= "table" then
+		return nil
+	end
+	local top = {}
+	for i, e in v.top do
+		if i > MAX_TOP then
+			break
+		end
+		if type(e) == "table" and type(e.name) == "string" and #e.name > 0 and #e.name <= 200 and isInt(e.uid, 0, 1e12) then
+			table.insert(top, { name = e.name, uid = e.uid })
+		end
+	end
+	return top
+end
+
 -- deps: { cfg (DonationConfig), http (HttpService), store (DataStore), memory (MemoryStore SortedMap),
 --         jobId, players (Players), filter(text, fromUserId) → string?, enqueue(item), publish(item),
 --         task, warn, print }
@@ -93,6 +131,9 @@ function Bagibagi.new(deps)
 	self.cfg = deps.cfg.bagibagi
 	self.warned = {} -- [jenis] = true (warn sekali sampai pulih)
 	self.uidCache = {} -- [nama] = userId | false
+	self.nameCache = {} -- [nama bebas] = nama tersaring (peringkat Gold)
+	self.fails = 0 -- gagal berturut-turut (dicetak saat pulih)
+	self.ticks = 0
 	self.leader = false
 	return self
 end
@@ -134,10 +175,12 @@ function Bagibagi:request(after)
 	end)
 	if not ok then
 		self:warnOnce("request", "permintaan gagal (" .. tostring(res) .. ") — cek Secret '" .. cfg.secret .. "'")
+		self:failed("permintaan gagal")
 		return nil
 	end
 	if not res.Success then
 		self:warnOnce("http", "HTTP " .. tostring(res.StatusCode))
+		self:failed("HTTP " .. tostring(res.StatusCode))
 		return nil
 	end
 	local okJ, data = pcall(d.http.JSONDecode, d.http, res.Body)
@@ -147,7 +190,77 @@ function Bagibagi:request(after)
 		return nil
 	end
 	self.warned.request, self.warned.http, self.warned.reply = nil, nil, nil
+	if self.fails > 0 then
+		d.print(("[Donation] bagibagi: pulih setelah %d kali gagal (terakhir: %s)"):format(self.fails, self.lastFail))
+		self.fails = 0
+	end
 	return parsed
+end
+
+function Bagibagi:failed(why)
+	self.fails += 1
+	self.lastFail = why
+end
+
+-- GET ?mode=summary → daftar nama atau nil. Gagal tidak mengganggu tarikan donasi (tanpa warn berulang).
+function Bagibagi:requestSummary()
+	local d, cfg = self.deps, self.cfg
+	local ok, res = pcall(function()
+		local url = d.http:GetSecret(cfg.secret):AddPrefix(cfg.url .. "?key=")
+		return d.http:RequestAsync({ Url = url:AddSuffix("&mode=summary"), Method = "GET" })
+	end)
+	if not ok or not res.Success then
+		return nil
+	end
+	local okJ, data = pcall(d.http.JSONDecode, d.http, res.Body)
+	local names = okJ and Bagibagi.parseSummary(data)
+	if not names and not self.oldBridge then
+		self.oldBridge = true
+		d.print("[Donation] bagibagi: jembatan belum v3 (?mode=summary) → peringkat Gold kosong")
+	end
+	return names or nil
+end
+
+-- Nama bebas → nama tampil: akun Roblox apa adanya, selain itu disaring (fail-closed → "Seseorang").
+function Bagibagi:displayFor(raw, uid, from)
+	if uid > 0 then
+		return raw
+	end
+	if self.nameCache[raw] then
+		return self.nameCache[raw]
+	end
+	local clean = from and self.deps.filter(raw, from.UserId)
+	if clean then
+		self.nameCache[raw] = clean
+	end
+	return clean or FALLBACK_NAME
+end
+
+-- Pemimpin: peringkat Gold → MemoryStore "summary" (semua server membacanya lewat readSummary).
+function Bagibagi:pullSummary()
+	local names = self:requestSummary()
+	if not names then
+		return
+	end
+	local d = self.deps
+	local from = d.players:GetPlayers()[1]
+	local top = {}
+	for _, n in names do
+		local raw = cutChars(trim(n), NAME_CHARS) or ""
+		if raw ~= "" then
+			local uid = self:userIdFor(raw)
+			table.insert(top, { name = self:displayFor(raw, uid, from), uid = uid })
+		end
+	end
+	self.top = top
+	pcall(d.memory.SetAsync, d.memory, "summary", { top = top }, self.cfg.summaryTtl)
+end
+
+-- Semua server: peringkat Gold terakhir (MemoryStore; pemimpin memakai salinannya sendiri kalau baca gagal).
+function Bagibagi:readSummary()
+	local ok, v = pcall(self.deps.memory.GetAsync, self.deps.memory, "summary")
+	local top = ok and Bagibagi.validTop(v)
+	return top or self.top
 end
 
 function Bagibagi:userIdFor(name)
@@ -197,6 +310,9 @@ function Bagibagi:announce(it)
 		test = it.test or nil,
 	}
 	d.print(("[Donation] bagibagi%s: %s%s"):format(it.test and " (tes)" or "", name, tier and (" | efek " .. tier.robux) or ""))
+	if not it.test then
+		self.dirty = true -- peringkat Gold diambil ulang segera
+	end
 	d.enqueue(item)
 	d.publish(item)
 end
@@ -274,6 +390,12 @@ function Bagibagi:start()
 				if not ok then
 					self:warnOnce("poll", "gagal (" .. tostring(err) .. ")")
 				end
+				local every = math.max(1, math.floor(self.cfg.summaryEvery / self.cfg.poll))
+				if self.dirty or self.ticks % every == 0 then
+					self.dirty = false
+					pcall(self.pullSummary, self)
+				end
+				self.ticks += 1
 			end
 			d.task.wait(self.cfg.poll)
 		end

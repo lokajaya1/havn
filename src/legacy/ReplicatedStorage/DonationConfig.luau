@@ -65,6 +65,8 @@ DonationConfig.bagibagi = {
 	memory = "DonationBagibagi", -- MemoryStore SortedMap pemimpin (+ _studio di Studio)
 	keepIds = 100, -- ID donasi terakhir yang diingat (anti dobel)
 	gap = 3, -- jeda antrean untuk donasi tanpa efek
+	summaryEvery = 60, -- detik antar ambil peringkat Gold (?mode=summary, jembatan v3; juga segera setelah donasi baru)
+	summaryTtl = 600, -- detik peringkat Gold bertahan di MemoryStore tanpa diperbarui
 	tiers = { -- rp minimal → t (tier Robux yang efeknya dipakai)
 		{ rp = 10000, t = 10 }, -- Level1
 		{ rp = 25000, t = 50 }, -- Level2
@@ -84,7 +86,8 @@ DonationConfig.test = {
 }
 
 -- Papan di map desain v1.5 (Workspace.DonationBoards, dipasang di Studio; posisi bebas digeser, NAMA jangan diubah).
--- Dua set: Robux dan Gold (donasi bagibagi, nominal tidak ditampilkan). Nama di bawah = nama model di folder itu.
+-- Dua set: Robux dan Gold (donasi bagibagi, nominal tidak ditampilkan; peringkat dari jembatan v3 per nama,
+-- patung memakai avatar akun Roblox yang namanya sama). Nama di bawah = nama model di folder itu.
 DonationConfig.boards = {
 	every = 60, -- detik baca ulang peringkat (juga atribut RefreshRate papan TOP untuk timer)
 	soon = 5, -- detik tunda baca ulang setelah donasi
@@ -109,6 +112,7 @@ DonationConfig.boards = {
 		rigs = "CashMannequins",
 		rank = "Gold",
 		label = "GOLD", -- teks di bawah judul papan (file: CASH)
+		soon = 20, -- detik tunda baca ulang peringkat Gold setelah donasi (pemimpin perlu mengambilnya dulu)
 		accent = Color3.fromRGB(139, 255, 42),
 	},
 }

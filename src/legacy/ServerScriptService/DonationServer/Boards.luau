@@ -2,8 +2,9 @@
 -- Dua set papan (nama model di DonationConfig.boards.robux / .cash):
 --   Robux : TopBoard (TOP DONATION dari PlayerDonations_v1: podium #1–#3 + baris #4–#10), TopMannequins Top1–3
 --           (avatar + emote dance + papan nama), FeedBoard (kartu donasi terbaru), LiveBoard (pesan donasi terakhir).
---   Gold  : CashFeedBoard + CashLiveBoard untuk donasi bagibagi (tanpa nominal). CashTopBoard & CashMannequins
---           belum punya data (DN13c) → podium "—", patung disembunyikan.
+--   Gold  : donasi bagibagi (tanpa nominal): CashFeedBoard + CashLiveBoard, CashTopBoard + CashMannequins dari
+--           peringkat Gold (goldSource = Bagibagi:readSummary; nama → akun Roblox → avatar patung; bukan akun → patung
+--           disembunyikan, podium huruf awal).
 -- Papan yang tidak ada di map dilewati diam-diam; semua panggilan web di-pcall.
 -- Struktur tiap papan: <Model>.Board.SurfaceGui { Panel, RowTemplate }.
 
@@ -186,6 +187,9 @@ function Boards.new(deps)
 	self.dressed = {} -- [Model] = userId yang avatarnya sedang dipakai
 	self.tracks = {} -- [Model] = AnimationTrack dance
 	self.sig = nil -- isi TOP terakhir yang digambar (gambar ulang hanya kalau berubah)
+	self.goldSig = nil
+	self.goldSource = nil -- function() → { {name, uid} } (dipasang DonationServer kalau bagibagi aktif)
+	self.pending = {} -- ["robux" | "gold"] = baca ulang sudah dijadwalkan
 	self.feed = {} -- donasi terakhir yang masuk papan (terbaru di depan, maks feedCount; Robux & Gold)
 	self.seq = 0
 	self.refreshing = false
@@ -306,13 +310,13 @@ function Boards:dress(man, rank, userId)
 	end
 end
 
--- rows[1..3] → patung tampil + papan nama; peringkat tanpa donatur → patung disembunyikan.
+-- rows[1..3] → patung tampil + papan nama; peringkat kosong / bukan akun Roblox → patung disembunyikan.
 function Boards:updateRigs(set, rows)
 	local model = self:part(set.rigs)
 	for rank = 1, 3 do
 		local man = self:rig(set, rank)
 		local row = rows[rank]
-		if man and model and not row then
+		if man and model and not (row and row.userId > 0) then
 			self:hideRig(man)
 		elseif man and model then
 			man.Parent = model
@@ -370,15 +374,53 @@ function Boards:refresh()
 	self.refreshing = false
 end
 
--- Segera baca ulang setelah donasi (digabung: paling cepat tiap `soon` detik).
-function Boards:refreshSoon()
-	if self.pending then
+-- ── TOP DONATION (Gold) ──────────────────────────────────────
+function Boards:refreshGold()
+	local src = self.goldSource
+	local ok, list = pcall(function()
+		return src and src()
+	end)
+	if not ok or type(list) ~= "table" then
 		return
 	end
-	self.pending = true
-	self.deps.task.delay(self.cfg.boards.soon, function()
-		self.pending = false
-		self:refresh()
+	local B = self.cfg.boards
+	local set = B.cash
+	local rows, sig = {}, {}
+	for rank, e in list do
+		if rank > B.showCount then
+			break
+		end
+		rows[rank] = { userId = e.uid, display = e.name, handle = e.uid > 0 and e.name or "", amount = Ui.HEART }
+		table.insert(sig, e.uid .. "=" .. e.name)
+	end
+	local sg, panel = Ui.surface(self:part(set.top))
+	if panel then
+		sg:SetAttribute("RefreshRate", B.every)
+		sg:SetAttribute("LastRefresh", self.deps.now())
+		local joined = table.concat(sig, "|")
+		if joined ~= self.goldSig then
+			Ui.renderTop(sg, panel, rows, B.showCount)
+			self.goldSig = joined
+		end
+	end
+	self:updateRigs(set, rows)
+end
+
+-- Segera baca ulang setelah donasi (digabung per jenis: robux `soon`, gold `cash.soon` detik).
+function Boards:refreshSoon(kind)
+	kind = kind or "robux"
+	if self.pending[kind] then
+		return
+	end
+	self.pending[kind] = true
+	local B = self.cfg.boards
+	self.deps.task.delay(kind == "gold" and B.cash.soon or B.soon, function()
+		self.pending[kind] = nil
+		if kind == "gold" then
+			self:refreshGold()
+		else
+			self:refresh()
+		end
 	end)
 end
 
@@ -407,9 +449,7 @@ function Boards:onDonation(item)
 	if live and Ui.hasMessage(item.message) then
 		Ui.showLive(live, item.message, item.displayName, set.accent)
 	end
-	if not item.external then
-		self:refreshSoon()
-	end
+	self:refreshSoon(item.external and "gold" or "robux")
 end
 
 -- Teks label papan dari Config (Gold: "GOLD"; LIST Robux: "LIVE" sampai feed harian ada).
@@ -431,7 +471,7 @@ end
 function Boards:start()
 	local okL, errL = pcall(function()
 		self:applyLabels()
-		self:updateRigs(self.cfg.boards.cash, {}) -- Gold belum punya peringkat (DN13c)
+		self:updateRigs(self.cfg.boards.cash, {}) -- sampai peringkat Gold pertama terbaca
 	end)
 	if not okL then
 		self.deps.warn("[Donation] papan Gold gagal disiapkan: " .. tostring(errL))
@@ -442,6 +482,10 @@ function Boards:start()
 			if not ok then
 				self.refreshing = false
 				self.deps.warn("[Donation] papan gagal diperbarui: " .. tostring(err))
+			end
+			local okG, errG = pcall(self.refreshGold, self)
+			if not okG then
+				self.deps.warn("[Donation] papan Gold gagal diperbarui: " .. tostring(errG))
 			end
 			self.deps.task.wait(self.cfg.boards.every)
 		end
