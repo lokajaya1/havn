@@ -204,6 +204,9 @@
         "DonationCinematic": {
           "$path": "src/client/DonationCinematic.client.luau"
         },
+        "MapFX": {
+          "$path": "src/client/MapFX"
+        },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
         },
