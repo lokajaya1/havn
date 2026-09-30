@@ -15,6 +15,11 @@ export type PartSpec = {
 	decor: boolean?, -- true = tidak bisa ditabrak (hiasan)
 }
 
+local function color(key: string?): Color3
+	local c = Palette.colors[key or "Blockout"] or Palette.colors.Blockout
+	return Color3.fromRGB(c[1], c[2], c[3])
+end
+
 local Builder = {}
 Builder.__index = Builder
 
@@ -24,12 +29,21 @@ function Builder.new(rootName: string, kit: Instance?)
 	self.root.Name = rootName
 	self.kit = kit
 	self.parts = 0
+	self.terrainOps = {} :: { any }
 	return self
 end
 
-local function color(key: string?): Color3
-	local c = Palette.colors[key or "Blockout"] or Palette.colors.Blockout
-	return Color3.fromRGB(c[1], c[2], c[3])
+-- Operasi terrain hanya DICATAT di sini; MapGen menjalankannya saat JALAN (bisa diperiksa dulu saat CEK).
+function Builder:terrain(kind: string, material: string, cf: CFrame, size: Vector3)
+	table.insert(self.terrainOps, { op = kind, material = material, cf = cf, size = size })
+end
+
+function Builder:terrainColor(material: string, colorKey: string)
+	table.insert(self.terrainOps, { op = "Color", material = material, color = color(colorKey) })
+end
+
+function Builder:water(props: { [string]: any })
+	table.insert(self.terrainOps, { op = "Water", props = props, color = color(props.color) })
 end
 
 function Builder:folder(parent: Instance?, name: string): Folder
