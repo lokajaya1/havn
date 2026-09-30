@@ -29,7 +29,7 @@ local zones: { [string]: (any, any) -> () } = {
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V11", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V13", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -223,6 +223,71 @@ function MapGen.check(root: Instance): { string }
 	return issues
 end
 
+-- P14 (Rencana_Workspace_R15.md §16): part COLLIDABLE yang memotong permukaan air di perairan renang (x < swimMaxX)
+-- harus berdiri dari dasar laut (tiang, platform padat) — tidak boleh mengapung (kolong = avatar terjepit & terlempar).
+function MapGen.checkWater(root: Instance): { string }
+	local issues = {}
+	local S = Layout.sea
+	-- satu Model (dermaga, platform) dinilai utuh: boleh punya bagian di permukaan air kalau Model itu berdiri dari dasar laut
+	local modelMin: { [Instance]: number } = {}
+	local function minYOf(m: Instance): number
+		if modelMin[m] == nil then
+			local lo = math.huge
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					lo = math.min(lo, aabb(d.CFrame, d.Size).minY)
+				end
+			end
+			modelMin[m] = lo
+		end
+		return modelMin[m]
+	end
+	for _, p in root:GetDescendants() do
+		if p:IsA("BasePart") and p.CanCollide and p.Transparency < 1 then
+			local box = aabb(p.CFrame, p.Size)
+			local owner = p:FindFirstAncestorOfClass("Model")
+			local lowest = if owner and owner:IsDescendantOf(root) then minYOf(owner) else box.minY
+			if box.minX < S.swimMaxX and box.minY < S.surfaceY + 0.5 and box.maxY > S.surfaceY - 0.5 and lowest > S.floorY + 0.5 then
+				table.insert(issues, ("%s mengapung di permukaan air renang (dasar y %.2f, harus dari dasar laut %d atau hiasan tembus)"):format(p.Name, box.minY, S.floorY))
+			end
+		end
+	end
+	return issues
+end
+
+-- P12: tiap blok Water harus didahului blok Air yang menutupinya, tanpa blok padat di antaranya.
+local function covers(a: any, b: any): boolean
+	return a.minX <= b.minX + 0.01 and a.maxX >= b.maxX - 0.01 and a.minY <= b.minY + 0.01 and a.maxY >= b.maxY - 0.01 and a.minZ <= b.minZ + 0.01 and a.maxZ >= b.maxZ - 0.01
+end
+local function overlap3(a: any, b: any): boolean
+	return a.maxX > b.minX + 0.01 and a.minX < b.maxX - 0.01 and a.maxY > b.minY + 0.01 and a.minY < b.maxY - 0.01 and a.maxZ > b.minZ + 0.01 and a.minZ < b.maxZ - 0.01
+end
+function MapGen.checkWaterOrder(ops: { any }): { string }
+	local issues = {}
+	for i, o in ops do
+		if o.op == "Block" and o.material == "Water" then
+			local w = aabb(o.cf, o.size)
+			local okCleared = false
+			for j = i - 1, 1, -1 do
+				local q = ops[j]
+				if q.op == "Block" or q.op == "Wedge" then
+					local qb = aabb(q.cf, q.size)
+					if q.material == "Air" and covers(qb, w) then
+						okCleared = true
+						break
+					elseif q.material ~= "Air" and q.material ~= "Water" and overlap3(qb, w) then
+						break
+					end
+				end
+			end
+			if not okCleared then
+				table.insert(issues, ("terrain #%d Water tanpa Air lebih dulu di atas voxel padat (P12)"):format(i))
+			end
+		end
+	end
+	return issues
+end
+
 -- Arah hadap kit (P8, Rencana_Workspace_R15.md §4): tiap kit harus terdaftar di KitFront; kit berarah wajib dipasang dengan
 -- arah tujuan (Prefabs.facing / Prefabs.seatFacing), bukan yaw tebakan.
 function MapGen.checkKits(uses: { any }): { string }
@@ -253,6 +318,12 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 		table.insert(issues, "kit tidak ada di ServerStorage.MapKit: " .. k)
 	end
 	for _, x in MapGen.checkKits(b.kitUses) do
+		table.insert(issues, x)
+	end
+	for _, x in MapGen.checkWater(b.root) do
+		table.insert(issues, x)
+	end
+	for _, x in MapGen.checkWaterOrder(b.terrainOps) do
 		table.insert(issues, x)
 	end
 	for _, x in MapGen.checkTerrain(b.terrainOps) do

@@ -1,5 +1,7 @@
 --!strict
--- MapGen/Zones/VipLounge — VIP Lounge timur (pola map club: VIP DITINGGIKAN menghadap lantai dansa, naik tangga).
+-- MapGen/Zones/VipLounge — VIP PAVILION timur (R5): kotak hitam 2 lantai menghadap panggung (barat). Lantai dasar = lounge
+-- dengan fasad kaca gelap + pintu 10 × 11, bar dengan rak backlit putih; atap = dek VIP y 18 (ruang di bawah 11 ≥ A1) dengan
+-- pagar kaca bening, naik lewat tangga luar lebar 10 (anak tangga 0.6) + landasan. Pola map club: VIP DITINGGIKAN.
 -- Area x 96…151, z −8…39 dikelilingi dinding tak terlihat CollisionGroup "DoorVIP" (VIP & VVIP tembus, pemain biasa
 -- terhalang — PlayerCollisionManager, pengganti `Vip Door02` lama). Lantai atas: dek x 100…128 (y 16) menghadap barat.
 -- Lantai dasar: bar kontainer VIP + sofa. Semua Seat menghadap barat (dek) / timur (kursi bar).
@@ -10,7 +12,6 @@ return function(b: any, L: any)
 	local G = L.groundY
 	local at = Prefabs.at
 	local x1, x2, z1, z2 = 96, 151, -8, 39 -- dinding (tebal 1) di luar garis ini, tetap di dalam zona x 92…152, z −64…40
-	local deckY = G + 10
 
 	-- dinding DoorVIP (tak terlihat) di keliling area
 	local walls = b:folder(nil, "VipWalls")
@@ -41,46 +42,79 @@ return function(b: any, L: any)
 	b:sign(lintel, "VIP", "Left", "NeonWhite")
 	b:sign(lintel, "VIP", "Right", "NeonWhite")
 
-	-- dek atas (menghadap lantai dansa di barat) + 4 kolom krom + pagar kaca + tepi neon
-	local deck = b:model(b:folder(nil, "Deck"), "Deck_Upper")
-	local dx1, dx2, dz1, dz2 = 100, 128, 4, 36
-	b:part(deck, "Floor", { size = Vector3.new(dx2 - dx1, 1, dz2 - dz1), cf = CFrame.new((dx1 + dx2) / 2, deckY - 0.5, (dz1 + dz2) / 2), color = "Asphalt", material = "DiamondPlate" })
-	for i, p in { { dx1 + 1, dz1 + 1 }, { dx1 + 1, dz2 - 1 }, { dx2 - 1, dz1 + 1 }, { dx2 - 1, dz2 - 7 } } do
-		b:part(deck, "Column_0" .. i, { size = Vector3.new(1.2, deckY - 1 - G, 1.2), cf = CFrame.new(p[1], (G + deckY - 1) / 2, p[2]), color = "Chrome", material = "Chrome" })
+	-- R5 pavilion menempel dinding DoorVIP utara & timur (tanpa lorong sempit, A4): x 121…151, z −8…29; atap y 17…18;
+	-- tangga luar lebar 10 di selatan (z 29…39, menempel dinding selatan) naik ke barat sampai x 131 + landasan x 121…131
+	local px1, px2, pz1, pz2 = x1 + 25, x2, z1, z2 - 10
+	local dz1, dz2 = 11, 21 -- pintu segaris gerbang VIP (z 10…22)
+	local roofY = G + 12 -- 18
+	local pav = b:model(b:folder(nil, "Pavilion"), "Pavilion_Main")
+	local function slab(name: string, ax: number, bx: number, y1: number, y2: number, az: number, bz: number, colorKey: string, material: string, extra: { [string]: any }?)
+		local spec: { [string]: any } = { size = Vector3.new(bx - ax, y2 - y1, bz - az), cf = CFrame.new((ax + bx) / 2, (y1 + y2) / 2, (az + bz) / 2), color = colorKey, material = material }
+		for k, v in extra or {} do
+			spec[k] = v
+		end
+		return b:part(pav, name, spec :: any)
 	end
-	for _, r in {
-		{ "Rail_West", dx1 + 0.2, (dz1 + dz2) / 2, 0.3, dz2 - dz1 },
-		{ "Rail_North", (dx1 + dx2) / 2, dz1 + 0.2, dx2 - dx1, 0.3 },
-		{ "Rail_South", (dx1 + dx2) / 2, dz2 - 0.2, dx2 - dx1, 0.3 },
-		{ "Rail_East", dx2 - 0.2, (dz1 + dz2 - 6) / 2, 0.3, dz2 - dz1 - 6 }, -- terbuka 6 stud di ujung tangga
-	} do
-		b:part(deck, r[1], { size = Vector3.new(r[4], 3.5, r[5]), cf = CFrame.new(r[2], deckY + 1.75, r[3]), color = "IceBlue", material = "Glass", transparency = 0.5 })
+	slab("Roof", px1, px2, roofY - 1, roofY, pz1, pz2, "Black", "Metal")
+	slab("Wall_North", px1, px2, G, roofY - 1, pz1, pz1 + 2, "Black", "Concrete")
+	slab("Wall_South", px1, px2, G, roofY - 1, pz2 - 2, pz2, "Black", "Concrete")
+	slab("Wall_East", px2 - 2, px2, G, roofY - 1, pz1 + 2, pz2 - 2, "Black", "Concrete")
+	-- fasad barat kaca gelap + pintu lebar 10, tinggi 11
+	slab("Facade_North", px1, px1 + 1, G, roofY - 1, pz1 + 2, dz1, "Smoke", "Plastic", { transparency = 0.45 })
+	slab("Facade_South", px1, px1 + 1, G, roofY - 1, dz2, pz2 - 2, "Smoke", "Plastic", { transparency = 0.45 })
+	for i, z in { dz1 - 0.6, dz2 } do -- kusen di LUAR bukaan → lebar bersih tetap 10
+		slab("Door_Frame_0" .. i, px1 - 0.2, px1 + 1.2, G, roofY - 1, z, z + 0.6, "Black", "Metal")
 	end
-	b:part(deck, "Neon_West", { size = Vector3.new(0.3, 0.3, dz2 - dz1), cf = CFrame.new(dx1 - 0.15, deckY - 0.5, (dz1 + dz2) / 2), color = "Lilac", material = "Neon" })
-	b:part(deck, "Neon_North", { size = Vector3.new(dx2 - dx1, 0.3, 0.3), cf = CFrame.new((dx1 + dx2) / 2, deckY - 0.5, dz1 - 0.15), color = "HotPink", material = "Neon" })
-	Prefabs.stairs(b, deck, "Stairs", dx2 + 20, dz2 - 6, dz2, G, deckY - G)
+	-- parapet + nama "VIP LOUNGE" di tepi barat atap (menghadap panggung), garis neon putih di bawah atap
+	local fascia = slab("Fascia_West", px1 - 0.4, px1, roofY - 1, roofY + 1.5, pz1, pz2, "Black", "Metal")
+	b:sign(fascia, "VIP LOUNGE", "Left", "NeonWhite")
+	b:part(pav, "Neon_Roofline", { size = Vector3.new(0.2, 0.2, pz2 - pz1), cf = CFrame.new(px1 - 0.5, roofY - 1.1, (pz1 + pz2) / 2), color = "NeonWhite", material = "Neon", decor = true })
+	-- lampu langit-langit lembut (sumber tersembunyi)
+	local roof = pav:FindFirstChild("Roof") :: BasePart
+	b:surfaceLight(roof, "Bottom", "CoolLight", 0.6, 12, 120)
 
-	-- perabot dek: meja tinggi ber-kursi & kursi telur menghadap barat, speaker
+	-- tangga luar + landasan padat (tanpa kolong) → atap
+	local stairsF = b:folder(nil, "Stairs")
+	Prefabs.stairs(b, stairsF, "Stairs_Main", px2, pz2, pz2 + 10, G, roofY - G, 0.6)
+	local land = b:model(stairsF, "Landing")
+	b:part(land, "Landing_Base", { size = Vector3.new(10, roofY - G, 10), cf = CFrame.new(px1 + 5, (G + roofY) / 2, pz2 + 5), color = "Black", material = "Concrete" })
+	-- pagar kaca bening 3.5 (tepi atap & landasan), terbuka 10 di jalur landasan → atap (x 121…131, z 29)
+	local rails = b:folder(nil, "Rails")
+	local function rail(name: string, ax: number, bx: number, az: number, bz: number)
+		b:part(rails, name, { size = Vector3.new(math.max(bx - ax, 0.3), 3.5, math.max(bz - az, 0.3)), cf = CFrame.new((ax + bx) / 2, roofY + 1.75, (az + bz) / 2), color = "Smoke", material = "Plastic", transparency = 0.6 })
+	end
+	rail("Rail_North", px1, px2, pz1, pz1 + 0.3)
+	rail("Rail_West", px1, px1 + 0.3, pz1, pz2)
+	rail("Rail_East", px2 - 0.3, px2, pz1, pz2)
+	rail("Rail_South", px1 + 10, px2, pz2 - 0.3, pz2)
+	rail("Rail_Landing_South", px1, px1 + 10, pz2 + 9.7, pz2 + 10)
+	rail("Rail_Landing_West", px1, px1 + 0.3, pz2, pz2 + 10)
+
+	-- perabot atap: meja tinggi & kursi telur menghadap panggung (barat), speaker
 	local deckF = b:folder(nil, "DeckFurniture")
-	Prefabs.seatFacing(b, deckF, "Kit_HighTable", 108, deckY, 12, 90, "HighTable_01")
-	Prefabs.seatFacing(b, deckF, "Kit_HighTable", 108, deckY, 26, 90, "HighTable_02")
-	Prefabs.seatFacing(b, deckF, "Kit_EggChair", 119, deckY, 10, 90, "EggChair_01")
-	Prefabs.seatFacing(b, deckF, "Kit_EggChair", 119, deckY, 22, 90, "EggChair_02")
-	for i, z in { 6.5, 33 } do
-		Prefabs.facing(b, deckF, "Kit_SpeakerTripod", 103, deckY, z, 90, string.format("Speaker_%02d", i)) -- ke panggung (barat)
+	Prefabs.seatFacing(b, deckF, "Kit_HighTable", px1 + 6.5, roofY, 1, 90, "HighTable_01")
+	Prefabs.seatFacing(b, deckF, "Kit_HighTable", px1 + 6.5, roofY, 19, 90, "HighTable_02")
+	Prefabs.seatFacing(b, deckF, "Kit_EggChair", px1 + 18, roofY, 3, 90, "EggChair_01")
+	Prefabs.seatFacing(b, deckF, "Kit_EggChair", px1 + 18, roofY, 17, 90, "EggChair_02")
+	for i, z in { pz1 + 3, pz2 - 3 } do
+		Prefabs.facing(b, deckF, "Kit_SpeakerTripod", px1 + 2.5, roofY, z, 90, string.format("Speaker_%02d", i)) -- ke panggung (barat)
 	end
 
-	-- lantai dasar: bar kontainer VIP (kontainer = dinding belakang di timur), rak neon, meja bar, kursi bar, sofa
+	-- lantai dasar: bar (meja hitam, atas putih) + rak backlit putih di dinding timur, 4 kursi bar menghadap meja, sofa
 	local bar = b:model(b:folder(nil, "VipBar"), "VipBar_Main")
-	b:clone(bar, "ContainerGreen", at(146, G, 9, 90), "Container_Back")
-	Prefabs.facing(b, bar, "Kit_NeonBarShelf", 139.6, G, 9, 90, "BarShelf") -- rak terbuka menghadap tamu (barat)
-	for i, z in { 1, 9, 17 } do
-		b:clone(bar, "Kit_BarCounter", at(136, G, z, 90), string.format("BarCounter_%02d", i))
+	local bzc = (pz1 + pz2) / 2 + 2 -- 12.5
+	b:part(bar, "Counter", { size = Vector3.new(2, 3.5, 18), cf = CFrame.new(px2 - 9, G + 1.75, bzc), color = "Black", material = "Plastic" })
+	local top = b:part(bar, "Counter_Top", { size = Vector3.new(2.4, 0.2, 18.4), cf = CFrame.new(px2 - 9, G + 3.6, bzc), color = "OffWhite", material = "Plastic" })
+	b:surfaceLight(top, "Top", "WarmLight", 1, 8, 90)
+	local shelf = b:part(bar, "BackShelf", { size = Vector3.new(1, 6, 18), cf = CFrame.new(px2 - 2.5, G + 6, bzc), color = "Black", material = "Metal" })
+	b:surfaceLight(shelf, "Left", "CoolLight", 1.2, 8, 90)
+	for i, y in { 4, 6, 8 } do
+		b:part(bar, "Neon_Shelf_0" .. i, { size = Vector3.new(0.2, 0.2, 18), cf = CFrame.new(px2 - 3.1, G + y, bzc), color = "NeonWhite", material = "Neon", decor = true })
 	end
-	for i, z in { 1, 6, 12, 17 } do
-		Prefabs.seatFacing(b, bar, "Kit_BarStool", 132, G, z, -90, string.format("BarStool_%02d", i))
+	local vipSign = b:part(bar, "Sign_Bar", { size = Vector3.new(0.3, 2, 10), cf = CFrame.new(px2 - 3.15, G + 10, bzc), color = "Black", material = "Metal" })
+	b:sign(vipSign, "VIP BAR", "Left", "NeonWhite")
+	for i, dz in { -6.75, -2.25, 2.25, 6.75 } do
+		Prefabs.seatFacing(b, bar, "Kit_BarStool", px2 - 12.5, G, bzc + dz, -90, string.format("BarStool_%02d", i))
 	end
-	local vipSign = b:part(bar, "Sign_Bar", { size = Vector3.new(0.6, 3, 16), cf = CFrame.new(141.3, G + 11.5, 9), color = "Asphalt", material = "Metal" })
-	b:sign(vipSign, "VIP BAR", "Left", "HotPink")
-	Prefabs.seatFacing(b, b:folder(nil, "Lounge"), "Kit_NeonSofa", 116, G, 0, 90, "NeonSofa_01")
+	Prefabs.seatFacing(b, b:folder(nil, "Lounge"), "Kit_NeonSofa", px1 + 10, G, pz1 + 5.5, 180, "NeonSofa_01") -- menempel dinding utara
 end

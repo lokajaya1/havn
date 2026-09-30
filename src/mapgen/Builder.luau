@@ -168,6 +168,20 @@ function Builder:seat(parent: Instance, name: string, cf: CFrame, size: Vector3)
 	return s
 end
 
+-- Lampu permukaan (sumber cahaya tersembunyi, D4): tanpa bayangan, jangkauan & sudut terbatas.
+function Builder:surfaceLight(part: BasePart, face: string, colorKey: string, brightness: number, range: number, angle: number)
+	local l = Instance.new("SurfaceLight")
+	l.Name = "Light"
+	l.Face = (Enum.NormalId :: any)[face]
+	l.Color = color(colorKey)
+	l.Brightness = brightness
+	l.Range = range
+	l.Angle = angle
+	l.Shadows = false
+	l.Parent = part
+	return l
+end
+
 -- Papan tulisan Y2K (SurfaceGui) di satu sisi part.
 function Builder:sign(board: BasePart, text: string, face: string, colorKey: string)
 	local gui = Instance.new("SurfaceGui")

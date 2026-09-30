@@ -24,7 +24,8 @@ return function(b: any, L: any)
 	local Bw = L.breakwater
 	block("Rock", Bw.minX, Bw.maxX, Y0, BY, Bw.minZ, Bw.maxZ)
 
-	-- 4) pantai: pasir rata y 4, lalu lereng pasir (wedge) ke dasar laut; air di atas lereng
+	-- 4) pantai: pasir rata y 4, lalu tebing pasir curam (wedge 8 stud) ke dasar laut; air di atas tebing.
+	--    Urutan WAJIB: Air → Water → pasir (P12: Water di atas voxel padat tidak mengosongkannya, bukti rig R4 20:45).
 	local Bs, Sl = L.beachSand, L.beachSlope
 	block("Sand", Sl.maxX, Bs.maxX, Y0, BY, Bs.minZ, Bs.maxZ)
 	block("Air", Sl.minX, Sl.maxX, S.floorY, BY, Bs.minZ, Bs.maxZ)
@@ -37,6 +38,13 @@ return function(b: any, L: any)
 		Vector3.new(Bs.maxZ - Bs.minZ, h, len)
 	)
 
+	-- 4b) teras kolam: pasir di bawah dek dibuang (beton darat y 0 dirender ≈ 2, di bawah dek 4.5 & lounge 2.5), lalu
+	--     kolam: Air dulu, baru Water (P12) — air masuk ke dalam dinding kolam 4 tebal.
+	local Pt, Pl = L.poolTerrace, L.pool
+	block("Air", Pt.minX, Pt.maxX, Y0 + 16, 8, Pt.minZ, Pt.maxZ)
+	block("Air", Pl.minX, Pl.maxX, Pl.floorY, Pl.surfaceY, Pl.minZ, Pl.maxZ)
+	block("Water", Pl.minX, Pl.maxX, Pl.floorY, Pl.surfaceY, Pl.minZ, Pl.maxZ)
+
 	-- 5) lubang lantai dansa: kosongkan di dalam bibir (tepi tersembunyi di dalam part bibir)
 	local P = L.pitCarve
 	block("Air", P.minX, P.maxX, P.minY, P.maxY, P.minZ, P.maxZ)
@@ -45,5 +53,6 @@ return function(b: any, L: any)
 	b:terrainColor("Sand", "Sand")
 	b:terrainColor("Concrete", "ConcreteDark")
 	b:terrainColor("Rock", "Steel")
-	b:water({ color = "Sea", transparency = 0.6, reflectance = 0.5, waveSize = 0.15, waveSpeed = 10 })
+	-- K4: air lebih tenang & jernih (global: laut + kolam)
+	b:water({ color = "Sea", transparency = 0.75, reflectance = 0.5, waveSize = 0.05, waveSpeed = 8 })
 end

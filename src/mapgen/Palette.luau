@@ -17,6 +17,8 @@ return {
 		NeonSoft = { 163, 162, 165 },
 		Smoke = { 40, 40, 44 }, -- kaca gelap (SmoothPlastic/Glass transparan)
 		Timber = { 150, 108, 72 },
+		WarmLight = { 255, 196, 140 }, -- lampu hangat (meja api, bar)
+		CoolLight = { 225, 240, 255 }, -- lampu kolam
 		-- dasar yang tetap
 		Concrete = { 138, 141, 145 },
 		ConcreteDark = { 92, 95, 99 },
