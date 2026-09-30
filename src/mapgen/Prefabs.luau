@@ -1,5 +1,6 @@
 --!strict
--- MapGen/Prefabs — objek industrial Y2K dari part primitif (tanpa Instance.new langsung; semua lewat Builder).
+-- MapGen/Prefabs — objek industrial Y2K. Bangunan besar dari part (derek, gudang, pagar, landasan); mesh dari
+-- ServerStorage.MapKit lewat Builder:clone (kontainer PBR 30×10×10, props pelabuhan). Semua lewat Builder.
 
 local Prefabs = {}
 
@@ -8,99 +9,148 @@ local function at(x: number, y: number, z: number, yaw: number?): CFrame
 end
 Prefabs.at = at
 
--- Kontainer 29.2 × 9.6 × 9.6 (panjang di sumbu X lokal). base = CFrame tengah-bawah.
-Prefabs.containerSize = Vector3.new(29.2, 9.6, 9.6)
-function Prefabs.container(b: any, parent: Instance, name: string, base: CFrame, colorKey: string)
+-- Warna kontainer mesh di MapKit.Import (SurfaceAppearance, warna tetap dari tekstur).
+Prefabs.containerKits = { "ContainerRed", "ContainerBlue", "ContainerYellow", "ContainerGreen" }
+
+-- Tumpukan kontainer mesh: `tiers` tingkat di (x, z), yaw 0 = panjang di sumbu X. Tiap tingkat menapak tepat di atas
+-- tingkat bawahnya (tinggi diambil dari mesh). seed memilih warna bergilir.
+function Prefabs.containerStack(b: any, parent: Instance, name: string, x: number, z: number, g: number, tiers: number, yaw: number, seed: number)
 	local m = b:model(parent, name)
-	local S = Prefabs.containerSize
-	b:part(m, "Body", { size = S, cf = base * CFrame.new(0, S.Y / 2, 0), color = colorKey, material = "Corrugated" })
-	b:part(m, "Door_End", { size = Vector3.new(0.3, S.Y - 0.4, S.Z - 0.4), cf = base * CFrame.new(S.X / 2 + 0.15, S.Y / 2, 0), color = colorKey, material = "Metal" })
-	for i, z in { -1.6, 1.6 } do
-		b:part(m, "LockBar_0" .. i, { size = Vector3.new(0.3, S.Y - 1.4, 0.3), cf = base * CFrame.new(S.X / 2 + 0.4, S.Y / 2, z), color = "Chrome", material = "Metal" })
+	local y = g
+	for t = 1, tiers do
+		local kit = Prefabs.containerKits[((seed + t - 2) % #Prefabs.containerKits) + 1]
+		local _, size = b:clone(m, kit, at(x, y, z, yaw), string.format("Container_%s_%02d", string.sub(kit, 10), t))
+		y += if size.Y > 0 then size.Y else 10
 	end
 	return m
 end
 
--- Tumpukan: kolom berjajar di sumbu Z lokal, tiap kolom `levels[i]` kontainer; warna bergilir.
-function Prefabs.stack(b: any, parent: Instance, name: string, base: CFrame, levels: { number }, colors: { string }, seed: number)
+-- Derek kapal-ke-darat (STS): 4 kaki di dermaga, lengan (boom) di atas air ke arah −X, menara & tali penahan,
+-- rumah mesin di belakang, kabin, troli + spreader + kontainer menggantung. Aksen neon Y2K.
+export type CraneSpec = { xSea: number, xLand: number, zc: number, gauge: number, boomTip: number, boomBack: number, g: number }
+function Prefabs.stsCrane(b: any, parent: Instance, name: string, s: CraneSpec)
 	local m = b:model(parent, name)
-	local S = Prefabs.containerSize
-	local n = 0
-	for col, h in levels do
-		for lv = 1, h do
-			n += 1
-			local key = colors[((seed + n) % #colors) + 1]
-			local cf = base * CFrame.new(0, (lv - 1) * S.Y, (col - (#levels + 1) / 2) * (S.Z + 0.4))
-			Prefabs.container(b, m, string.format("Container_%s_%02d", (string.gsub(key, "Container", "")), n), cf, key)
+	local g, zc, hz = s.g, s.zc, s.gauge / 2
+	local H = 50 -- tinggi kaki
+	local boomY = g + H + 3 -- bawah lengan
+	local teal, metal = "CraneTeal", "Metal"
+	for _, c in { { "SeaNorth", s.xSea, zc - hz }, { "SeaSouth", s.xSea, zc + hz }, { "LandNorth", s.xLand, zc - hz }, { "LandSouth", s.xLand, zc + hz } } do
+		b:part(m, "Leg_" .. c[1], { size = Vector3.new(3, H, 3), cf = CFrame.new(c[2], g + H / 2, c[3]), color = teal, material = metal })
+		b:part(m, "Neon_Leg_" .. c[1], { size = Vector3.new(3.3, 1, 3.3), cf = CFrame.new(c[2], g + 30, c[3]), color = "HotPink", material = "Neon" })
+		b:part(m, "Bogie_" .. c[1], { size = Vector3.new(4, 2, 5), cf = CFrame.new(c[2], g + 1, c[3]), color = "Steel", material = metal })
+	end
+	local span = math.abs(s.xLand - s.xSea)
+	local midX = (s.xLand + s.xSea) / 2
+	for _, z in { { "North", zc - hz }, { "South", zc + hz } } do
+		b:part(m, "Brace_" .. z[1], { size = Vector3.new(span, 2.5, 2), cf = CFrame.new(midX, g + 28, z[2]), color = teal, material = metal })
+	end
+	for _, x in { { "Sea", s.xSea }, { "Land", s.xLand } } do
+		b:part(m, "Portal_" .. x[1], { size = Vector3.new(3, 3, s.gauge + 3), cf = CFrame.new(x[2], g + H + 1.5, zc), color = teal, material = metal })
+	end
+	-- lengan: 2 girder sejajar + ikatan silang
+	local boomLen = s.boomBack - s.boomTip
+	local boomMid = (s.boomBack + s.boomTip) / 2
+	for _, z in { { "North", zc - 5 }, { "South", zc + 5 } } do
+		b:part(m, "Boom_" .. z[1], { size = Vector3.new(boomLen, 4, 2.5), cf = CFrame.new(boomMid, boomY + 2, z[2]), color = teal, material = metal })
+	end
+	local nTie = math.floor(boomLen / 12)
+	for i = 0, nTie do
+		local x = s.boomTip + i * boomLen / nTie
+		b:part(m, string.format("Boom_Tie_%02d", i + 1), { size = Vector3.new(1, 1, 10), cf = CFrame.new(x, boomY + 3.5, zc), color = teal, material = metal })
+	end
+	b:part(m, "Neon_Boom", { size = Vector3.new(boomLen, 0.4, 0.4), cf = CFrame.new(boomMid, boomY - 0.2, zc), color = "IceBlue", material = "Neon" })
+	-- menara di atas kaki darat + tali penahan ke ujung lengan & ke belakang
+	local apexY = boomY + 22
+	for _, z in { { "North", zc - 5 }, { "South", zc + 5 } } do
+		b:part(m, "Tower_" .. z[1], { size = Vector3.new(2.5, apexY - boomY - 4, 2.5), cf = CFrame.new(s.xLand, (boomY + 4 + apexY) / 2, z[2]), color = teal, material = metal })
+		for _, t in { { "Front", s.boomTip + 2 }, { "Back", s.boomBack - 2 } } do
+			local a, bb = Vector3.new(s.xLand, apexY, z[2]), Vector3.new(t[2], boomY + 4, z[2])
+			b:part(m, "Stay_" .. t[1] .. "_" .. z[1], { size = Vector3.new(0.7, 0.7, (bb - a).Magnitude), cf = CFrame.lookAt((a + bb) / 2, bb), color = "Steel", material = metal })
 		end
 	end
+	b:part(m, "Tower_Cap", { size = Vector3.new(3, 2, 13), cf = CFrame.new(s.xLand, apexY + 1, zc), color = teal, material = metal })
+	b:part(m, "Neon_Tower_Cap", { size = Vector3.new(3.2, 0.5, 13.2), cf = CFrame.new(s.xLand, apexY + 2.25, zc), color = "HotPink", material = "Neon" })
+	-- rumah mesin (belakang) & kabin operator (di bawah lengan, sisi laut)
+	b:part(m, "Machinery_House", { size = Vector3.new(10, 8, 14), cf = CFrame.new(s.boomBack - 6, boomY + 8, zc), color = "Chrome", material = "Chrome" })
+	b:part(m, "Neon_Machinery", { size = Vector3.new(10.2, 0.5, 14.2), cf = CFrame.new(s.boomBack - 6, boomY + 11.5, zc), color = "Lime", material = "Neon" })
+	b:part(m, "Cab", { size = Vector3.new(6, 6, 6), cf = CFrame.new(s.xSea - 6, boomY - 3, zc), color = "Chrome", material = "Chrome" })
+	b:part(m, "Cab_Glass", { size = Vector3.new(0.3, 3.5, 5.4), cf = CFrame.new(s.xSea - 9.1, boomY - 3, zc), color = "IceBlue", material = "Glass", transparency = 0.35 })
+	-- troli, kabel, spreader, kontainer menggantung di atas air
+	local tx = s.boomTip + 24
+	b:part(m, "Trolley", { size = Vector3.new(8, 3, 12), cf = CFrame.new(tx, boomY - 1.5, zc), color = "Steel", material = metal })
+	local spreadTop = boomY - 18
+	for i, dz in { -3.5, 3.5 } do
+		for j, dx in { -10, 10 } do
+			b:part(m, string.format("Cable_%02d", (i - 1) * 2 + j), { size = Vector3.new(0.3, boomY - 3 - spreadTop, 0.3), cf = CFrame.new(tx + dx * 0.3, (boomY - 3 + spreadTop) / 2, zc + dz), color = "Steel", material = metal, decor = true })
+		end
+	end
+	b:part(m, "Spreader", { size = Vector3.new(30, 1.2, 10), cf = CFrame.new(tx, spreadTop - 0.6, zc), color = "SafetyYellow", material = metal })
+	b:clone(m, "ContainerBlue", at(tx, spreadTop - 1.2 - 9.962, zc), "Container_Hanging")
+	-- rel kaki di dermaga
 	return m
 end
 
--- Derek gantry: 4 kaki, girder, boom, kabin, troli + kabel + kontainer menggantung, strip neon.
-function Prefabs.crane(b: any, parent: Instance, name: string, cx: number, cz: number, g: number)
+-- Gudang atap gergaji: dinding bergelombang, 3 gigi atap + kaca, 3 pintu gulung di sisi barat, neon, papan nama.
+function Prefabs.warehouse(b: any, parent: Instance, name: string, cx: number, cz: number, g: number, sign: string, W: number, D: number)
 	local m = b:model(parent, name)
-	local H, hx, hz = 60, 18, 10
-	for _, c in { { "NW", -hx, -hz }, { "NE", hx, -hz }, { "SW", -hx, hz }, { "SE", hx, hz } } do
-		b:part(m, "Leg_" .. c[1], { size = Vector3.new(3, H, 3), cf = CFrame.new(cx + c[2], g + H / 2, cz + c[3]), color = "ContainerOrange", material = "Metal" })
-		b:part(m, "Neon_Leg_" .. c[1], { size = Vector3.new(3.2, 1, 3.2), cf = CFrame.new(cx + c[2], g + H - 3, cz + c[3]), color = "HotPink", material = "Neon" })
-	end
-	for _, z in { { "North", -hz }, { "South", hz } } do
-		b:part(m, "Girder_" .. z[1], { size = Vector3.new(60, 4, 3), cf = CFrame.new(cx, g + H + 2, cz + z[2]), color = "ContainerOrange", material = "Metal" })
-	end
-	b:part(m, "Beam_West", { size = Vector3.new(3, 4, 2 * hz), cf = CFrame.new(cx - hx, g + H + 2, cz), color = "ContainerOrange", material = "Metal" })
-	b:part(m, "Beam_East", { size = Vector3.new(3, 4, 2 * hz), cf = CFrame.new(cx + hx, g + H + 2, cz), color = "ContainerOrange", material = "Metal" })
-	b:part(m, "Cab", { size = Vector3.new(7, 6, 7), cf = CFrame.new(cx + hx - 4, g + H - 3, cz), color = "Chrome", material = "Metal" })
-	b:part(m, "Cab_Glass", { size = Vector3.new(0.3, 3, 6), cf = CFrame.new(cx + hx - 7.7, g + H - 2.5, cz), color = "IceBlue", material = "Glass", transparency = 0.4 })
-	b:part(m, "Trolley", { size = Vector3.new(8, 3, 2 * hz + 3), cf = CFrame.new(cx - 10, g + H - 0.5, cz), color = "Steel", material = "Metal" })
-	b:part(m, "Cable", { size = Vector3.new(0.4, 28, 0.4), cf = CFrame.new(cx - 10, g + H - 16, cz), color = "Steel", material = "Metal", decor = true })
-	b:part(m, "Spreader", { size = Vector3.new(30, 1.2, 9), cf = CFrame.new(cx - 10, g + H - 30, cz), color = "SafetyYellow", material = "Metal" })
-	Prefabs.container(b, m, "Container_Hanging", at(cx - 10, g + H - 40.6, cz), "Lilac")
-	return m
-end
-
--- Gudang atap gergaji: 4 dinding bergelombang, 3 gigi atap + kaca, 3 pintu gulung di sisi barat, neon, papan nama.
-function Prefabs.warehouse(b: any, parent: Instance, name: string, cx: number, cz: number, g: number, sign: string)
-	local m = b:model(parent, name)
-	local W, H, D = 60, 24, 45
+	local H = 24
 	local function wall(n: string, sx: number, sz: number, x: number, z: number)
 		b:part(m, n, { size = Vector3.new(sx, H, sz), cf = CFrame.new(x, g + H / 2, z), color = "ContainerBlue", material = "Corrugated" })
 	end
-	wall("Wall_North", W, 1, cx, cz - D / 2)
-	wall("Wall_South", W, 1, cx, cz + D / 2)
-	wall("Wall_East", 1, D, cx + W / 2, cz)
-	wall("Wall_West", 1, D, cx - W / 2, cz)
+	wall("Wall_North", W, 1, cx, cz - D / 2 + 0.5)
+	wall("Wall_South", W, 1, cx, cz + D / 2 - 0.5)
+	wall("Wall_East", 1, D - 2, cx + W / 2 - 0.5, cz)
+	wall("Wall_West", 1, D - 2, cx - W / 2 + 0.5, cz)
 	for i = 1, 3 do
 		local x = cx - W / 2 + (i - 0.5) * (W / 3)
 		b:part(m, "Roof_Tooth_0" .. i, { size = Vector3.new(D, 6, W / 3), cf = CFrame.new(x, g + H + 3, cz) * CFrame.Angles(0, math.rad(90), 0), color = "Rust", material = "Corrugated", shape = "Wedge" })
 		b:part(m, "Roof_Glass_0" .. i, { size = Vector3.new(0.4, 5.6, D - 1), cf = CFrame.new(x + W / 6 - 0.3, g + H + 3, cz), color = "IceBlue", material = "Glass", transparency = 0.35 })
 	end
-	for i, z in { -14, 0, 14 } do
-		b:part(m, "Door_Roll_0" .. i, { size = Vector3.new(0.4, 14, 10), cf = CFrame.new(cx - W / 2 - 0.4, g + 7, cz + z), color = "Steel", material = "DiamondPlate" })
-		b:part(m, "Neon_Door_0" .. i, { size = Vector3.new(0.4, 0.6, 10), cf = CFrame.new(cx - W / 2 - 0.5, g + 14.8, cz + z), color = if i == 2 then "Lime" else "HotPink", material = "Neon" })
+	local doorZ = { -D / 3.2, 0, D / 3.2 }
+	for i, z in doorZ do
+		b:part(m, "Door_Roll_0" .. i, { size = Vector3.new(0.4, 14, 10), cf = CFrame.new(cx - W / 2 - 0.2, g + 7, cz + z), color = "Steel", material = "DiamondPlate" })
+		b:part(m, "Neon_Door_0" .. i, { size = Vector3.new(0.4, 0.6, 10), cf = CFrame.new(cx - W / 2 - 0.3, g + 14.3, cz + z), color = if i == 2 then "Lime" else "HotPink", material = "Neon" })
 	end
-	b:part(m, "Neon_Roofline", { size = Vector3.new(0.5, 0.6, D), cf = CFrame.new(cx - W / 2 - 0.5, g + H - 0.5, cz), color = "IceBlue", material = "Neon" })
-	b:part(m, "LoadingDock", { size = Vector3.new(8, 1.5, D), cf = CFrame.new(cx - W / 2 - 4.5, g + 0.75, cz), color = "Concrete", material = "Concrete" })
-	b:part(m, "Dock_Edge", { size = Vector3.new(0.4, 1.6, D), cf = CFrame.new(cx - W / 2 - 8.6, g + 0.8, cz), color = "SafetyYellow", material = "Plastic" })
-	local board = b:part(m, "Sign_Board", { size = Vector3.new(0.6, 5, 26), cf = CFrame.new(cx - W / 2 - 0.8, g + H - 5, cz), color = "Steel", material = "Metal" })
+	b:part(m, "Neon_Roofline", { size = Vector3.new(0.5, 0.6, D), cf = CFrame.new(cx - W / 2 - 0.25, g + H - 0.3, cz), color = "IceBlue", material = "Neon" })
+	b:part(m, "LoadingDock", { size = Vector3.new(8, 1.5, D), cf = CFrame.new(cx - W / 2 - 4, g + 0.75, cz), color = "Concrete", material = "Concrete" })
+	b:part(m, "Dock_Edge", { size = Vector3.new(0.4, 1.6, D), cf = CFrame.new(cx - W / 2 - 8.2, g + 0.8, cz), color = "SafetyYellow", material = "Plastic" })
+	local board = b:part(m, "Sign_Board", { size = Vector3.new(0.6, 5, 26), cf = CFrame.new(cx - W / 2 - 0.3, g + H - 4.5, cz), color = "Steel", material = "Metal" })
 	b:sign(board, sign, "Left", "HotPink")
 	return m
 end
 
--- Pagar kawat: tiang tiap `step`, panel kawat tembus pandang, rel atas. Garis lurus dari (x1,z1) ke (x2,z2).
-function Prefabs.fence(b: any, parent: Instance, name: string, x1: number, z1: number, x2: number, z2: number, g: number)
+-- Landasan roket donasi (tepat di bawah NukeLaunch): cakram baja Ø16 + tepi neon + tanda silang + 2 suar rendah
+-- (sisi timur dibiarkan kosong: dinding kontainer timur mulai x 153).
+function Prefabs.launchPad(b: any, parent: Instance, name: string, x: number, z: number, g: number)
 	local m = b:model(parent, name)
-	local dx, dz = x2 - x1, z2 - z1
-	local len = math.sqrt(dx * dx + dz * dz)
-	local n = math.max(1, math.floor(len / 12 + 0.5))
-	local yaw = math.atan2(-dz, dx)
-	for i = 0, n do
-		local t = i / n
-		b:part(m, string.format("Post_%02d", i + 1), { size = Vector3.new(0.6, 10, 0.6), cf = CFrame.new(x1 + dx * t, g + 5, z1 + dz * t), color = "Chrome", material = "Metal" })
+	local up = CFrame.Angles(0, 0, math.rad(90))
+	b:part(m, "Neon_Rim", { size = Vector3.new(0.2, 17, 17), cf = CFrame.new(x, g + 0.1, z) * up, color = "HotPink", material = "Neon", shape = "Cylinder" })
+	b:part(m, "Pad_Disk", { size = Vector3.new(0.4, 16, 16), cf = CFrame.new(x, g + 0.2, z) * up, color = "Steel", material = "DiamondPlate", shape = "Cylinder" })
+	for i, yaw in { 45, -45 } do
+		b:part(m, "Mark_Cross_0" .. i, { size = Vector3.new(11, 0.1, 1.2), cf = CFrame.new(x, g + 0.45, z) * CFrame.Angles(0, math.rad(yaw), 0), color = "SafetyYellow", material = "Plastic", decor = true })
 	end
-	local mid = CFrame.new((x1 + x2) / 2, 0, (z1 + z2) / 2) * CFrame.Angles(0, yaw, 0)
-	b:part(m, "Mesh_Panel", { size = Vector3.new(len, 9, 0.2), cf = mid + Vector3.new(0, g + 4.5, 0), color = "Chrome", material = "DiamondPlate", transparency = 0.6 })
-	b:part(m, "Rail_Top", { size = Vector3.new(len, 0.4, 0.4), cf = mid + Vector3.new(0, g + 9.8, 0), color = "Chrome", material = "Metal" })
+	for i, d in { { 0, -11 }, { 0, 11 } } do
+		b:part(m, "Beacon_Pole_0" .. i, { size = Vector3.new(8, 0.8, 0.8), cf = CFrame.new(x + d[1], g + 4, z + d[2]) * up, color = "Chrome", material = "Metal", shape = "Cylinder" })
+		b:part(m, "Beacon_Light_0" .. i, { size = Vector3.new(1.4, 1.4, 1.4), cf = CFrame.new(x + d[1], g + 8.7, z + d[2]), color = if i % 2 == 0 then "IceBlue" else "HotPink", material = "Neon", shape = "Ball" })
+	end
+	return m
+end
+
+-- Tambat (bollard) baja di tepi dermaga.
+function Prefabs.bollard(b: any, parent: Instance, name: string, x: number, z: number, g: number)
+	return b:part(parent, name, { size = Vector3.new(1.8, 1.4, 1.4), cf = CFrame.new(x, g + 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), color = "Steel", material = "Metal", shape = "Cylinder" })
+end
+
+-- Papan nama rendah di 2 tiang.
+function Prefabs.lowSign(b: any, parent: Instance, name: string, x: number, z: number, g: number, text: string, yaw: number)
+	local m = b:model(parent, name)
+	local base = at(x, g, z, yaw)
+	for i, dx in { -8, 8 } do
+		b:part(m, "Post_0" .. i, { size = Vector3.new(0.6, 8, 0.6), cf = base * CFrame.new(dx, 4, 0), color = "Chrome", material = "Metal" })
+	end
+	local board = b:part(m, "Board", { size = Vector3.new(18, 3.5, 0.5), cf = base * CFrame.new(0, 6.5, 0), color = "Steel", material = "Metal" })
+	b:sign(board, text, "Front", "Lime")
+	b:sign(board, text, "Back", "Lime")
 	return m
 end
 

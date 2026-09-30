@@ -13,6 +13,9 @@ export type PartSpec = {
 	transparency: number?,
 	shape: string?, -- "Block" (default) | "Wedge" | "Cylinder" | "Ball"
 	decor: boolean?, -- true = tidak bisa ditabrak (hiasan)
+	collisionGroup: string?, -- mis. "DoorVIP" / "DoorVVIP" (PlayerCollisionManager)
+	floor: boolean?, -- true = slab lantai (tanpa bayangan, tetap bisa diinjak)
+	allowBelowGround: boolean?, -- true = sengaja di bawah lantai (fender dinding dermaga, tiang di air)
 }
 
 local function color(key: string?): Color3
@@ -86,15 +89,41 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	local biggest = math.max(spec.size.X, spec.size.Y, spec.size.Z)
 	local invisible = (spec.transparency or 0) >= 1
-	p.CastShadow = not (biggest < 2 or invisible or mat == "Neon")
+	p.CastShadow = not (biggest < 2 or invisible or mat == "Neon" or spec.floor == true)
 	if spec.decor or biggest < 1 then
 		p.CanCollide = false
 		p.CanTouch = false
 		p.CanQuery = false
 	end
+	if spec.collisionGroup then
+		p.CollisionGroup = spec.collisionGroup
+	end
+	if spec.allowBelowGround then
+		p:SetAttribute("AllowBelowGround", true)
+	end
 	p.Parent = parent
 	self.parts += 1
 	return p
+end
+
+-- SpawnLocation 12 × 1 × 12 (netral, forcefield 10 dtk seperti spawn lama), neon pink.
+function Builder:spawn(parent: Instance, name: string, cf: CFrame): SpawnLocation
+	local s = Instance.new("SpawnLocation")
+	s.Name = name
+	s.Anchored = true
+	s.Size = Vector3.new(12, 1, 12)
+	s.CFrame = cf
+	s.Neutral = true
+	s.Duration = 10
+	s.Enabled = true
+	s.Color = color("HotPink")
+	s.Material = Enum.Material.Neon
+	s.TopSurface = Enum.SurfaceType.Smooth
+	s.BottomSurface = Enum.SurfaceType.Smooth
+	s.CastShadow = false
+	s.Parent = parent
+	self.parts += 1
+	return s
 end
 
 -- Papan tulisan Y2K (SurfaceGui) di satu sisi part.
@@ -150,12 +179,13 @@ local function eachPart(inst: Instance, fn: (BasePart) -> ())
 end
 
 -- Salin mesh dari ServerStorage.MapKit (dicari rekursif), taruh dengan tengah-bawahnya di cf (menapak tanah),
--- beri nama. Isi kit bernama generik ("Part", "Meshes/…") → Piece_NN / Group_NN.
-function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: string): Instance?
+-- beri nama, opsional diskalakan. Isi kit bernama generik ("Part", "Meshes/…") → Piece_NN / Group_NN.
+-- Mengembalikan (instance, ukuran kotak pembatas setelah skala).
+function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: string, scale: number?): (Instance?, Vector3)
 	local src = self.kit and self.kit:FindFirstChild(kitName, true)
 	if not src then
 		table.insert(self.missingKit, kitName)
-		return nil
+		return nil, Vector3.new(0, 0, 0)
 	end
 	local Naming = require(script.Parent.Naming)
 	local c = src:Clone()
@@ -166,24 +196,53 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 			d.Name = Naming.fallback(d.ClassName, i)
 		end
 	end
+	-- nama kembar di satu induk → diberi nomor (Tyre → Tyre_01, Tyre_02, …)
+	local holders = c:GetDescendants()
+	table.insert(holders, c)
+	for _, holder in holders do
+		local count: { [string]: number } = {}
+		for _, k in holder:GetChildren() do
+			count[k.Name] = (count[k.Name] or 0) + 1
+		end
+		local seen: { [string]: number } = {}
+		for _, k in holder:GetChildren() do
+			if count[k.Name] > 1 and (k:IsA("BasePart") or k:IsA("Model") or k:IsA("Folder")) then
+				local base = k.Name
+				seen[base] = (seen[base] or 0) + 1
+				k.Name = string.format("%s_%02d", base, seen[base])
+			end
+		end
+	end
 	-- kotak pembatas lama → pindahkan supaya tengah-bawah = cf (tanpa GetBoundingBox/PivotTo: jalan juga di Lune)
 	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
 	eachPart(c, function(p)
+		-- sudut kotak part yang sudah diputar (bukan sekadar posisi ± ukuran/2) → dasar mesh miring tetap tepat
 		local h = p.Size / 2
-		lo = Vector3.new(math.min(lo.X, p.CFrame.X - h.X), math.min(lo.Y, p.CFrame.Y - h.Y), math.min(lo.Z, p.CFrame.Z - h.Z))
-		hi = Vector3.new(math.max(hi.X, p.CFrame.X + h.X), math.max(hi.Y, p.CFrame.Y + h.Y), math.max(hi.Z, p.CFrame.Z + h.Z))
+		for _, sx in { -1, 1 } do
+			for _, sy in { -1, 1 } do
+				for _, sz in { -1, 1 } do
+					local w = p.CFrame:PointToWorldSpace(Vector3.new(sx * h.X, sy * h.Y, sz * h.Z))
+					lo = Vector3.new(math.min(lo.X, w.X), math.min(lo.Y, w.Y), math.min(lo.Z, w.Z))
+					hi = Vector3.new(math.max(hi.X, w.X), math.max(hi.Y, w.Y), math.max(hi.Z, w.Z))
+				end
+			end
+		end
 	end)
 	local pivot = CFrame.new((lo.X + hi.X) / 2, lo.Y, (lo.Z + hi.Z) / 2)
-	local move = cf * pivot:Inverse()
+	local k = scale or 1
 	eachPart(c, function(p)
-		p.CFrame = move * p.CFrame
+		local rel = pivot:ToObjectSpace(p.CFrame)
+		p.CFrame = cf * (rel - rel.Position + rel.Position * k)
+		if k ~= 1 then
+			p.Size = p.Size * k
+		end
 		p.Anchored = true
 		self.parts += 1
 	end)
 	c.Name = name
 	c:SetAttribute("KitSource", nil)
 	c.Parent = parent
-	return c
+	return c, (hi - lo) * k
 end
 
 return Builder

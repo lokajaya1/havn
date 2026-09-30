@@ -21,6 +21,7 @@ return {
 		Asphalt = { 52, 54, 58 },
 		Steel = { 70, 74, 80 },
 		SafetyYellow = { 242, 196, 36 },
+		CraneTeal = { 42, 140, 140 },
 		Blockout = { 200, 200, 205 },
 	},
 	materials = {
