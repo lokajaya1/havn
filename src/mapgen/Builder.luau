@@ -19,6 +19,8 @@ export type PartSpec = {
 	collisionGroup: string?, -- mis. "DoorVIP" / "DoorVVIP" (PlayerCollisionManager)
 	floor: boolean?, -- true = slab lantai (tanpa bayangan, tetap bisa diinjak)
 	allowBelowGround: boolean?, -- true = sengaja di bawah lantai (fender dinding dermaga, tiang di air)
+	reflectance: number?, -- kilap (balon perak Metal 0.35, lateks 0.1)
+	noShadow: boolean?, -- true = tanpa bayangan (dekor pesta)
 }
 
 local function rgb(c: { number }): Color3
@@ -100,11 +102,14 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 		p.MaterialVariant = spec.materialVariant
 	end
 	p.Transparency = spec.transparency or 0
+	if spec.reflectance then
+		p.Reflectance = spec.reflectance
+	end
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	local biggest = math.max(spec.size.X, spec.size.Y, spec.size.Z)
 	local invisible = (spec.transparency or 0) >= 1
-	p.CastShadow = not (biggest < 2 or invisible or mat == "Neon" or spec.floor == true)
+	p.CastShadow = not (biggest < 2 or invisible or mat == "Neon" or spec.floor == true or spec.noShadow == true)
 	p.CanTouch = false
 	if spec.decor or biggest < 1 then
 		p.CanCollide = false
@@ -207,6 +212,55 @@ function Builder:sign(board: BasePart, text: string, face: string, colorKey: str
 	t.Text = text
 	t.Parent = gui
 	gui.Parent = board
+end
+
+-- Tulisan balon (B1, gaya "A" pilihan user dari preview B0): huruf bulat FredokaOne, isi warna `fillKey`, garis `strokeKey`,
+-- menyala lembut (LightInfluence 0, Brightness 1.5), di panel tak terlihat.
+function Builder:balloonText(board: BasePart, text: string, face: string, fillKey: string, strokeKey: string)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "TextGui"
+	gui.Face = (Enum.NormalId :: any)[face]
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.Brightness = 1.5
+	local t = Instance.new("TextLabel")
+	t.Name = "Text"
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.TextScaled = true
+	t.Font = Enum.Font.FredokaOne
+	t.TextColor3 = color(fillKey)
+	t.Text = text
+	local st = Instance.new("UIStroke")
+	st.Name = "Stroke"
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	st.Color = color(strokeKey)
+	st.Thickness = 5
+	st.Parent = t
+	t.Parent = gui
+	gui.Parent = board
+end
+
+-- Confetti ringan (B1): jatuh dari `part` (volume kotak), satu warna per emitter; biaya kecil di HP (rate rendah).
+function Builder:confetti(part: BasePart, name: string, colorKey: string, texture: string, rate: number)
+	local e = Instance.new("ParticleEmitter")
+	e.Name = name
+	pcall(function()
+		(e :: any).Texture = texture -- properti Content (Lune tidak bisa menulisnya; di Roblox berhasil)
+	end)
+	e.Color = ColorSequence.new(color(colorKey))
+	e.Rate = rate
+	e.Lifetime = NumberRange.new(10, 11)
+	e.Speed = NumberRange.new(3, 5)
+	e.Acceleration = Vector3.new(0, -0.6, 0)
+	e.EmissionDirection = Enum.NormalId.Bottom
+	e.SpreadAngle = Vector2.new(25, 25)
+	e.Size = NumberSequence.new(0.4)
+	e.Rotation = NumberRange.new(0, 360)
+	e.RotSpeed = NumberRange.new(-120, 120)
+	e.Parent = part
+	return e
 end
 
 -- Label melayang (hanya untuk blockout / tinjauan).

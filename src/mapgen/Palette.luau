@@ -46,6 +46,10 @@ return {
 		PastelMint = { 223, 223, 222 },
 		PastelBlue = { 91, 93, 105 },
 		Cream = { 223, 223, 222 },
+		-- B1 pesta ulang tahun (zona Party, sementara): monokrom + sentuhan pink (dipilih user dari preview B0 1 Okt)
+		PartyPink = { 255, 105, 180 },
+		PartyBlush = { 248, 187, 208 },
+		PartySilver = { 200, 200, 205 },
 	},
 	-- Neon di klon kit ikut NeonWhite, kecuali kit yang cahayanya konten (layar arcade).
 	neonKeep = { Kit_ArcadeMachines = true, Kit_LogoHAVN = true }, -- huruf 3D HAVN = putih 255 persis DJ STAGE
@@ -69,5 +73,6 @@ return {
 		Sand = "Sand",
 		DiamondPlate = "DiamondPlate",
 		Pavement = "Pavement",
+		Foil = "Foil",
 	},
 }

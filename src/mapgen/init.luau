@@ -25,11 +25,12 @@ local zones: { [string]: (any, any) -> () } = {
 	Bay = require(script.Zones.Bay),
 	VipLounge = require(script.Zones.VipLounge),
 	Plaza = require(script.Zones.Plaza),
+	Party = require(script.Zones.Party),
 }
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V15", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V16", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -175,7 +176,8 @@ function MapGen.check(root: Instance): { string }
 				end
 				local box = aabb(c.CFrame, c.Size)
 				for _, r in Layout.fixed do
-					if touches(c, r) and c:GetAttribute("AllowFixed") ~= r.name then
+					local allow = c:GetAttribute("AllowFixed") -- satu nama area atau beberapa dipisah koma
+					if touches(c, r) and not (type(allow) == "string" and table.find(string.split(allow, ","), r.name)) then
 						table.insert(issues, c.Name .. " menabrak area " .. r.name)
 					end
 				end
