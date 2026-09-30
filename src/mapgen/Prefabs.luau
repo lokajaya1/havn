@@ -266,6 +266,25 @@ function Prefabs.pontoon(b: any, parent: Instance, name: string, x: number, z: n
 	return m
 end
 
+-- Kursi/meja mesh ber-Seat yang diputar supaya Seat-nya menghadap arah `heading` (derajat; 90 = barat/−X,
+-- −90 = timur/+X, 0 = utara/−Z). Arah Seat asli dibaca dari kit (Builder:seatHeading).
+function Prefabs.seatFacing(b: any, parent: Instance, kit: string, x: number, y: number, z: number, heading: number, name: string, scale: number?)
+	local yaw = heading - (b:seatHeading(kit) or 0)
+	return b:clone(parent, kit, at(x, y, z, yaw), name, scale)
+end
+
+-- Tangga lurus dari lantai g naik `rise` stud ke arah −X mulai x0 (anak tangga 0.5 tinggi × 1 panjang), lebar w.
+function Prefabs.stairs(b: any, parent: Instance, name: string, x0: number, z1: number, z2: number, g: number, rise: number)
+	local m = b:model(parent, name)
+	local n = math.floor(rise / 0.5 + 0.5)
+	for k = 1, n do
+		local h = k * 0.5
+		b:part(m, string.format("Step_%02d", k), { size = Vector3.new(1, h, z2 - z1), cf = CFrame.new(x0 - (k - 0.5), g + h / 2, (z1 + z2) / 2), color = "Steel", material = "DiamondPlate" })
+	end
+	b:part(m, "Neon_Edge", { size = Vector3.new(n, 0.2, 0.2), cf = CFrame.new(x0 - n / 2, g + rise / 2 + 0.3, z1 + 0.1) * CFrame.Angles(0, 0, math.atan2(-rise, n)), color = "HotPink", material = "Neon", decor = true })
+	return m
+end
+
 -- Tambat (bollard) baja di tepi dermaga.
 function Prefabs.bollard(b: any, parent: Instance, name: string, x: number, z: number, g: number)
 	return b:part(parent, name, { size = Vector3.new(1.8, 1.4, 1.4), cf = CFrame.new(x, g + 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), color = "Steel", material = "Metal", shape = "Cylinder" })

@@ -126,6 +126,22 @@ function Builder:spawn(parent: Instance, name: string, cf: CFrame): SpawnLocatio
 	return s
 end
 
+-- Arah hadap (derajat, 0 = −Z) Seat pertama di sebuah kit, untuk memutar kursi mesh supaya menghadap target.
+-- Rumus: kursi yang diputar yaw θ menghadap (−sin θ, 0, −cos θ). nil kalau kit/Seat tidak ada.
+function Builder:seatHeading(kitName: string): number?
+	local src = self.kit and self.kit:FindFirstChild(kitName, true)
+	if not src then
+		return nil
+	end
+	for _, d in src:GetDescendants() do
+		if d:IsA("Seat") then
+			local l = d.CFrame.LookVector
+			return math.deg(math.atan2(-l.X, -l.Z))
+		end
+	end
+	return nil
+end
+
 -- Tempat duduk (Seat tak terlihat) di atas bangku mesh: pemain bisa duduk, tidak menghalangi jalan.
 function Builder:seat(parent: Instance, name: string, cf: CFrame, size: Vector3): BasePart
 	local s = Instance.new("Seat")
