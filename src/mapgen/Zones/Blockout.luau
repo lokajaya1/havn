@@ -32,7 +32,7 @@ return function(b: any, L: any)
 
 	-- Harbor (timur): tumpukan kontainer 3 lebar × 2 tinggi, derek gantry, gudang, pagar kawat
 	local harbor = b:folder(nil, "Harbor")
-	local stacks = { { 120, -285 }, { 160, -285 }, { 200, -285 }, { 120, -250 }, { 160, -250 }, { 200, -250 }, { 200, -215 } }
+	local stacks = { { 120, -248 }, { 160, -248 }, { 200, -248 }, { 170, -215 }, { 205, -215 }, { 214, -182 } }
 	for i, p in stacks do
 		box(harbor, string.format("ContainerStack_%02d", i), p[1], p[2], 29.2, 19.3, 28.9, "ContainerOrange")
 	end
@@ -42,7 +42,7 @@ return function(b: any, L: any)
 	end
 	box(crane, "Beam_Top", 180, -150, 52, 5, 26, "ContainerRed", G + 60)
 	local warehouse = box(harbor, "Warehouse_Main", 165, -80, 60, 28, 45, "Concrete")
-	box(harbor, "Fence_West_North", 97, -258, 1, 10, 84, "Chrome") -- berhenti di z −216: jalur efek donasi bebas
+	box(harbor, "Fence_West_North", 97, -240.5, 1, 10, 49, "Chrome") -- z −265…−216: jalur efek donasi bebas
 	box(harbor, "Fence_West_South", 97, -30, 1, 10, 130, "Chrome")
 	b:label(harbor, warehouse, "HARBOR")
 
@@ -61,8 +61,8 @@ return function(b: any, L: any)
 
 	-- Beach (barat): laut, dermaga, menara penjaga, container bar, area santai
 	local beach = b:folder(nil, "Beach")
-	local sea = box(beach, "Sea_Placeholder", -205, -70, 30, 0.4, 460, "Sea", G - 1)
-	box(beach, "Pier_Main", -190, -20, 60, 1, 14, "Wood", G + 1)
+	local sea = box(beach, "Sea_Placeholder", -196, -32.5, 28, 0.4, 470, "Sea", G - 1)
+	box(beach, "Pier_Main", -180, -20, 58, 1, 14, "Wood", G + 1)
 	local tower = b:model(beach, "LifeguardTower_01")
 	box(tower, "Base", -175, 70, 8, 14, 8, "Chrome")
 	box(tower, "Cabin", -175, 70, 10, 6, 10, "HotPink", G + 14)

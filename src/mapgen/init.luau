@@ -12,11 +12,12 @@ local Layout = require(script.Layout)
 
 local zones: { [string]: (any, any) -> () } = {
 	Blockout = require(script.Zones.Blockout),
+	Terrain = require(script.Zones.Terrain),
 }
 
-local MapGen = { version = "R1", layout = Layout }
+local MapGen = { version = "R2", layout = Layout }
 
-type Env = { workspace: Instance, serverStorage: Instance, history: any?, out: ((string) -> ())? }
+type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
 local function defaultEnv(): Env
 	return {
@@ -34,6 +35,69 @@ end
 local function touches(p: BasePart, a: any): boolean
 	local pos, s = p.CFrame.Position, p.Size
 	return pos.X + s.X / 2 > a.minX and pos.X - s.X / 2 < a.maxX and pos.Z + s.Z / 2 > a.minZ and pos.Z - s.Z / 2 < a.maxZ
+end
+
+-- Kotak pembatas (sumbu dunia) dari CFrame + ukuran (termasuk yang diputar).
+local function aabb(cf: CFrame, size: Vector3)
+	local h = size / 2
+	local ax = cf:VectorToWorldSpace(Vector3.new(h.X, 0, 0))
+	local ay = cf:VectorToWorldSpace(Vector3.new(0, h.Y, 0))
+	local az = cf:VectorToWorldSpace(Vector3.new(0, 0, h.Z))
+	local e = Vector3.new(
+		math.abs(ax.X) + math.abs(ay.X) + math.abs(az.X),
+		math.abs(ax.Y) + math.abs(ay.Y) + math.abs(az.Y),
+		math.abs(ax.Z) + math.abs(ay.Z) + math.abs(az.Z)
+	)
+	local p = cf.Position
+	return { minX = p.X - e.X, maxX = p.X + e.X, minZ = p.Z - e.Z, maxZ = p.Z + e.Z }
+end
+
+local function overlap(a: any, b: any): boolean
+	return a.maxX > b.minX + 0.01 and a.minX < b.maxX - 0.01 and a.maxZ > b.minZ + 0.01 and a.minZ < b.maxZ - 0.01
+end
+
+-- Periksa operasi terrain: di dalam batas map, tidak menyentuh DJ STAGE / lubang lantai dansa, material sah.
+function MapGen.checkTerrain(ops: { any }): { string }
+	local issues = {}
+	local B = Layout.boundary
+	for i, o in ops do
+		if o.op == "Block" or o.op == "Wedge" then
+			local box = aabb(o.cf, o.size)
+			if box.minX < B.minX - 0.01 or box.maxX > B.maxX + 0.01 or box.minZ < B.minZ - 0.01 or box.maxZ > B.maxZ + 0.01 then
+				table.insert(issues, ("terrain #%d (%s) keluar batas map"):format(i, o.material))
+			end
+			for _, r in { Layout.reserved[1], Layout.danceFloorPit } do
+				if overlap(box, r) then
+					table.insert(issues, ("terrain #%d (%s) menyentuh %s"):format(i, o.material, r.name))
+				end
+			end
+		end
+		if o.material and not pcall(function()
+			return (Enum.Material :: any)[o.material]
+		end) then
+			table.insert(issues, ("terrain #%d material tidak dikenal: %s"):format(i, o.material))
+		end
+	end
+	return issues
+end
+
+local function applyTerrain(t: any, ops: { any })
+	for _, o in ops do
+		local mat = o.material and (Enum.Material :: any)[o.material]
+		if o.op == "Block" then
+			t:FillBlock(o.cf, o.size, mat)
+		elseif o.op == "Wedge" then
+			t:FillWedge(o.cf, o.size, mat)
+		elseif o.op == "Color" then
+			t:SetMaterialColor(mat, o.color)
+		elseif o.op == "Water" then
+			t.WaterColor = o.color
+			t.WaterTransparency = o.props.transparency
+			t.WaterReflectance = o.props.reflectance
+			t.WaterWaveSize = o.props.waveSize
+			t.WaterWaveSpeed = o.props.waveSpeed
+		end
+	end
 end
 
 -- Periksa pohon hasil build: nama, kembar, skrip, Anchored, area zona, area terlarang.
@@ -99,8 +163,11 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	local b = Builder.new(zoneName, kit)
 	fn(b, Layout)
 	local issues = MapGen.check(b.root)
-	local report = { zone = zoneName, parts = b.parts, issues = issues, applied = false }
-	out(("MapGen %s %s | part %d | masalah %d"):format(MapGen.version, zoneName, b.parts, #issues))
+	for _, x in MapGen.checkTerrain(b.terrainOps) do
+		table.insert(issues, x)
+	end
+	local report = { zone = zoneName, parts = b.parts, terrainOps = #b.terrainOps, issues = issues, applied = false }
+	out(("MapGen %s %s | part %d | terrain %d operasi | masalah %d"):format(MapGen.version, zoneName, b.parts, #b.terrainOps, #issues))
 	for i = 1, math.min(#issues, 15) do
 		out("  - " .. issues[i])
 	end
@@ -110,22 +177,29 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 		return report
 	end
 	local rec = env.history and env.history:TryBeginRecording("MapGen_" .. zoneName)
-	local map = env.workspace:FindFirstChild("Map")
-	if not map then
-		map = Instance.new("Folder")
-		map.Name = "Map"
-		map.Parent = env.workspace
+	if #b.terrainOps > 0 then
+		applyTerrain(env.terrain or env.workspace:FindFirstChildOfClass("Terrain"), b.terrainOps)
 	end
-	local old = map:FindFirstChild(zoneName)
-	if old then
-		old:Destroy()
+	if #b.root:GetChildren() > 0 then
+		local map = env.workspace:FindFirstChild("Map")
+		if not map then
+			map = Instance.new("Folder")
+			map.Name = "Map"
+			map.Parent = env.workspace
+		end
+		local old = map:FindFirstChild(zoneName)
+		if old then
+			old:Destroy()
+		end
+		b.root.Parent = map
+	else
+		b.root:Destroy()
 	end
-	b.root.Parent = map
 	if rec then
 		env.history:FinishRecording(rec, Enum.FinishRecordingOperation.Commit)
 	end
 	report.applied = true
-	out(("MapGen SELESAI: Workspace.Map.%s dibangun (%d part)."):format(zoneName, b.parts))
+	out(("MapGen SELESAI: %s dibangun (%d part, %d operasi terrain)."):format(zoneName, b.parts, #b.terrainOps))
 	return report
 end
 
