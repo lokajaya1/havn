@@ -215,13 +215,15 @@ function Builder:sign(board: BasePart, text: string, face: string, colorKey: str
 end
 
 -- Tulisan balon (B1, gaya "A" pilihan user dari preview B0): huruf bulat FredokaOne, isi warna `fillKey`, garis `strokeKey`,
--- menyala lembut (LightInfluence 0, Brightness 1.5), di panel tak terlihat.
+-- menyala lembut (LightInfluence 0, Brightness 1.5), di panel tak terlihat. B1b: TextScaled dibatasi Roblox 100 px →
+-- PixelsPerStud dihitung dari tinggi panel (tinggi kanvas ≤ 95 px) supaya huruf memenuhi panel; garis ±0.15 stud.
 function Builder:balloonText(board: BasePart, text: string, face: string, fillKey: string, strokeKey: string)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "TextGui"
 	gui.Face = (Enum.NormalId :: any)[face]
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
+	local pps = math.max(1, math.floor(95 / board.Size.Y))
+	gui.PixelsPerStud = pps
 	gui.LightInfluence = 0
 	gui.Brightness = 1.5
 	local t = Instance.new("TextLabel")
@@ -236,7 +238,7 @@ function Builder:balloonText(board: BasePart, text: string, face: string, fillKe
 	st.Name = "Stroke"
 	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	st.Color = color(strokeKey)
-	st.Thickness = 5
+	st.Thickness = math.max(1, math.floor(0.15 * pps + 0.5))
 	st.Parent = t
 	t.Parent = gui
 	gui.Parent = board

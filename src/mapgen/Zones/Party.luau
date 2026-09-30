@@ -50,9 +50,9 @@ return function(b: any, L: any)
 		local board = b:part(letters, row[1], { size = Vector3.new(row[5], row[4], 0.2), cf = CFrame.new(T.x, row[3] + row[4] / 2, T.z), transparency = 1, decor = true })
 		b:balloonText(board, row[2], "Back", "White", "PartyPink")
 	end
-	for i, dx in { -27, 27 } do
+	for i, dx in { -T.clusterDX, T.clusterDX } do
 		local x = T.x + dx
-		Prefabs.garland(b, letters, "Cluster_Letters_0" .. i, { Vector3.new(x, T.happyY + 3, T.z), Vector3.new(x, T.birthdayY + 4, T.z) }, 4001 + i, { spread = 1.6, perStep = 2, step = 1.2 })
+		Prefabs.garland(b, letters, "Cluster_Letters_0" .. i, { Vector3.new(x, T.birthdayY + 3, T.z), Vector3.new(x, T.happyY + T.happyH - 2, T.z) }, 4001 + i, { spread = 1.6, perStep = 2, step = 1.2 })
 	end
 
 	-- 4) kanopi: tiang di bibir barat & timur, tali melengkung + bola lampu neon, gugus balon, bola cermin
