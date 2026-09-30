@@ -2,8 +2,8 @@
 -- ServerStorage/MapGen (ModuleScript) — alat STUDIO untuk membangun map dari kode (tidak pernah di-require game).
 -- Command Bar (mode Edit):
 --   local G = require(game.ServerStorage.MapGen:Clone())   -- :Clone() = hindari cache require Command Bar
---   G.build("Blockout", "CEK")     → laporan saja, tidak mengubah apa pun
---   G.build("Blockout", "JALAN")   → ganti Workspace.Map.<zona> (bisa Ctrl+Z)
+--   G.build("Ground", "CEK")     → laporan saja, tidak mengubah apa pun
+--   G.build("Ground", "JALAN")   → ganti Workspace.Map.<zona> (bisa Ctrl+Z)
 --   G.draft("SIMPAN") / G.draft("TAMPIL")  → pindah Workspace.Map ↔ ServerStorage.MapDraft (sebelum Publish)
 
 local Builder = require(script.Builder)
@@ -11,12 +11,17 @@ local Naming = require(script.Naming)
 local Layout = require(script.Layout)
 
 local zones: { [string]: (any, any) -> () } = {
-	Blockout = require(script.Zones.Blockout),
 	Terrain = require(script.Zones.Terrain),
-	Harbor = require(script.Zones.Harbor),
+	Ground = require(script.Zones.Ground),
+	Boundary = require(script.Zones.Boundary),
+	Spawn = require(script.Zones.Spawn),
+	Quay = require(script.Zones.Quay),
+	ContainerWall = require(script.Zones.ContainerWall),
+	LaunchPad = require(script.Zones.LaunchPad),
+	Yard = require(script.Zones.Yard),
 }
 
-local MapGen = { version = "R3", layout = Layout }
+local MapGen = { version = "V3", layout = Layout }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -40,7 +45,7 @@ local function aabb(cf: CFrame, size: Vector3)
 		math.abs(ax.Z) + math.abs(ay.Z) + math.abs(az.Z)
 	)
 	local p = cf.Position
-	return { minX = p.X - e.X, maxX = p.X + e.X, minZ = p.Z - e.Z, maxZ = p.Z + e.Z }
+	return { minX = p.X - e.X, maxX = p.X + e.X, minZ = p.Z - e.Z, maxZ = p.Z + e.Z, minY = p.Y - e.Y, maxY = p.Y + e.Y }
 end
 
 local function overlap(a: any, b: any): boolean
@@ -56,19 +61,25 @@ local function touches(p: BasePart, a: any): boolean
 	return overlap(aabb(p.CFrame, p.Size), a)
 end
 
--- Periksa operasi terrain: di dalam batas map, tidak menyentuh DJ STAGE / lubang lantai dansa, material sah.
+-- Periksa operasi terrain: di dalam jangkauan, SEJAJAR GRID 4 (voxel penuh = permukaan rata), material sah.
+local function onGrid(v: number): boolean
+	local g = Layout.grid
+	return math.abs(v / g - math.floor(v / g + 0.5)) < 1e-4
+end
+
 function MapGen.checkTerrain(ops: { any }): { string }
 	local issues = {}
-	local B = Layout.boundary
+	local W = Layout.terrainWipe
 	for i, o in ops do
 		if o.op == "Block" or o.op == "Wedge" then
 			local box = aabb(o.cf, o.size)
-			if box.minX < B.minX - 0.01 or box.maxX > B.maxX + 0.01 or box.minZ < B.minZ - 0.01 or box.maxZ > B.maxZ + 0.01 then
-				table.insert(issues, ("terrain #%d (%s) keluar batas map"):format(i, o.material))
+			if box.minX < W.minX - 0.01 or box.maxX > W.maxX + 0.01 or box.minZ < W.minZ - 0.01 or box.maxZ > W.maxZ + 0.01 then
+				table.insert(issues, ("terrain #%d (%s) keluar jangkauan terrain"):format(i, o.material))
 			end
-			for _, r in { Layout.reserved[1], Layout.danceFloorPit } do
-				if overlap(box, r) then
-					table.insert(issues, ("terrain #%d (%s) menyentuh %s"):format(i, o.material, r.name))
+			for _, v in { box.minX, box.maxX, box.minY, box.maxY, box.minZ, box.maxZ } do
+				if not onGrid(v) then
+					table.insert(issues, ("terrain #%d (%s) tidak sejajar grid %d (%.2f)"):format(i, o.material, Layout.grid, v))
+					break
 				end
 			end
 		end
@@ -100,13 +111,33 @@ local function applyTerrain(t: any, ops: { any })
 	end
 end
 
+-- Jalur roket donasi: apakah kotak part (diperlebar radius) memuat salah satu titik di garis NukeLaunch → NukeTarget.
+local function blocksNukePath(box: any): boolean
+	local P = Layout.nukePath
+	local a, b = Vector3.new(P.from[1], P.from[2], P.from[3]), Vector3.new(P.to[1], P.to[2], P.to[3])
+	local r = P.radius
+	local n = math.ceil((b - a).Magnitude)
+	for i = 0, n do
+		local p = a:Lerp(b, i / n)
+		if p.X > box.minX - r and p.X < box.maxX + r and p.Z > box.minZ - r and p.Z < box.maxZ + r and p.Y > box.minY - r and p.Y < box.maxY + r then
+			return true
+		end
+	end
+	return false
+end
+
 -- Periksa pohon hasil build: nama, kembar, skrip, Anchored, area zona, area terlarang.
 function MapGen.check(root: Instance): { string }
 	local issues = {}
+	-- zona lantai & batas boleh di bawah permukaan dan di bawah objek lama yang berdiri di lantai
+	local isFloor = root.Name == "Ground" or root.Name == "Boundary"
 	local function walk(inst: Instance)
 		local names = {}
 		for _, c in inst:GetChildren() do
-			table.insert(names, c.Name)
+			-- nama kembar hanya dilarang untuk objek map (part/model/folder); Texture/Decal/Attachment di dalam mesh boleh
+			if c:IsA("BasePart") or c:IsA("Model") or c:IsA("Folder") then
+				table.insert(names, c.Name)
+			end
 			if c:IsA("LuaSourceContainer") then
 				table.insert(issues, "skrip dilarang: " .. c:GetFullName())
 			end
@@ -120,12 +151,23 @@ function MapGen.check(root: Instance): { string }
 				if not c.Anchored then
 					table.insert(issues, "tidak Anchored: " .. c.Name)
 				end
-				for _, r in Layout.reserved do
+				local box = aabb(c.CFrame, c.Size)
+				for _, r in Layout.fixed do
 					if touches(c, r) then
 						table.insert(issues, c.Name .. " menabrak area " .. r.name)
 					end
 				end
-				if touches(c, Layout.nukeCorridor) then
+				if not isFloor then
+					for _, r in Layout.standing do
+						if touches(c, r) then
+							table.insert(issues, c.Name .. " menabrak area " .. r.name)
+						end
+					end
+					if box.minY < Layout.groundY - 0.01 and not c:GetAttribute("AllowBelowGround") then
+						table.insert(issues, ("%s masuk ke lantai/terrain (dasar y %.2f < %d)"):format(c.Name, box.minY, Layout.groundY))
+					end
+				end
+				if not isFloor and blocksNukePath(box) then
 					table.insert(issues, c.Name .. " menutup jalur efek donasi")
 				end
 			end

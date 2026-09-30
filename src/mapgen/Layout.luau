@@ -1,33 +1,80 @@
 --!strict
--- MapGen/Layout — denah zona (data murni, koordinat dunia; utara = −Z). Lihat Rencana_Workspace.md §2.
+-- MapGen/Layout — denah v3 PRESISI (data murni, koordinat dunia; utara = −Z). Lihat Rencana_Workspace.md §3–§4.
+-- Aturan: batas terrain & zona di kelipatan 4 (voxel terrain 4×4×4); objek lama yang dipertahankan memakai ukuran
+-- TERUKUR dari place (dibulatkan keluar 0.1 stud). Lantai asli map lama = y 6.0.
 
-export type Area = { name: string, minX: number, maxX: number, minZ: number, maxZ: number }
+export type Area = { name: string, minX: number, maxX: number, minZ: number, maxZ: number, maxY: number? }
+
+local function area(name: string, minX: number, maxX: number, minZ: number, maxZ: number, maxY: number?): Area
+	return { name = name, minX = minX, maxX = maxX, minZ = minZ, maxZ = maxZ, maxY = maxY }
+end
 
 return {
-	groundY = 6, -- tinggi tanah map (puncak terrain baru = lempeng Part lama ±6)
-	-- batas map = dinding DoorVVIP lama (CollisionWater); semua zona di dalamnya
-	boundary = { name = "Boundary", minX = -211, maxX = 232, minZ = -269, maxZ = 204 },
-	-- area yang TIDAK boleh diisi MapGen (bangunan & terrain di bawahnya dibiarkan)
-	reserved = {
-		{ name = "DJ STAGE", minX = -77, maxX = 79, minZ = -229, maxZ = -85 },
+	grid = 4,
+	groundY = 6, -- permukaan lantai (slab part) = lantai map lama
+	-- Terrain darat di bawah lantai sengaja DIRENDAHKAN ke y 0 dan slab dibuat tebal (y −2…6): permukaan terrain yang
+	-- dirender Roblox bisa sedikit naik dari batas voxel (uji Studio 13:21 — terrain menembus slab y 4…6), jadi terrain
+	-- selalu tertanam ≥ 6 stud di bawah permukaan lantai dan tidak pernah terlihat di atas slab.
+	landY = 0, -- puncak terrain darat di bawah slab (voxel penuh)
+	slabBottomY = -2, -- dasar slab lantai (tertanam 2 stud ke terrain → tepi tidak pernah bolong)
+	beachY = 4, -- puncak pasir pantai & batu pemecah ombak (terrain yang TERLIHAT)
+	baseY = -16, -- dasar terrain
+	sea = { surfaceY = 0, floorY = -12 },
+	-- batas map = dinding DoorVVIP (zona Boundary)
+	boundary = area("Boundary", -172, 164, -208, 104),
+	-- lantai part (slab) yang bisa diinjak
+	walkable = area("Walkable", -104, 164, -208, 104),
+	-- jangkauan terrain yang DIHAPUS dulu (mencakup terrain lama x −212…236, z −272…208)
+	terrainWipe = { minX = -220, maxX = 240, minZ = -276, maxZ = 212, minY = -24, maxY = 64 },
+	-- jangkauan terrain baru
+	terrainExtent = { minX = -216, maxX = 212, minZ = -256, maxZ = 152 },
+	land = area("Land", -104, 212, -256, 152), -- beton rata y 4 (termasuk cincin luar di balik bangunan batas)
+	seaArea = area("Sea", -216, -104, -256, 152), -- air y −12…0 di atas pasir
+	breakwater = area("Breakwater", -176, -168, -256, 152),
+	beachSand = area("BeachSand", -104, -60, -64, 104), -- pasir rata y 4 (x −88…−60) + lereng ke air (x −136…−88)
+	beachSlope = { minX = -136, maxX = -88 },
+	boardwalk = area("Boardwalk", -60, -44, -64, 104), -- dek kayu y 6
+	road = area("Road", -44, 164, 48, 64), -- jalan klub (aspal)
+	quayWall = { x1 = -106, x2 = -104, minZ = -208, maxZ = -64, bottomY = -14 },
+	-- lubang terrain di dalam bibir lubang dansa (tepi tersembunyi di dalam part bibir)
+	pitCarve = { minX = -40, maxX = 44, minZ = -108, maxZ = 36, minY = -8, maxY = 8 },
+
+	-- Objek TETAP (terukur dari place): slab lantai tidak boleh menimpa, props tidak boleh menabrak.
+	fixed = {
+		area("DJ STAGE", -40.6, 43.6, -174.3, -140.5), -- panggung utama (floorDj + tabledj)
+		area("DJ STAGE front", -30.4, 33.2, -140.5, -138.0), -- meja depan + tulisan HAVN
+		area("DJ STAGE entrance W", -71.0, -40.5, -174.3, -156.9),
+		area("DJ STAGE entrance E", 43.1, 73.7, -174.3, -156.9),
+		area("DanceFloorPit", -43.6, 49.5, -112.0, 42.4), -- bibir luar lubang dansa (atas y 7.21)
+		area("PitStrip_West", 39.8, 49.5, -123.6, 79.1),
+		area("PitStrip_East", 70.3, 80.0, -123.6, 79.1),
 	} :: { Area },
-	-- lubang lantai dansa (terrain Asphalt/Sand di bawah y 0) — terrain tidak disentuh
-	danceFloorPit = { name = "DanceFloorPit", minX = -42, maxX = 34, minZ = -104, maxZ = 40 },
+	-- Objek lama yang berdiri DI ATAS lantai: slab boleh di bawahnya, props tidak boleh menabrak.
+	standing = {
+		area("DonationBoards", 83.1, 86.8, -89.6, -4.8),
+		area("TimePlayedLeaderboard", -1.2, 21.0, 73.3, 76.7),
+		area("360Cam", 53.9, 63.5, -111.0, -98.0),
+		area("DJ STAGE stairs W", -60.4, -37.4, -157.2, -146.6),
+		area("DJ STAGE stairs E", 40.0, 63.0, -157.2, -146.6),
+	} :: { Area },
+	-- Jalur roket efek donasi: garis lurus NukeLaunch → NukeTarget (DonationMarkers, tidak dipindah). Tidak boleh ada
+	-- part dalam radius 6 stud dari garis (diperiksa 3D, titik tiap 1 stud).
+	nukePath = { from = { 143, 17.5, -184.5 }, to = { 1, 7.5, -119 }, radius = 6 },
 	zones = {
-		Stage = { name = "Stage", minX = -80, maxX = 65, minZ = -85, maxZ = 40 },
-		Plaza = { name = "Plaza", minX = 65, maxX = 95, minZ = -90, maxZ = 0 },
-		Harbor = { name = "Harbor", minX = 95, maxX = 232, minZ = -269, maxZ = 40 },
-		Street = { name = "Street", minX = -90, maxX = 232, minZ = 40, maxZ = 204 },
-		Beach = { name = "Beach", minX = -211, maxX = -90, minZ = -269, maxZ = 204 },
-		VipLounge = { name = "VipLounge", minX = -205, maxX = -155, minZ = -265, maxZ = -160 },
-		PoolDeck = { name = "PoolDeck", minX = -150, maxX = -90, minZ = -60, maxZ = 40 },
-		Spawn = { name = "Spawn", minX = -30, maxX = 30, minZ = 140, maxZ = 204 },
+		Ground = area("Ground", -108, 164, -208, 104),
+		Boundary = area("Boundary", -176, 168, -212, 108),
+		Spawn = area("Spawn", -24, 24, 76, 100),
+		Stage = area("Stage", -44, 52, -140, -112),
+		Quay = area("Quay", -168, -56, -188, -64), -- termasuk lengan derek di atas teluk
+		ContainerWall = area("ContainerWall", -104, 164, -208, 104), -- utara (x ≤ 88) + timur (x 152…164)
+		LaunchPad = area("LaunchPad", 92, 152, -208, -148),
+		Yard = area("Yard", 92, 152, -148, -64),
+		VipLounge = area("VipLounge", 92, 152, -64, 40),
+		Plaza = area("Plaza", 52, 92, -124, 44),
+		Beach = area("Beach", -104, -44, -64, 104),
+		Bay = area("Bay", -168, -104, -208, 104),
+		Street = area("Street", -44, 164, 44, 104),
 	} :: { [string]: Area },
-	-- lantai dansa cekung: lantai beton 51 × 115 di (3, −5.7, −32.4); tengah yang diukur user (1.5, −5.6, −9)
-	danceFloor = { x = 3, y = -5.6, z = -32.4, halfX = 25.5, halfZ = 57.5 },
-	-- jalur efek donasi besar (DonationMarkers) yang tidak boleh ditutup bangunan
-	nukeCorridor = { name = "NukeCorridor", minX = 95, maxX = 150, minZ = -215, maxZ = -150 },
-	-- laut di tepi barat: permukaan air y 3, dasar y −10, pantai landai sampai x −166
-	sea = { minX = -211, maxX = -166, surfaceY = 3, floorY = -10 },
-	road = { minZ = 89, maxZ = 111 }, -- jalan utama (aspal) di zona Street
+	-- lantai dansa cekung (bagian dari objek tetap): lantai beton 51.1 × 115.2 di (2.95, −5.72, −32.42)
+	danceFloor = { x = 2.95, y = -5.44, z = -32.42, halfX = 25.55, halfZ = 57.6 },
 }
