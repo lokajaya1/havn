@@ -26,7 +26,9 @@ local zones: { [string]: (any, any) -> () } = {
 	Plaza = require(script.Zones.Plaza),
 }
 
-local MapGen = { version = "V6", layout = Layout }
+local Mood = require(script.Mood)
+
+local MapGen = { version = "V7", layout = Layout, mood = Mood }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -252,6 +254,90 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	report.applied = true
 	out(("MapGen SELESAI: %s dibangun (%d part, %d operasi terrain)."):format(zoneName, b.parts, #b.terrainOps))
 	return report
+end
+
+-- Suasana senja + neon (Mood) ke Lighting. CEK = laporan nilai lama → baru; JALAN = terapkan (bisa Ctrl+Z).
+-- Atmosphere & ColorCorrectionEffect yang ada dipakai ulang (GraphicsClient mencari Atmosphere); Bloom dibuat kalau belum ada.
+function MapGen.lighting(mode: string?, lightingIn: any?, historyIn: any?, outIn: ((string) -> ())?)
+	local L = lightingIn or game:GetService("Lighting")
+	local out = outIn or print
+	local function col(v: any): any
+		return if type(v) == "table" then Color3.fromRGB(v[1], v[2], v[3]) else v
+	end
+	local function fmt(v: any): string
+		if typeof(v) == "Color3" then
+			return string.format("%d,%d,%d", math.floor(v.R * 255 + 0.5), math.floor(v.G * 255 + 0.5), math.floor(v.B * 255 + 0.5))
+		end
+		return if type(v) == "number" then string.format("%.3g", v) else tostring(v)
+	end
+	local changes = {}
+	local function plan(target: any, label: string, props: { [string]: any })
+		for k, v in props do
+			if k ~= "Name" then
+				local ok, old = pcall(function()
+					return target[k]
+				end)
+				table.insert(changes, { target = target, key = k, value = col(v), label = label, old = if ok then old else nil })
+			end
+		end
+	end
+	plan(L, "Lighting", Mood.lighting)
+	local atm = L:FindFirstChildOfClass("Atmosphere")
+	local cc = L:FindFirstChildOfClass("ColorCorrectionEffect")
+	local bloom = L:FindFirstChild(Mood.bloom.Name)
+	if atm then
+		plan(atm, "Atmosphere", Mood.atmosphere)
+	end
+	if cc then
+		plan(cc, "ColorCorrection", Mood.colorCorrection)
+	end
+	if bloom then
+		plan(bloom, "Bloom", Mood.bloom)
+	end
+	for _, c in changes do
+		out(("  %s.%s: %s → %s"):format(c.label, c.key, fmt(c.old), fmt(c.value)))
+	end
+	out(("MapGen %s lighting | %d nilai | Atmosphere %s | ColorCorrection %s | Bloom %s"):format(
+		MapGen.version, #changes, atm and "ada" or "DIBUAT", cc and "ada" or "DIBUAT", bloom and "ada" or "DIBUAT"))
+	if mode ~= "JALAN" then
+		out("MapGen lighting CEK selesai: belum ada yang diubah.")
+		return { applied = false, changes = #changes }
+	end
+	local history = historyIn or game:GetService("ChangeHistoryService")
+	local rec = history and history:TryBeginRecording("MapGen_Lighting")
+	local function make(className: string, name: string, props: { [string]: any })
+		local e = Instance.new(className)
+		e.Name = name
+		for k, v in props do
+			if k ~= "Name" then
+				(e :: any)[k] = col(v)
+			end
+		end
+		e.Parent = L
+	end
+	if not atm then
+		make("Atmosphere", "Atmosphere", Mood.atmosphere)
+	end
+	if not cc then
+		make("ColorCorrectionEffect", "ColorCorrection", Mood.colorCorrection)
+	end
+	if not bloom then
+		make("BloomEffect", Mood.bloom.Name, Mood.bloom)
+	end
+	local failed = {}
+	for _, c in changes do
+		local ok = pcall(function()
+			c.target[c.key] = c.value
+		end)
+		if not ok then
+			table.insert(failed, c.label .. "." .. c.key)
+		end
+	end
+	if rec then
+		history:FinishRecording(rec, Enum.FinishRecordingOperation.Commit)
+	end
+	out(("MapGen lighting SELESAI | gagal %d %s"):format(#failed, table.concat(failed, ", ")))
+	return { applied = true, changes = #changes, failed = failed }
 end
 
 -- Pindahkan map baru keluar/masuk Workspace (supaya Publish di tengah rombak tetap memakai map lama).
