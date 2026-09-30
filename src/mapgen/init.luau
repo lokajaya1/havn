@@ -13,9 +13,10 @@ local Layout = require(script.Layout)
 local zones: { [string]: (any, any) -> () } = {
 	Blockout = require(script.Zones.Blockout),
 	Terrain = require(script.Zones.Terrain),
+	Harbor = require(script.Zones.Harbor),
 }
 
-local MapGen = { version = "R2", layout = Layout }
+local MapGen = { version = "R3", layout = Layout }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -25,16 +26,6 @@ local function defaultEnv(): Env
 		serverStorage = game:GetService("ServerStorage"),
 		history = game:GetService("ChangeHistoryService"),
 	}
-end
-
-local function inside(p: BasePart, a: any): boolean
-	local pos, s = p.CFrame.Position, p.Size
-	return pos.X - s.X / 2 >= a.minX - 0.01 and pos.X + s.X / 2 <= a.maxX + 0.01 and pos.Z - s.Z / 2 >= a.minZ - 0.01 and pos.Z + s.Z / 2 <= a.maxZ + 0.01
-end
-
-local function touches(p: BasePart, a: any): boolean
-	local pos, s = p.CFrame.Position, p.Size
-	return pos.X + s.X / 2 > a.minX and pos.X - s.X / 2 < a.maxX and pos.Z + s.Z / 2 > a.minZ and pos.Z - s.Z / 2 < a.maxZ
 end
 
 -- Kotak pembatas (sumbu dunia) dari CFrame + ukuran (termasuk yang diputar).
@@ -54,6 +45,15 @@ end
 
 local function overlap(a: any, b: any): boolean
 	return a.maxX > b.minX + 0.01 and a.minX < b.maxX - 0.01 and a.maxZ > b.minZ + 0.01 and a.minZ < b.maxZ - 0.01
+end
+
+local function inside(p: BasePart, a: any): boolean
+	local box = aabb(p.CFrame, p.Size)
+	return box.minX >= a.minX - 0.01 and box.maxX <= a.maxX + 0.01 and box.minZ >= a.minZ - 0.01 and box.maxZ <= a.maxZ + 0.01
+end
+
+local function touches(p: BasePart, a: any): boolean
+	return overlap(aabb(p.CFrame, p.Size), a)
 end
 
 -- Periksa operasi terrain: di dalam batas map, tidak menyentuh DJ STAGE / lubang lantai dansa, material sah.
@@ -138,8 +138,9 @@ function MapGen.check(root: Instance): { string }
 		end
 	end
 	walk(root)
-	-- setiap subfolder bernama zona harus di dalam areanya
-	for _, zf in root:GetChildren() do
+	-- zona (akar atau subfolder bernama zona) harus di dalam areanya
+	local zoneFolders = if Layout.zones[root.Name] then { root } else root:GetChildren()
+	for _, zf in zoneFolders do
 		local area = Layout.zones[zf.Name]
 		if area then
 			for _, d in zf:GetDescendants() do
@@ -163,6 +164,9 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	local b = Builder.new(zoneName, kit)
 	fn(b, Layout)
 	local issues = MapGen.check(b.root)
+	for _, k in b.missingKit do
+		table.insert(issues, "kit tidak ada di ServerStorage.MapKit: " .. k)
+	end
 	for _, x in MapGen.checkTerrain(b.terrainOps) do
 		table.insert(issues, x)
 	end

@@ -19,6 +19,8 @@ return {
 		Sea = { 30, 140, 154 },
 		Wood = { 120, 86, 58 },
 		Asphalt = { 52, 54, 58 },
+		Steel = { 70, 74, 80 },
+		SafetyYellow = { 242, 196, 36 },
 		Blockout = { 200, 200, 205 },
 	},
 	materials = {
@@ -32,5 +34,6 @@ return {
 		Asphalt = "Asphalt",
 		Plastic = "SmoothPlastic",
 		Sand = "Sand",
+		DiamondPlate = "DiamondPlate",
 	},
 }
