@@ -20,9 +20,11 @@ local zones: { [string]: (any, any) -> () } = {
 	LaunchPad = require(script.Zones.LaunchPad),
 	Yard = require(script.Zones.Yard),
 	Street = require(script.Zones.Street),
+	Beach = require(script.Zones.Beach),
+	Bay = require(script.Zones.Bay),
 }
 
-local MapGen = { version = "V4", layout = Layout }
+local MapGen = { version = "V5", layout = Layout }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
