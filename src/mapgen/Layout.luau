@@ -86,7 +86,21 @@ return {
 		Beach = area("Beach", -104, -44, -64, 104),
 		Bay = area("Bay", -220, -84, -208, 104), -- teluk + dermaga (mulai tepi pasir x −88) + pemecah ombak + laut luar
 		Street = area("Street", -44, 164, 44, 104),
+		DanceStairs = area("DanceStairs", -6, 6, 10, 34),
 	} :: { [string]: Area },
+	-- tangga masuk lubang dansa (R7): permukaan lama terukur R0a — bibir 7.21 (z ≥ 32.04), Step2 2.39 (z 25.16…32.04),
+	-- Step1 −1.44 (z 18.80…25.16), lantai −5.44 (z ≤ 25.16)
+	danceStairs = {
+		minX = -5,
+		maxX = 5,
+		run = 0.8,
+		materialVariant = "granite tile 3", -- sama dengan Pit_* (MaterialService, Granite, 10 stud/tile)
+		segments = {
+			{ top = 7.21, base = 2.39, zStart = 32.04, steps = 8 },
+			{ top = 2.39, base = -1.44, zStart = 25.16, steps = 6 },
+			{ top = -1.44, base = -5.44, zStart = 18.8, steps = 6 },
+		},
+	},
 	-- lantai dansa cekung (bagian dari objek tetap): lantai beton 51.1 × 115.2 di (2.95, −5.72, −32.42)
 	danceFloor = { x = 2.95, y = -5.44, z = -32.42, halfX = 25.55, halfZ = 57.6 },
 }
