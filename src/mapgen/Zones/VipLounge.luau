@@ -63,13 +63,13 @@ return function(b: any, L: any)
 	Prefabs.seatFacing(b, deckF, "Kit_EggChair", 119, deckY, 10, 90, "EggChair_01")
 	Prefabs.seatFacing(b, deckF, "Kit_EggChair", 119, deckY, 22, 90, "EggChair_02")
 	for i, z in { 6.5, 33 } do
-		b:clone(deckF, "Kit_SpeakerTripod", at(103, deckY, z, 90), string.format("Speaker_%02d", i))
+		Prefabs.facing(b, deckF, "Kit_SpeakerTripod", 103, deckY, z, 90, string.format("Speaker_%02d", i)) -- ke panggung (barat)
 	end
 
 	-- lantai dasar: bar kontainer VIP (kontainer = dinding belakang di timur), rak neon, meja bar, kursi bar, sofa
 	local bar = b:model(b:folder(nil, "VipBar"), "VipBar_Main")
 	b:clone(bar, "ContainerGreen", at(146, G, 9, 90), "Container_Back")
-	b:clone(bar, "Kit_NeonBarShelf", at(139.6, G, 9, 0), "BarShelf")
+	Prefabs.facing(b, bar, "Kit_NeonBarShelf", 139.6, G, 9, 90, "BarShelf") -- rak terbuka menghadap tamu (barat)
 	for i, z in { 1, 9, 17 } do
 		b:clone(bar, "Kit_BarCounter", at(136, G, z, 90), string.format("BarCounter_%02d", i))
 	end

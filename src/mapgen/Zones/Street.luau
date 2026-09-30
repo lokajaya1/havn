@@ -40,14 +40,14 @@ return function(b: any, L: any)
 
 	-- perabot jalan (trotoar z 64…76)
 	local props = b:folder(nil, "Props")
-	b:clone(props, "Kit_ArcadeMachines", at(38, G, 74, 90), "ArcadeMachines_01")
-	b:clone(props, "Kit_PhoneBooth", at(122, G, 73.5, 180), "PhoneBooth_01")
-	b:clone(props, "Kit_VendingMachine", at(150, G, 73, 180), "VendingMachine_01")
-	b:clone(props, "Bus_Stop_01_A", at(96, G, 68, 0), "BusStop_01")
+	Prefabs.facing(b, props, "Kit_ArcadeMachines", 38, G, 74, 0, "ArcadeMachines_01")
+	Prefabs.facing(b, props, "Kit_PhoneBooth", 122, G, 73.5, 0, "PhoneBooth_01")
+	Prefabs.facing(b, props, "Kit_VendingMachine", 150, G, 73, 0, "VendingMachine_01")
+	Prefabs.facing(b, props, "Bus_Stop_01_A", 96, G, 68, 0, "BusStop_01") -- bukaan halte menghadap jalan (utara)
 	b:seat(props, "Seat_BusStop_01", CFrame.new(96, G + 1.8, 68), Vector3.new(14, 0.4, 1.6))
 	for i, p in { { -34, 67 }, { -20, 67 }, { 20, 67 } } do
-		-- bangku kit memanjang di sumbu X (8.1 stud) → sejajar jalan, Seat (7 × 1.6) searah bangku menghadap jalan (utara)
-		b:clone(props, "MetalBench_01_A", at(p[1], G, p[2], 0), string.format("Bench_%02d", i))
+		-- bangku kit memanjang di sumbu X (8.1 stud) → sejajar jalan; depan bangku & Seat (7 × 1.6) menghadap jalan (utara)
+		Prefabs.facing(b, props, "MetalBench_01_A", p[1], G, p[2], 0, string.format("Bench_%02d", i))
 		b:seat(props, string.format("Seat_Bench_%02d", i), CFrame.new(p[1], G + 1.8, p[2]), Vector3.new(7, 0.4, 1.6))
 	end
 	for i, x in { 64, 132 } do
@@ -57,8 +57,8 @@ return function(b: any, L: any)
 		b:clone(props, "FireHydrant_01_A", at(x, G, 65.5, 0), string.format("Hydrant_%02d", i))
 	end
 	local lights = b:folder(nil, "Lights")
-	-- tiang kit ada di sisi −Z mesh, lampu di +Z → diputar 180°: tiang di trotoar (z ≈ 67), lampu menjorok ke atas jalan
+	-- lengan lampu = depan kit (+Z) → menghadap utara: tiang di trotoar (z ≈ 67), lampu menjorok ke atas jalan
 	for i, x in { -40, 28, 78, 112, 144 } do
-		b:clone(lights, "StreetLightPole_01_A", at(x, G, 62.9, 180), string.format("StreetLight_%02d", i))
+		Prefabs.facing(b, lights, "StreetLightPole_01_A", x, G, 62.9, 0, string.format("StreetLight_%02d", i))
 	end
 end

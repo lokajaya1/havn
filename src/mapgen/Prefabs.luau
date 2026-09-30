@@ -2,6 +2,8 @@
 -- MapGen/Prefabs — objek industrial Y2K. Bangunan besar dari part (derek, gudang, pagar, landasan); mesh dari
 -- ServerStorage.MapKit lewat Builder:clone (kontainer PBR 30×10×10, props pelabuhan). Semua lewat Builder.
 
+local KitFront = require(script.Parent.KitFront)
+
 local Prefabs = {}
 
 local function at(x: number, y: number, z: number, yaw: number?): CFrame
@@ -270,7 +272,14 @@ end
 -- −90 = timur/+X, 0 = utara/−Z). Arah Seat asli dibaca dari kit (Builder:seatHeading).
 function Prefabs.seatFacing(b: any, parent: Instance, kit: string, x: number, y: number, z: number, heading: number, name: string, scale: number?)
 	local yaw = heading - (b:seatHeading(kit) or 0)
-	return b:clone(parent, kit, at(x, y, z, yaw), name, scale)
+	return b:clone(parent, kit, at(x, y, z, yaw), name, scale, heading)
+end
+
+-- Kit berarah diputar supaya SISI DEPAN-nya (KitFront, terukur) menghadap `heading` (derajat; 0 = utara/−Z, 90 = barat/−X,
+-- −90 = timur/+X, 180 = selatan/+Z). Kit "any" dipasang tanpa putaran tambahan. Titik (x, z) = tengah kotak pembatas.
+function Prefabs.facing(b: any, parent: Instance, kit: string, x: number, y: number, z: number, heading: number, name: string, scale: number?)
+	local yaw = heading - (KitFront.headingOf(kit) or heading)
+	return b:clone(parent, kit, at(x, y, z, yaw), name, scale, heading)
 end
 
 -- Tangga lurus dari lantai g naik `rise` stud ke arah −X mulai x0 (anak tangga 0.5 tinggi × 1 panjang), lebar w.

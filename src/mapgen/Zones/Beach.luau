@@ -12,12 +12,12 @@ return function(b: any, L: any)
 	-- Container Bar (z −45…−15): kontainer = dinding belakang, meja bar menghadap timur ke dek kayu
 	local bar = b:model(b:folder(nil, "ContainerBar"), "ContainerBar_Main")
 	b:clone(bar, "ContainerYellow", at(-82, G, -30, 90), "Container_Back")
-	b:clone(bar, "Kit_NeonBarShelf", at(-75.5, G, -30, 0), "BarShelf")
+	Prefabs.facing(b, bar, "Kit_NeonBarShelf", -75.5, G, -30, -90, "BarShelf") -- rak menghadap tamu (timur)
 	for i, z in { -38, -30, -22 } do
 		b:clone(bar, "Kit_BarCounter", at(-71.5, G, z, 90), string.format("BarCounter_%02d", i))
 	end
 	for i, z in { -38, -32, -26, -20 } do
-		b:clone(bar, "Kit_BarStool", at(-67.5, G, z, 90), string.format("BarStool_%02d", i))
+		Prefabs.facing(b, bar, "Kit_BarStool", -67.5, G, z, 90, string.format("BarStool_%02d", i)) -- menghadap meja bar (barat)
 	end
 	for i, p in { { -77, -44 }, { -77, -16 }, { -64.5, -44 }, { -64.5, -16 } } do
 		b:part(bar, "Canopy_Post_0" .. i, { size = Vector3.new(0.6, 11, 0.6), cf = CFrame.new(p[1], G + 5.5, p[2]), color = "Chrome", material = "Chrome" })
@@ -33,7 +33,7 @@ return function(b: any, L: any)
 	-- lounge: bean bag dekat bar
 	local lounge = b:folder(nil, "Lounge")
 	for i, p in { { -70, -58 }, { -64, -58 }, { -70, -52 }, { -64, -52 } } do
-		b:clone(lounge, "Kit_BeanBag", at(p[1], G, p[2], 90), string.format("BeanBag_%02d", i))
+		Prefabs.facing(b, lounge, "Kit_BeanBag", p[1], G, p[2], 90, string.format("BeanBag_%02d", i)) -- menghadap laut (barat)
 	end
 
 	-- kursi berjemur menghadap laut (kepala ke timur) + payung
@@ -49,7 +49,7 @@ return function(b: any, L: any)
 
 	-- menara penjaga pantai, palem, papan selancar
 	local deco = b:folder(nil, "Deco")
-	b:clone(deco, "Kit_LifeguardTower", at(-74, G, 84, 0), "LifeguardTower_01", 0.7)
+	Prefabs.facing(b, deco, "Kit_LifeguardTower", -74, G, 84, 90, "LifeguardTower_01", 0.7) -- menghadap laut (barat)
 	for i, p in { { -86, -56 }, { -84, 50 }, { -66, 50 }, { -84, 97 } } do
 		b:clone(deco, "Kit_PalmTree", at(p[1], G, p[2], i * 90), string.format("PalmTree_%02d", i), 0.55)
 	end

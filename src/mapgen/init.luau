@@ -9,6 +9,7 @@
 local Builder = require(script.Builder)
 local Naming = require(script.Naming)
 local Layout = require(script.Layout)
+local KitFront = require(script.KitFront)
 
 local zones: { [string]: (any, any) -> () } = {
 	Terrain = require(script.Zones.Terrain),
@@ -28,7 +29,7 @@ local zones: { [string]: (any, any) -> () } = {
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V7", layout = Layout, mood = Mood }
+local MapGen = { version = "V9", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -202,6 +203,21 @@ function MapGen.check(root: Instance): { string }
 	return issues
 end
 
+-- Arah hadap kit (P8, Rencana_Workspace_R15.md §4): tiap kit harus terdaftar di KitFront; kit berarah wajib dipasang dengan
+-- arah tujuan (Prefabs.facing / Prefabs.seatFacing), bukan yaw tebakan.
+function MapGen.checkKits(uses: { any }): { string }
+	local issues = {}
+	for _, u in uses do
+		local e = KitFront.kits[u.kit]
+		if not e then
+			table.insert(issues, ("kit '%s' (%s) belum diaudit arah depannya (KitFront)"):format(u.kit, u.name))
+		elseif e.front ~= "any" and u.heading == nil then
+			table.insert(issues, ("kit berarah '%s' (%s, depan %s) dipasang tanpa arah tujuan — pakai Prefabs.facing"):format(u.kit, u.name, e.front))
+		end
+	end
+	return issues
+end
+
 function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	local env = envIn or defaultEnv()
 	local out = env.out or print
@@ -215,6 +231,9 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	local issues = MapGen.check(b.root)
 	for _, k in b.missingKit do
 		table.insert(issues, "kit tidak ada di ServerStorage.MapKit: " .. k)
+	end
+	for _, x in MapGen.checkKits(b.kitUses) do
+		table.insert(issues, x)
 	end
 	for _, x in MapGen.checkTerrain(b.terrainOps) do
 		table.insert(issues, x)

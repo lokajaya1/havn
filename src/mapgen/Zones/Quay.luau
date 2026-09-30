@@ -40,6 +40,6 @@ return function(b: any, L: any)
 	-- lampu jalan resmi Roblox (City Props) di sisi darat dermaga
 	local lights = b:folder(nil, "Lights")
 	for n, z in { -150, -96 } do
-		b:clone(lights, "StreetLightPole_01_A", at(-74, G, z, 0), string.format("StreetLight_%02d", n))
+		Prefabs.facing(b, lights, "StreetLightPole_01_A", -74, G, z, 180, string.format("StreetLight_%02d", n))
 	end
 end

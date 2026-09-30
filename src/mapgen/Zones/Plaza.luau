@@ -7,10 +7,9 @@ local Prefabs = require(script.Parent.Parent.Prefabs)
 
 return function(b: any, L: any)
 	local G = L.groundY
-	local at = Prefabs.at
 	local f = b:folder(nil, "Seating")
 	for i, z in { -62, -28 } do
-		b:clone(f, "MetalBench_01_A", at(72, G, z, 90), string.format("Bench_%02d", i))
+		Prefabs.facing(b, f, "MetalBench_01_A", 72, G, z, -90, string.format("Bench_%02d", i)) -- menghadap papan donasi (timur)
 		b:seat(f, string.format("Seat_Bench_%02d", i), CFrame.new(72, G + 1.8, z) * CFrame.Angles(0, math.rad(-90), 0), Vector3.new(7, 0.4, 1.6))
 	end
 	b:part(b:folder(nil, "Markings"), "Neon_ViewLine", { size = Vector3.new(0.4, 0.05, 80), cf = CFrame.new(78, G + 0.025, -46), color = "HotPink", material = "Neon", decor = true })
