@@ -140,7 +140,8 @@ end
 
 -- Toko Y2K 2 lantai (lantai dasar 14, atas 11 stud — tinggi lantai komersial ±3.9 m): muka menghadap utara (−Z) di
 -- zFront, kaca etalase + bingkai krom, awning ≥ 10 stud di atas trotoar, papan neon bernama, jendela atas, parapet.
-export type ShopSpec = { name: string, text: string, body: string, accent: string, awning: string, shutter: boolean? }
+-- sills = false → tanpa ambang jendela atas (S1: PHONE ZONE & BOBA, dihapus tangan user).
+export type ShopSpec = { name: string, text: string, body: string, accent: string, awning: string, shutter: boolean?, sills: boolean? }
 function Prefabs.storefront(b: any, parent: Instance, x1: number, x2: number, zFront: number, depth: number, g: number, s: ShopSpec)
 	local m = b:model(parent, s.name)
 	local w = x2 - x1
@@ -172,7 +173,9 @@ function Prefabs.storefront(b: any, parent: Instance, x1: number, x2: number, zF
 	-- lantai atas: 2 jendela kaca biru es + ambang krom
 	for i, dx in { -w / 4, w / 4 } do
 		b:part(m, "Window_Upper_0" .. i, { size = Vector3.new(w / 3, 5, 0.3), cf = CFrame.new(cx + dx, g + 21.5, zf - 0.15), color = "PastelBlue", material = "Glass", transparency = 0.25 })
-		b:part(m, "Sill_0" .. i, { size = Vector3.new(w / 3 + 0.6, 0.4, 0.8), cf = CFrame.new(cx + dx, g + 18.8, zf - 0.4), color = "Chrome", material = "Chrome" })
+		if s.sills ~= false then
+			b:part(m, "Sill_0" .. i, { size = Vector3.new(w / 3 + 0.6, 0.4, 0.8), cf = CFrame.new(cx + dx, g + 18.8, zf - 0.4), color = "Chrome", material = "Chrome" })
+		end
 	end
 	return m
 end
@@ -269,6 +272,21 @@ function Prefabs.markBelow(inst: Instance?): Instance?
 	return inst
 end
 
+-- Geser utuh semua part sebuah objek/zona (S1: area yang dipindah tangan user dipindah persis di kode, bentuk tetap).
+function Prefabs.shift(inst: Instance?, offset: Vector3): Instance?
+	if not inst then
+		return nil
+	end
+	local list = inst:GetDescendants()
+	table.insert(list, inst)
+	for _, d in list do
+		if d:IsA("BasePart") then
+			d.CFrame = d.CFrame + offset
+		end
+	end
+	return inst
+end
+
 -- Jadikan hiasan tembus (tidak bisa ditabrak/diraycast): benda di permukaan air & latar laut (P14).
 function Prefabs.decor(inst: Instance?): Instance?
 	if not inst then
@@ -354,16 +372,17 @@ end
 
 -- Platform renang PADAT dari dasar laut (bukan ponton apung): tidak ada kolong tempat avatar terjepit (bukti R0c 20:03 —
 -- avatar tinggi di bawah ponton apung terlempar ke y 16.000). Dek putih 0.5 di atas air (naik dari air tanpa lompat,
--- uji tangga R0c2), sisi graphite, strip garis putih, 2 anak tangga 0.5 di sisi barat.
+-- uji tangga R0c2), sisi graphite, strip garis putih. S1 (sentuhan user): 3 anak tangga 0.5 di sisi barat = balok PADAT dari
+-- dasar laut (tanpa kolong di bawah anak tangga).
 function Prefabs.swimPlatform(b: any, parent: Instance, name: string, x: number, z: number, waterY: number, floorY: number)
 	local m = b:model(parent, name)
 	local top = waterY + 0.5
 	b:part(m, "Base", { size = Vector3.new(16, top - 0.5 - floorY, 16), cf = CFrame.new(x, (floorY + top - 0.5) / 2, z), color = "Graphite", material = "Concrete", allowBelowGround = true })
 	b:part(m, "Deck", { size = Vector3.new(16, 0.5, 16), cf = CFrame.new(x, top - 0.25, z), color = "OffWhite", material = "Plastic", allowBelowGround = true })
 	b:part(m, "Edge_Line", { size = Vector3.new(16.1, 0.2, 16.1), cf = CFrame.new(x, top - 0.6, z), color = "Black", material = "Plastic", decor = true, allowBelowGround = true })
-	for k = 1, 2 do
+	for k = 1, 3 do
 		local h = top - k * 0.5
-		b:part(m, "Step_0" .. k, { size = Vector3.new(1, 0.5, 6), cf = CFrame.new(x - 8 - (k - 0.5), h - 0.25, z), color = "OffWhite", material = "Plastic", allowBelowGround = true })
+		b:part(m, "Step_0" .. k, { size = Vector3.new(1, h - floorY, 6), cf = CFrame.new(x - 8 - (k - 0.5), (h + floorY) / 2, z), color = "OffWhite", material = "Plastic", allowBelowGround = true })
 	end
 	return m
 end

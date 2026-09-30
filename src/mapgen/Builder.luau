@@ -121,8 +121,9 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 	return p
 end
 
--- SpawnLocation 12 × 1 × 12 (netral, forcefield 10 dtk seperti spawn lama), neon pink.
-function Builder:spawn(parent: Instance, name: string, cf: CFrame): SpawnLocation
+-- SpawnLocation 12 × 1 × 12 (netral, forcefield 10 dtk seperti spawn lama), graphite; transparency 1 = pad tak terlihat
+-- (tetap berfungsi sebagai titik spawn — sentuhan user S1).
+function Builder:spawn(parent: Instance, name: string, cf: CFrame, transparency: number?): SpawnLocation
 	local s = Instance.new("SpawnLocation")
 	s.Name = name
 	s.Anchored = true
@@ -136,6 +137,7 @@ function Builder:spawn(parent: Instance, name: string, cf: CFrame): SpawnLocatio
 	s.TopSurface = Enum.SurfaceType.Smooth
 	s.BottomSurface = Enum.SurfaceType.Smooth
 	s.CastShadow = false
+	s.Transparency = transparency or 0
 	s.Parent = parent
 	self.parts += 1
 	return s

@@ -25,12 +25,11 @@ local zones: { [string]: (any, any) -> () } = {
 	Bay = require(script.Zones.Bay),
 	VipLounge = require(script.Zones.VipLounge),
 	Plaza = require(script.Zones.Plaza),
-	DanceStairs = require(script.Zones.DanceStairs),
 }
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V14", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V15", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -66,8 +65,10 @@ local function inside(p: BasePart, a: any): boolean
 	return box.minX >= a.minX - 0.01 and box.maxX <= a.maxX + 0.01 and box.minZ >= a.minZ - 0.01 and box.maxZ <= a.maxZ + 0.01
 end
 
+-- maxY (opsional) = puncak objek: part yang seluruhnya di atasnya tidak menabrak (mis. atap di atas papan donasi).
 local function touches(p: BasePart, a: any): boolean
-	return overlap(aabb(p.CFrame, p.Size), a)
+	local box = aabb(p.CFrame, p.Size)
+	return overlap(box, a) and (a.maxY == nil or box.minY < a.maxY - 0.01)
 end
 
 -- Periksa operasi terrain: di dalam jangkauan, SEJAJAR GRID 4 (voxel penuh = permukaan rata), material sah.

@@ -1,12 +1,15 @@
 --!strict
 -- MapGen/Zones/Street — jalan klub selatan (x −44…164): marka aspal, penyeberangan di sumbu spawn, deret toko Y2K
 -- 2 lantai sebagai dinding batas selatan (muka ke utara), lampu jalan / halte / bangku / hidran / pot (City Props resmi
--- Roblox), mesin arcade, telepon umum, vending di depan toko. Semua dasar tepat di lantai y 6.
+-- Roblox), mesin arcade, telepon umum, vending di depan toko. Toko menapak y 6; perabot trotoar menapak kerb
+-- L.sidewalkTop (S1). S1 (sentuhan user): nama papan tanpa "HAVN", BOBA → DRINK, tanpa ambang jendela PHONE ZONE & BOBA,
+-- halte pindah ke sisi utara jalan (x 147, z 39) menghadap jalan (selatan).
 
 local Prefabs = require(script.Parent.Parent.Prefabs)
 
 return function(b: any, L: any)
 	local G = L.groundY
+	local S = L.sidewalkTop -- perabot di trotoar
 	local at = Prefabs.at
 	local R, W = L.road, L.sidewalk
 
@@ -30,15 +33,15 @@ return function(b: any, L: any)
 	-- R7: 3 venue bisa dimasuki (ARCADE 2000, HAVN RECORDS, HAVN STUDIO pengganti CYBER CAFE) + 2 fasad
 	local venues = {
 		{ name = "Shop_Arcade", text = "ARCADE 2000", kind = "arcade", awning = "Black" },
-		{ name = "Shop_Records", text = "HAVN RECORDS", kind = "records", awning = "Graphite" },
-		{ name = "Shop_Studio", text = "HAVN STUDIO", kind = "studio", awning = "Black" },
+		{ name = "Shop_Records", text = "RECORDS", kind = "records", awning = "Graphite" },
+		{ name = "Shop_Studio", text = "STUDIO", kind = "studio", awning = "Black" },
 	}
 	for i, s in venues do
 		Prefabs.venue(b, shops, 24 + (i - 1) * 28, 24 + i * 28, zf, depth, G, s)
 	end
 	local fronts = {
-		{ name = "Shop_PhoneZone", text = "PHONE ZONE", body = "PastelPink", accent = "HotPink", awning = "Chrome" },
-		{ name = "Shop_Boba", text = "BOBA Y2K", body = "Cream", accent = "Lime", awning = "PastelMint" },
+		{ name = "Shop_PhoneZone", text = "PHONE ZONE", body = "PastelPink", accent = "HotPink", awning = "Chrome", sills = false },
+		{ name = "Shop_Boba", text = "DRINK", body = "Cream", accent = "Lime", awning = "PastelMint", sills = false },
 	}
 	for i, s in fronts do
 		Prefabs.storefront(b, shops, 108 + (i - 1) * 28, 108 + i * 28, zf, depth, G, s)
@@ -46,25 +49,26 @@ return function(b: any, L: any)
 
 	-- perabot jalan (trotoar z 64…76)
 	local props = b:folder(nil, "Props")
-	Prefabs.facing(b, props, "Kit_PhoneBooth", 122, G, 73.5, 0, "PhoneBooth_01")
-	Prefabs.facing(b, props, "Kit_VendingMachine", 150, G, 73, 0, "VendingMachine_01")
-	-- halte = hiasan tembus (kaca kit bisa "dipanjat" avatar tinggi, R0c2); Seat sendiri tetap
-	Prefabs.decor(Prefabs.facing(b, props, "Bus_Stop_01_A", 96, G, 68, 0, "BusStop_01")) -- bukaan halte menghadap jalan (utara)
-	b:seat(props, "Seat_BusStop_01", CFrame.new(96, G + 1.8, 68), Vector3.new(14, 0.4, 1.6))
+	Prefabs.facing(b, props, "Kit_PhoneBooth", 122, S, 73.5, 0, "PhoneBooth_01")
+	Prefabs.facing(b, props, "Kit_VendingMachine", 150, S, 73, 0, "VendingMachine_01")
+	-- halte = hiasan tembus (kaca kit bisa "dipanjat" avatar tinggi, R0c2); Seat sendiri tetap. S1: di beton sisi utara jalan
+	-- (posisi & ukuran Seat dari sentuhan user), bukaan & Seat menghadap jalan (selatan, +Z)
+	Prefabs.decor(Prefabs.facing(b, props, "Bus_Stop_01_A", 146.94, G, 39.26, 180, "BusStop_01"))
+	b:seat(props, "Seat_BusStop_01", CFrame.new(147.14, G + 2.03, 37.85) * CFrame.Angles(0, math.pi, 0), Vector3.new(8.23, 0.4, 1.6))
 	for i, p in { { -34, 67 }, { -20, 67 }, { 20, 67 } } do
 		-- bangku kit memanjang di sumbu X (8.1 stud) → sejajar jalan; depan bangku & Seat (7 × 1.6) menghadap jalan (utara)
-		Prefabs.facing(b, props, "MetalBench_01_A", p[1], G, p[2], 0, string.format("Bench_%02d", i))
-		b:seat(props, string.format("Seat_Bench_%02d", i), CFrame.new(p[1], G + 1.8, p[2]), Vector3.new(7, 0.4, 1.6))
+		Prefabs.facing(b, props, "MetalBench_01_A", p[1], S, p[2], 0, string.format("Bench_%02d", i))
+		b:seat(props, string.format("Seat_Bench_%02d", i), CFrame.new(p[1], S + 1.8, p[2]), Vector3.new(7, 0.4, 1.6))
 	end
 	for i, x in { 64, 122 } do
-		b:clone(props, "Planter_Rectangle_01_A", at(x, G, 66.5, 0), string.format("Planter_%02d", i))
+		b:clone(props, "Planter_Rectangle_01_A", at(x, S, 66.5, 0), string.format("Planter_%02d", i))
 	end
 	for i, x in { 50, 140 } do
-		b:clone(props, "FireHydrant_01_A", at(x, G, 65.5, 0), string.format("Hydrant_%02d", i))
+		b:clone(props, "FireHydrant_01_A", at(x, S, 65.5, 0), string.format("Hydrant_%02d", i))
 	end
 	local lights = b:folder(nil, "Lights")
 	-- lengan lampu = depan kit (+Z) → menghadap utara: tiang di trotoar (z ≈ 67), lampu menjorok ke atas jalan
 	for i, x in { -24, 52, 80, 108, 136 } do -- di batas toko → tidak menutupi papan nama
-		Prefabs.facing(b, lights, "StreetLightPole_01_A", x, G, 62.9, 0, string.format("StreetLight_%02d", i))
+		Prefabs.facing(b, lights, "StreetLightPole_01_A", x, S, 62.9, 0, string.format("StreetLight_%02d", i))
 	end
 end
