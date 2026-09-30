@@ -39,12 +39,17 @@ return {
 	beachSlope = { minX = -108, maxX = -100 },
 	boardwalk = area("Boardwalk", -56, -44, -64, 104), -- dek kayu y 6 (lebar 12)
 	-- Teras kolam "HAVN POOL" (R4b, foto acuan user): dek kayu y 4.5 (1.5 di bawah lantai), kolam air terrain y −12…4
-	-- (dalam 14, lebar 24 = P13), dinding/coping putih 4 tebal (tepi air tersembunyi, P5), sunken lounge lantai 2.5.
+	-- (lebar 24 = P13), dinding/coping putih 4 tebal (tepi air tersembunyi, P5), sunken lounge lantai 2.5.
+	-- S1 (sentuhan user 30 Sep): lantai kolam PART putih y −10…−6 (dalam 10) dari dinding utara sampai kaki tangga.
 	poolTerrace = { minX = -100, maxX = -56, minZ = -60, maxZ = 24, deckY = 4.5 },
-	pool = { minX = -100, maxX = -68, minZ = -48, maxZ = 16, wall = 4, surfaceY = 4, floorY = -12 }, -- termasuk dinding
+	pool = { minX = -100, maxX = -68, minZ = -48, maxZ = 16, wall = 4, surfaceY = 4, floorY = -12, partFloorTop = -6, partFloorBottom = -10 }, -- termasuk dinding
 	lounge = { minX = -92, maxX = -72, minZ = -60, maxZ = -50, floorY = 2.5 }, -- termasuk tangga turun x −76…−72
 	road = area("Road", -44, 164, 48, 64), -- jalan klub (aspal)
-	sidewalk = area("Sidewalk", -44, 164, 64, 76), -- trotoar depan deret toko
+	sidewalk = area("Sidewalk", -44, 164, 64, 76), -- trotoar depan deret toko (muka toko di z 76 + 1)
+	-- S1: trotoar = kerb (sentuhan user +0.39 → dibulatkan 6.4); slab sampai muka toko z 77 (tanpa alur di depan pintu venue).
+	-- Semua benda di trotoar (gerbang HAVN, lampu, bangku + Seat, hidran, pot, telepon, vending) menapak tepat di sini.
+	sidewalkTop = 6.4,
+	sidewalkSlabMaxZ = 77,
 	quayWall = { x1 = -106, x2 = -104, minZ = -208, maxZ = -64, bottomY = -14 },
 	-- lubang terrain di dalam bibir lubang dansa (tepi tersembunyi di dalam part bibir)
 	pitCarve = { minX = -40, maxX = 44, minZ = -108, maxZ = 36, minY = -8, maxY = 8 },
@@ -56,13 +61,13 @@ return {
 		area("DJ STAGE entrance W", -71.0, -40.5, -174.3, -156.9),
 		area("DJ STAGE entrance E", 43.1, 73.7, -174.3, -156.9),
 		area("DanceFloorPit", -43.6, 49.5, -112.0, 42.4), -- bibir luar lubang dansa (atas y 7.21)
-		-- lajur Granite timur lubang dansa (satu-satunya yang tersisa di Studio; x 39.85…49.36, dicek 30 Sep 14:05),
-		-- dipotong sampai z 44 di V4 (K4). Lajur kedua (x 70…80) sudah tidak ada sejak KOSONGKAN → tidak dicadangkan.
-		area("PitStrip_West", 39.8, 49.5, -123.6, 44.1),
+		-- lajur Granite timur lubang dansa (Pit_Rim_East x 39.85…49.36, z −123.55…42.34, terukur 30 Sep 22:40). Dulu maxZ 44.1
+		-- → lubang lantai 1.76 × 9.7 di z 42.34…44.1 (ditambal tangan user) → S1: 42.4 (dibulatkan keluar 0.1).
+		area("PitStrip_West", 39.8, 49.5, -123.6, 42.4),
 	} :: { Area },
 	-- Objek lama yang berdiri DI ATAS lantai: slab boleh di bawahnya, props tidak boleh menabrak.
 	standing = {
-		area("DonationBoards", 83.1, 86.8, -89.6, -4.8),
+		area("DonationBoards", 83.1, 86.8, -89.6, -4.8, 36.9), -- puncak papan LIVE 36.84: di atasnya boleh (atap dinding, S1)
 		-- dipindah utuh di V4 ke sisi barat plaza spawn, menghadap timur (ke pad spawn), dasar tepat y 6
 		area("TimePlayedLeaderboard", -23.8, -20.2, 76.8, 99.2),
 		area("360Cam", 53.9, 63.5, -111.0, -98.0),
@@ -80,27 +85,17 @@ return {
 		Quay = area("Quay", -168, -56, -188, -64), -- termasuk lengan derek di atas teluk
 		ContainerWall = area("ContainerWall", -104, 164, -208, 104), -- utara (x ≤ 88) + timur (x 152…164)
 		LaunchPad = area("LaunchPad", 92, 152, -208, -148),
-		Yard = area("Yard", 92, 152, -148, -64),
-		VipLounge = area("VipLounge", 92, 152, -64, 40),
+		Yard = area("Yard", 92, 152, -172, -64), -- S1: lampu halaman sampai z −158
+		VipLounge = area("VipLounge", 68, 132, -60, 48), -- S1: seluruh VIP digeser vipOffset (dinding x 72.6…129.6, z −4…45)
 		Plaza = area("Plaza", 52, 92, -124, 44),
 		Beach = area("Beach", -104, -44, -64, 104),
 		Bay = area("Bay", -220, -84, -208, 104), -- teluk + dermaga (mulai tepi pasir x −88) + pemecah ombak + laut luar
-		Street = area("Street", -44, 164, 44, 104),
-		DanceStairs = area("DanceStairs", -6, 6, 10, 34),
+		Street = area("Street", -44, 164, 32, 104), -- S1: halte di sisi utara jalan (z ±39)
 	} :: { [string]: Area },
-	-- tangga masuk lubang dansa (R7): permukaan lama terukur R0a — bibir 7.21 (z ≥ 32.04), Step2 2.39 (z 25.16…32.04),
-	-- Step1 −1.44 (z 18.80…25.16), lantai −5.44 (z ≤ 25.16)
-	danceStairs = {
-		minX = -5,
-		maxX = 5,
-		run = 0.8,
-		materialVariant = "granite tile 3", -- sama dengan Pit_* (MaterialService, Granite, 10 stud/tile)
-		segments = {
-			{ top = 7.21, base = 2.39, zStart = 32.04, steps = 8 },
-			{ top = 2.39, base = -1.44, zStart = 25.16, steps = 6 },
-			{ top = -1.44, base = -5.44, zStart = 18.8, steps = 6 },
-		},
-	},
+	-- S1 (sentuhan user 30 Sep, Rencana_Workspace_Sentuhan.md): seluruh VIP Lounge (termasuk dinding DoorVIP) digeser
+	-- tangan Δ(−22.37, 0, +5.01) → dibulatkan (beda ≤ 0.04). Dermaga dinaikkan 0.27 (dek atas 6.27, di atas pasir render).
+	vipOffset = { x = -22.4, z = 5 },
+	pierLift = 0.27,
 	-- lantai dansa cekung (bagian dari objek tetap): lantai beton 51.1 × 115.2 di (2.95, −5.72, −32.42)
 	danceFloor = { x = 2.95, y = -5.44, z = -32.42, halfX = 25.55, halfZ = 57.6 },
 }

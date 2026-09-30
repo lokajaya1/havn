@@ -2,6 +2,7 @@
 -- MapGen/Zones/Ground — lantai yang diinjak = SLAB PART setebal 8 stud (y −2…6), tertanam di terrain rata y 0.
 -- Permukaan tepat y 6.000 (lantai map lama). Slab dipotong persis mengikuti objek tetap (DJ STAGE, lubang dansa,
 -- lajur Granite) sehingga tidak ada celah & tidak ada tumpang. Dinding dermaga menutup tepi terrain ke air.
+-- S1: trotoar = kerb (atas L.sidewalkTop 6.4) sampai muka toko z 77 (L.sidewalkSlabMaxZ).
 
 type Rect = { x1: number, x2: number, z1: number, z2: number }
 
@@ -75,12 +76,13 @@ return function(b: any, L: any)
 		table.insert(holes, rect(f))
 	end
 	local bw, road, sand, walk = rect(L.boardwalk), rect(L.road), rect(L.beachSand), rect(L.sidewalk)
+	walk.z2 = L.sidewalkSlabMaxZ
 
 	-- urutan prioritas: dek kayu → jalan aspal → trotoar → beton (sisanya), pasir pantai bukan slab
 	local layers = {
 		{ name = "Boardwalk", material = "Wood", color = "Wood", area = bw, minus = {} },
 		{ name = "Road", material = "Asphalt", color = "Asphalt", area = road, minus = { bw } },
-		{ name = "Sidewalk", material = "Pavement", color = "ConcreteDark", area = walk, minus = { bw, road } },
+		{ name = "Sidewalk", material = "Pavement", color = "ConcreteDark", area = walk, minus = { bw, road }, top = L.sidewalkTop },
 		{ name = "Concrete", material = "Concrete", color = "Concrete", area = rect(L.walkable), minus = { bw, road, sand, walk } },
 	}
 	local slabs = b:folder(nil, "Slabs")
@@ -93,10 +95,11 @@ return function(b: any, L: any)
 		table.sort(pieces, function(p, q)
 			return if p.x1 ~= q.x1 then p.x1 < q.x1 else p.z1 < q.z1
 		end)
+		local top = layer.top or G
 		for i, p in pieces do
 			b:part(slabs, string.format("Slab_%s_%02d", layer.name, i), {
-				size = Vector3.new(p.x2 - p.x1, G - LY, p.z2 - p.z1),
-				cf = CFrame.new((p.x1 + p.x2) / 2, (G + LY) / 2, (p.z1 + p.z2) / 2),
+				size = Vector3.new(p.x2 - p.x1, top - LY, p.z2 - p.z1),
+				cf = CFrame.new((p.x1 + p.x2) / 2, (top + LY) / 2, (p.z1 + p.z2) / 2),
 				color = layer.color,
 				material = layer.material,
 				floor = true,

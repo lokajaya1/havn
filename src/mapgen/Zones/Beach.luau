@@ -5,6 +5,8 @@
 --   · tangga putih lebar di ujung selatan kolam (anak tangga 0.5, terbukti tanpa lompat) · sunken lounge lantai 2.5 + sofa
 --   built-in (6 Seat) + meja api (lampu hangat) · pergola bilah hitam (bawah bilah 12.4 di atas dek ≥ A1) · 8 kursi berjemur
 --   menghadap kolam & laut · bar kolam 4 kursi + dinding foto "HAVN POOL". Pantai selatan: menara penjaga, palem, papan selancar.
+-- S1 (sentuhan user): lantai kolam part putih (dalam 10), tanpa anak tangga di muka air (y 4 = sebidang air → berkedip),
+--   anak tangga pertama injakan 2, anak tangga terbawah padat sampai lantai, sandaran sofa barat menutup sudut.
 
 local Prefabs = require(script.Parent.Parent.Prefabs)
 
@@ -53,7 +55,7 @@ return function(b: any, L: any)
 		blk(deck, "Step_East_0" .. k, box(T.maxX - k, T.maxX - k + 1, D, top, T.minZ, T.maxZ), "Timber", "Wood")
 	end
 
-	-- 2) kolam: dinding/coping putih 4 tebal (y −12…4.5), air terrain y 4 (zona Terrain), tanpa lantai part
+	-- 2) kolam: dinding/coping putih 4 tebal (y −12…4.5), air terrain y 4 (zona Terrain), lantai part y −10…−6 (S1)
 	local pool = b:folder(root, "Pool")
 	local walls = {
 		Wall_West = box(P.minX, P.minX + W, P.floorY, D, P.minZ, P.maxZ),
@@ -67,17 +69,23 @@ return function(b: any, L: any)
 	end
 	b:surfaceLight(wallParts.Wall_West, "Right", "CoolLight", 1, 16, 90) -- lampu bawah air (sumber tersembunyi)
 	b:surfaceLight(wallParts.Wall_East, "Left", "CoolLight", 1, 16, 90)
-	-- tangga putih lebar di ujung selatan (keluar dari air tanpa lompat): pelat 0.5, anak tangga 0.5 × 1, sampai dalam 5
+	-- tangga putih lebar di ujung selatan (keluar dari air tanpa lompat): pelat 0.5, anak tangga 0.5 × 1, sampai dalam 5.
+	-- Anak tangga di muka air (atas y 4) tidak dibuat → anak tangga 2 (atas 3.5) injakan 2 sampai dinding; anak tangga
+	-- terbawah padat sampai dasar lantai part (tanpa kolong di kaki tangga).
 	local ix1, ix2 = P.minX + W, P.maxX - W
-	local k = 0
+	local k, lastZ = 1, 0
 	while true do
 		k += 1
 		local top = D - k * 0.5
 		if top < P.surfaceY - 5 then
 			break
 		end
-		blk(pool, string.format("Step_%02d", k), box(ix1, ix2, top - 0.5, top, P.maxZ - W - k, P.maxZ - W - k + 1), "OffWhite", "Plastic")
+		local z1, z2 = P.maxZ - W - k, if k == 2 then P.maxZ - W else P.maxZ - W - k + 1
+		local y1 = if top - 0.5 < P.surfaceY - 5 then P.partFloorBottom else top - 0.5
+		blk(pool, string.format("Step_%02d", k), box(ix1, ix2, y1, top, z1, z2), "OffWhite", "Plastic")
+		lastZ = z1
 	end
+	blk(pool, "Floor", box(ix1, ix2, P.partFloorBottom, P.partFloorTop, P.minZ + W, lastZ), "OffWhite", "Plastic")
 	b:part(pool, "Neon_Coping", { size = Vector3.new(ix2 - ix1, 0.2, 0.2), cf = CFrame.new((ix1 + ix2) / 2, D - 0.1, P.minZ + W + 0.1), color = "NeonWhite", material = "Neon", decor = true })
 
 	-- 3) sunken lounge: lantai 2.5, tangga 3 × 0.5 (lebar 10) dari dek di sisi timur, sofa built-in utara & barat, meja api
@@ -92,7 +100,7 @@ return function(b: any, L: any)
 	blk(lounge, "Sofa_North", box(Lo.minX, sx, Lo.floorY, seatY, Lo.minZ, Lo.minZ + 2), "OffWhite", "Plastic")
 	blk(lounge, "Sofa_North_Back", box(Lo.minX, sx, seatY, 5.5, Lo.minZ, Lo.minZ + 0.6), "OffWhite", "Plastic")
 	blk(lounge, "Sofa_West", box(Lo.minX, Lo.minX + 2, Lo.floorY, seatY, Lo.minZ + 2, Lo.maxZ), "OffWhite", "Plastic")
-	blk(lounge, "Sofa_West_Back", box(Lo.minX, Lo.minX + 0.6, seatY, 5.5, Lo.minZ + 2, Lo.maxZ), "OffWhite", "Plastic")
+	blk(lounge, "Sofa_West_Back", box(Lo.minX, Lo.minX + 0.6, seatY, 5.5, Lo.minZ + 0.6, Lo.maxZ), "OffWhite", "Plastic")
 	local seats = b:folder(lounge, "Seats")
 	for i = 1, 4 do -- menghadap selatan (+Z); mulai setelah sofa barat (x −90)
 		local x = Lo.minX + 3.5 + (i - 1) * 3.5

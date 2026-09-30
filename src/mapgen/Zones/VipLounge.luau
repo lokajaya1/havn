@@ -5,6 +5,9 @@
 -- Area x 96…151, z −8…39 dikelilingi dinding tak terlihat CollisionGroup "DoorVIP" (VIP & VVIP tembus, pemain biasa
 -- terhalang — PlayerCollisionManager, pengganti `Vip Door02` lama). Lantai atas: dek x 100…128 (y 16) menghadap barat.
 -- Lantai dasar: bar kontainer VIP + sofa. Semua Seat menghadap barat (dek) / timur (kursi bar).
+-- S1 (sentuhan user 30 Sep): seluruh zona (termasuk dinding DoorVIP) dipindah tangan → dibangun di koordinat lama lalu
+-- digeser utuh L.vipOffset (x −22.4, z +5); papan "VIP BAR" & huruf "VIP" di gerbang dihapus, fasad atap "LOUNGE".
+-- Koordinat di bawah = SEBELUM digeser.
 
 local Prefabs = require(script.Parent.Parent.Prefabs)
 
@@ -37,10 +40,8 @@ return function(b: any, L: any)
 		b:part(gate, "Column_0" .. i, { size = Vector3.new(1, gh + 1.5, 1), cf = CFrame.new(gx, G + (gh + 1.5) / 2, gzc + side * (gw / 2 + 0.5)), color = "Black", material = "Metal" })
 		b:part(gate, "Neon_Inner_0" .. i, { size = Vector3.new(0.2, gh, 0.2), cf = CFrame.new(gx, G + gh / 2, gzc + side * (gw / 2 - 0.1)), color = "NeonWhite", material = "Neon" })
 	end
-	local lintel = b:part(gate, "Lintel", { size = Vector3.new(1, 1.5, gw + 2), cf = CFrame.new(gx, G + gh + 0.75, gzc), color = "Black", material = "Metal" })
+	b:part(gate, "Lintel", { size = Vector3.new(1, 1.5, gw + 2), cf = CFrame.new(gx, G + gh + 0.75, gzc), color = "Black", material = "Metal" })
 	b:part(gate, "Neon_Inner_Top", { size = Vector3.new(0.2, 0.2, gw), cf = CFrame.new(gx, G + gh - 0.1, gzc), color = "NeonWhite", material = "Neon" })
-	b:sign(lintel, "VIP", "Left", "NeonWhite")
-	b:sign(lintel, "VIP", "Right", "NeonWhite")
 
 	-- R5 pavilion menempel dinding DoorVIP utara & timur (tanpa lorong sempit, A4): x 121…151, z −8…29; atap y 17…18;
 	-- tangga luar lebar 10 di selatan (z 29…39, menempel dinding selatan) naik ke barat sampai x 131 + landasan x 121…131
@@ -65,9 +66,9 @@ return function(b: any, L: any)
 	for i, z in { dz1 - 0.6, dz2 } do -- kusen di LUAR bukaan → lebar bersih tetap 10
 		slab("Door_Frame_0" .. i, px1 - 0.2, px1 + 1.2, G, roofY - 1, z, z + 0.6, "Black", "Metal")
 	end
-	-- parapet + nama "VIP LOUNGE" di tepi barat atap (menghadap panggung), garis neon putih di bawah atap
+	-- parapet + nama "LOUNGE" di tepi barat atap (menghadap panggung), garis neon putih di bawah atap
 	local fascia = slab("Fascia_West", px1 - 0.4, px1, roofY - 1, roofY + 1.5, pz1, pz2, "Black", "Metal")
-	b:sign(fascia, "VIP LOUNGE", "Left", "NeonWhite")
+	b:sign(fascia, "LOUNGE", "Left", "NeonWhite")
 	b:part(pav, "Neon_Roofline", { size = Vector3.new(0.2, 0.2, pz2 - pz1), cf = CFrame.new(px1 - 0.5, roofY - 1.1, (pz1 + pz2) / 2), color = "NeonWhite", material = "Neon", decor = true })
 	-- lampu langit-langit lembut (sumber tersembunyi)
 	local roof = pav:FindFirstChild("Roof") :: BasePart
@@ -111,10 +112,9 @@ return function(b: any, L: any)
 	for i, y in { 4, 6, 8 } do
 		b:part(bar, "Neon_Shelf_0" .. i, { size = Vector3.new(0.2, 0.2, 18), cf = CFrame.new(px2 - 3.1, G + y, bzc), color = "NeonWhite", material = "Neon", decor = true })
 	end
-	local vipSign = b:part(bar, "Sign_Bar", { size = Vector3.new(0.3, 2, 10), cf = CFrame.new(px2 - 3.15, G + 10, bzc), color = "Black", material = "Metal" })
-	b:sign(vipSign, "VIP BAR", "Left", "NeonWhite")
 	for i, dz in { -6.75, -2.25, 2.25, 6.75 } do
 		Prefabs.seatFacing(b, bar, "Kit_BarStool", px2 - 12.5, G, bzc + dz, -90, string.format("BarStool_%02d", i))
 	end
 	Prefabs.seatFacing(b, b:folder(nil, "Lounge"), "Kit_NeonSofa", px1 + 10, G, pz1 + 5.5, 180, "NeonSofa_01") -- menempel dinding utara
+	Prefabs.shift(b.root, Vector3.new(L.vipOffset.x, 0, L.vipOffset.z))
 end
