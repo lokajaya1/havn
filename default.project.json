@@ -280,6 +280,9 @@
     },
     "ServerStorage": {
       "$className": "ServerStorage",
+      "MapGen": {
+        "$path": "src/mapgen"
+      },
       "Money Gun": {
         "$className": "Tool",
         "Serverscript": {
