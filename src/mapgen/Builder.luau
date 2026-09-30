@@ -234,6 +234,11 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 	local c = src:Clone()
 	local i = 0
 	for _, d in c:GetDescendants() do
+		-- huruf teks 3D ("uni0048") → "Letter_H"
+		local hex = string.match(d.Name, "^uni(%x%x%x%x)$")
+		if hex then
+			d.Name = "Letter_" .. utf8.char(tonumber(hex, 16) :: number)
+		end
 		if (d:IsA("BasePart") or d:IsA("Model") or d:IsA("Folder")) and Naming.problem(d.Name) then
 			i += 1
 			d.Name = Naming.fallback(d.ClassName, i)
@@ -274,6 +279,7 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 	local pivot = CFrame.new((lo.X + hi.X) / 2, lo.Y, (lo.Z + hi.Z) / 2)
 	local k = scale or 1
 	local keepNeon = Palette.neonKeep[kitName] == true
+	local recolor = Palette.kitRecolor[kitName]
 	local tintKit = Palette.containerKits[kitName] == true
 	eachPart(c, function(p)
 		local rel = pivot:ToObjectSpace(p.CFrame)
@@ -282,6 +288,13 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 			p.Size = p.Size * k
 		end
 		p.Anchored = true
+		if recolor then
+			local col = p.Color
+			local to = recolor[string.format("%d,%d,%d", math.floor(col.R * 255 + 0.5), math.floor(col.G * 255 + 0.5), math.floor(col.B * 255 + 0.5))]
+			if to then
+				p.Color = rgb(Palette.colors[to])
+			end
+		end
 		local isNeon = p.Material == Enum.Material.Neon
 		if isNeon and not keepNeon then
 			p.Color = rgb(Palette.colors.NeonWhite)

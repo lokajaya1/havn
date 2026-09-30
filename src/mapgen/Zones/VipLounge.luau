@@ -24,18 +24,22 @@ return function(b: any, L: any)
 		b:part(walls, w[1], { size = Vector3.new(w[4], H, w[5]), cf = CFrame.new(w[2], G + H / 2, w[3]), transparency = 1, collisionGroup = "DoorVIP" })
 	end
 
-	-- tanda batas VIP: tali beludru di sisi barat & selatan, gerbang neon "VIP"
+	-- tanda batas VIP (R3): tiang antre hitam + tali putih (warna kit diubah Palette.kitRecolor), gerbang PORTAL hitam
+	-- bahasa sama dengan gerbang HAVN: bukaan 12 × 12, garis neon putih 0.2 di sisi dalam, huruf "VIP" putih di balok atas.
 	local edge = b:folder(nil, "Edge")
-	for i, z in { -3, 5.5, 26, 34.5 } do
-		b:clone(edge, "Kit_VipRope", at(x1 + 1.5, G, z, 0), string.format("VipRope_%02d", i))
+	for i, z in { -4, 4.5, 27, 35 } do
+		b:clone(edge, "Kit_VipRope", at(x1 + 1.5, G, z, 0), string.format("VipRope_%02d", i), 0.95)
 	end
 	local gate = b:model(edge, "Gate_VIP")
-	for i, z in { 11, 21 } do
-		b:part(gate, "Post_0" .. i, { size = Vector3.new(1, 12, 1), cf = CFrame.new(x1 + 1, G + 6, z), color = "Chrome", material = "Chrome" })
-		b:part(gate, "Neon_Post_0" .. i, { size = Vector3.new(0.4, 11, 0.4), cf = CFrame.new(x1 + 0.4, G + 6, z), color = "Lilac", material = "Neon" })
+	local gx, gzc, gw, gh = x1 + 1, 16, 12, 12
+	for i, side in { -1, 1 } do
+		b:part(gate, "Column_0" .. i, { size = Vector3.new(1, gh + 1.5, 1), cf = CFrame.new(gx, G + (gh + 1.5) / 2, gzc + side * (gw / 2 + 0.5)), color = "Black", material = "Metal" })
+		b:part(gate, "Neon_Inner_0" .. i, { size = Vector3.new(0.2, gh, 0.2), cf = CFrame.new(gx, G + gh / 2, gzc + side * (gw / 2 - 0.1)), color = "NeonWhite", material = "Neon" })
 	end
-	local sign = b:part(gate, "Sign", { size = Vector3.new(1, 3, 12), cf = CFrame.new(x1 + 1, G + 13.5, 16), color = "Asphalt", material = "Metal" })
-	b:sign(sign, "VIP", "Left", "Lilac")
+	local lintel = b:part(gate, "Lintel", { size = Vector3.new(1, 1.5, gw + 2), cf = CFrame.new(gx, G + gh + 0.75, gzc), color = "Black", material = "Metal" })
+	b:part(gate, "Neon_Inner_Top", { size = Vector3.new(0.2, 0.2, gw), cf = CFrame.new(gx, G + gh - 0.1, gzc), color = "NeonWhite", material = "Neon" })
+	b:sign(lintel, "VIP", "Left", "NeonWhite")
+	b:sign(lintel, "VIP", "Right", "NeonWhite")
 
 	-- dek atas (menghadap lantai dansa di barat) + 4 kolom krom + pagar kaca + tepi neon
 	local deck = b:model(b:folder(nil, "Deck"), "Deck_Upper")
