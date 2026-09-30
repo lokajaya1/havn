@@ -22,6 +22,7 @@ local kits: { [string]: Front } = {
 	Kit_SpeakerTripod = { front = "+X", source = "raycast 1.5/1.0 (lemah, cek visual R5)" },
 	Kit_LifeguardTower = { front = "-X", source = "raycast 28.0/21.7" },
 	StreetLightPole_01_A = { front = "+Z", source = "lengan lampu di +Z + raycast 9.3/4.4" },
+	Kit_LogoHAVN = { front = "+Z", source = "huruf 3D H→N terbaca dari +Z (urutan x sama dengan DJ STAGE)" },
 	-- simetris / bebas
 	Kit_HighTable = { front = "any", source = "2 Seat berhadapan (+X & -X)" },
 	Kit_BarCounter = { front = "any", source = "raycast simetris" },

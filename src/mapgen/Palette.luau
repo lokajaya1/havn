@@ -46,7 +46,11 @@ return {
 		Cream = { 223, 223, 222 },
 	},
 	-- Neon di klon kit ikut NeonWhite, kecuali kit yang cahayanya konten (layar arcade).
-	neonKeep = { Kit_ArcadeMachines = true },
+	neonKeep = { Kit_ArcadeMachines = true, Kit_LogoHAVN = true }, -- huruf 3D HAVN = putih 255 persis DJ STAGE
+	-- warna part kit yang diganti monokrom (kunci "R,G,B" asli → token)
+	kitRecolor = {
+		Kit_VipRope = { ["239,184,56"] = "Black", ["255,0,0"] = "OffWhite" }, -- tiang emas → hitam, tali merah → putih
+	},
 	-- tint SurfaceAppearance kontainer (perkalian warna → kontainer gelap; tint putih TIDAK bisa, R0b)
 	containerTint = { 60, 60, 64 },
 	containerKits = { ContainerRed = true, ContainerBlue = true, ContainerYellow = true, ContainerGreen = true },

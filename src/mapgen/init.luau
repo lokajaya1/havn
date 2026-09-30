@@ -29,7 +29,7 @@ local zones: { [string]: (any, any) -> () } = {
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V10", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V11", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -281,7 +281,9 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 		end
 		local old = map:FindFirstChild(zoneName)
 		if old then
-			old:Destroy()
+			-- Parent = nil (BUKAN Destroy): Ctrl+Z bisa mengembalikan zona lama. Destroy mengunci Parent → undo gagal
+			-- ("The Parent property of … is locked", terlihat 30 Sep 20:36).
+			old.Parent = nil
 		end
 		b.root.Parent = map
 	else
