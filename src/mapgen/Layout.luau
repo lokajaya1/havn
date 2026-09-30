@@ -21,7 +21,7 @@ return {
 	baseY = -16, -- dasar terrain
 	-- air voxel sampai y 0. BUKTI raycast Studio 30 Sep 14:20: permukaan air dirender TEPAT y 0.00 (beda dengan darat
 	-- yang dirender batas voxel + 2). Benda apung memakai renderY.
-	sea = { surfaceY = 0, floorY = -12, renderY = 0 },
+	sea = { surfaceY = 0, floorY = -12, renderY = 0, swimMaxX = -104 }, -- swimMaxX: perairan renang = x < −104 (teluk; dinding dermaga x −106…−104)
 	-- batas map = dinding DoorVVIP (zona Boundary)
 	boundary = area("Boundary", -172, 164, -208, 104),
 	-- lantai part (slab) yang bisa diinjak
@@ -33,9 +33,16 @@ return {
 	land = area("Land", -104, 212, -256, 152), -- beton rata y 4 (termasuk cincin luar di balik bangunan batas)
 	seaArea = area("Sea", -216, -104, -256, 152), -- air y −12…0 di atas pasir
 	breakwater = area("Breakwater", -176, -168, -256, 152),
-	beachSand = area("BeachSand", -104, -60, -64, 104), -- pasir rata y 4 (x −88…−60) + lereng ke air (x −136…−88)
-	beachSlope = { minX = -136, maxX = -88 },
-	boardwalk = area("Boardwalk", -60, -44, -64, 104), -- dek kayu y 6
+	beachSand = area("BeachSand", -104, -56, -64, 104), -- pasir rata y 4 (x −100…−56) + tebing pasir curam ke air (x −108…−100)
+	-- R4 (Rencana_Workspace_R15.md §16): lereng landai 48 stud (air dangkal ±15 stud untuk avatar tinggi → bolak-balik
+	-- lari↔renang) diganti tebing pasir 8 stud (kemiringan 2:1): dari dalam 0 ke 12 dalam 8 stud.
+	beachSlope = { minX = -108, maxX = -100 },
+	boardwalk = area("Boardwalk", -56, -44, -64, 104), -- dek kayu y 6 (lebar 12)
+	-- Teras kolam "HAVN POOL" (R4b, foto acuan user): dek kayu y 4.5 (1.5 di bawah lantai), kolam air terrain y −12…4
+	-- (dalam 14, lebar 24 = P13), dinding/coping putih 4 tebal (tepi air tersembunyi, P5), sunken lounge lantai 2.5.
+	poolTerrace = { minX = -100, maxX = -56, minZ = -60, maxZ = 24, deckY = 4.5 },
+	pool = { minX = -100, maxX = -68, minZ = -48, maxZ = 16, wall = 4, surfaceY = 4, floorY = -12 }, -- termasuk dinding
+	lounge = { minX = -92, maxX = -72, minZ = -60, maxZ = -50, floorY = 2.5 }, -- termasuk tangga turun x −76…−72
 	road = area("Road", -44, 164, 48, 64), -- jalan klub (aspal)
 	sidewalk = area("Sidewalk", -44, 164, 64, 76), -- trotoar depan deret toko
 	quayWall = { x1 = -106, x2 = -104, minZ = -208, maxZ = -64, bottomY = -14 },

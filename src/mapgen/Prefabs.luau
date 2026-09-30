@@ -178,9 +178,9 @@ function Prefabs.storefront(b: any, parent: Instance, x1: number, x2: number, zF
 end
 
 -- Tandai semua part sebuah objek boleh di bawah lantai (tiang di air, benda apung, batu setengah terbenam).
-function Prefabs.markBelow(inst: Instance?)
+function Prefabs.markBelow(inst: Instance?): Instance?
 	if not inst then
-		return
+		return nil
 	end
 	if inst:IsA("BasePart") then
 		inst:SetAttribute("AllowBelowGround", true)
@@ -190,6 +190,24 @@ function Prefabs.markBelow(inst: Instance?)
 			d:SetAttribute("AllowBelowGround", true)
 		end
 	end
+	return inst
+end
+
+-- Jadikan hiasan tembus (tidak bisa ditabrak/diraycast): benda di permukaan air & latar laut (P14).
+function Prefabs.decor(inst: Instance?): Instance?
+	if not inst then
+		return nil
+	end
+	local list = inst:GetDescendants()
+	table.insert(list, inst)
+	for _, d in list do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+		end
+	end
+	return inst
 end
 
 -- Kursi berjemur Y2K: rangka krom + bantal warna + Seat. Panjang di sumbu X lokal, kepala di +X lokal.
@@ -201,7 +219,8 @@ function Prefabs.lounger(b: any, parent: Instance, name: string, cf: CFrame, col
 	end
 	b:part(m, "Cushion", { size = Vector3.new(4.4, 0.5, 2.4), cf = cf * CFrame.new(-1, 1.65, 0), color = colorKey, material = "Plastic" })
 	b:part(m, "Backrest", { size = Vector3.new(2.8, 0.5, 2.4), cf = cf * CFrame.new(2.2, 2.3, 0) * CFrame.Angles(0, 0, math.rad(35)), color = colorKey, material = "Plastic" })
-	b:seat(m, "Seat", cf * CFrame.new(-0.5, 1.95, 0), Vector3.new(4, 0.2, 2))
+	-- kepala di +X lokal → badan menghadap −X lokal (Seat diputar 90°; dulu menghadap samping)
+	b:seat(m, "Seat", cf * CFrame.new(-0.5, 1.95, 0) * CFrame.Angles(0, math.rad(90), 0), Vector3.new(2, 0.2, 4))
 	return m
 end
 
@@ -257,13 +276,18 @@ function Prefabs.pier(b: any, parent: Instance, name: string, x1: number, x2: nu
 	return m
 end
 
--- Ponton renang apung: dek putih + strip pink + tangga, permukaan dek 0.75 di atas permukaan air.
-function Prefabs.pontoon(b: any, parent: Instance, name: string, x: number, z: number, waterY: number)
+-- Platform renang PADAT dari dasar laut (bukan ponton apung): tidak ada kolong tempat avatar terjepit (bukti R0c 20:03 —
+-- avatar tinggi di bawah ponton apung terlempar ke y 16.000). Dek putih 0.5 di atas air (naik dari air tanpa lompat,
+-- uji tangga R0c2), sisi graphite, strip garis putih, 2 anak tangga 0.5 di sisi barat.
+function Prefabs.swimPlatform(b: any, parent: Instance, name: string, x: number, z: number, waterY: number, floorY: number)
 	local m = b:model(parent, name)
-	b:part(m, "Deck", { size = Vector3.new(16, 1.5, 16), cf = CFrame.new(x, waterY, z), color = "White", material = "Plastic", allowBelowGround = true })
-	b:part(m, "Stripe", { size = Vector3.new(16.2, 0.3, 16.2), cf = CFrame.new(x, waterY - 0.3, z), color = "HotPink", material = "Plastic", allowBelowGround = true })
-	for i, dz in { -1.2, 1.2 } do
-		b:part(m, "Ladder_Rail_0" .. i, { size = Vector3.new(0.3, 4, 0.3), cf = CFrame.new(x - 8.3, waterY, z + dz), color = "Chrome", material = "Metal", allowBelowGround = true })
+	local top = waterY + 0.5
+	b:part(m, "Base", { size = Vector3.new(16, top - 0.5 - floorY, 16), cf = CFrame.new(x, (floorY + top - 0.5) / 2, z), color = "Graphite", material = "Concrete", allowBelowGround = true })
+	b:part(m, "Deck", { size = Vector3.new(16, 0.5, 16), cf = CFrame.new(x, top - 0.25, z), color = "OffWhite", material = "Plastic", allowBelowGround = true })
+	b:part(m, "Edge_Line", { size = Vector3.new(16.1, 0.2, 16.1), cf = CFrame.new(x, top - 0.6, z), color = "Black", material = "Plastic", decor = true, allowBelowGround = true })
+	for k = 1, 2 do
+		local h = top - k * 0.5
+		b:part(m, "Step_0" .. k, { size = Vector3.new(1, 0.5, 6), cf = CFrame.new(x - 8 - (k - 0.5), h - 0.25, z), color = "OffWhite", material = "Plastic", allowBelowGround = true })
 	end
 	return m
 end
@@ -282,15 +306,18 @@ function Prefabs.facing(b: any, parent: Instance, kit: string, x: number, y: num
 	return b:clone(parent, kit, at(x, y, z, yaw), name, scale, heading)
 end
 
--- Tangga lurus dari lantai g naik `rise` stud ke arah −X mulai x0 (anak tangga 0.5 tinggi × 1 panjang), lebar w.
-function Prefabs.stairs(b: any, parent: Instance, name: string, x0: number, z1: number, z2: number, g: number, rise: number)
+-- Tangga lurus dari lantai g naik `rise` stud ke arah −X mulai x0 (anak tangga `step` tinggi × 1 panjat, default 0.5),
+-- lebar z1…z2. Anak tangga = balok padat dari lantai (tanpa kolong). Garis neon putih 0.2 menyusuri sisi utara.
+function Prefabs.stairs(b: any, parent: Instance, name: string, x0: number, z1: number, z2: number, g: number, rise: number, step: number?)
 	local m = b:model(parent, name)
-	local n = math.floor(rise / 0.5 + 0.5)
+	local st = step or 0.5
+	local n = math.floor(rise / st + 0.5)
 	for k = 1, n do
-		local h = k * 0.5
-		b:part(m, string.format("Step_%02d", k), { size = Vector3.new(1, h, z2 - z1), cf = CFrame.new(x0 - (k - 0.5), g + h / 2, (z1 + z2) / 2), color = "Steel", material = "DiamondPlate" })
+		local h = k * st
+		b:part(m, string.format("Step_%02d", k), { size = Vector3.new(1, h, z2 - z1), cf = CFrame.new(x0 - (k - 0.5), g + h / 2, (z1 + z2) / 2), color = "Black", material = "Metal" })
 	end
-	b:part(m, "Neon_Edge", { size = Vector3.new(n, 0.2, 0.2), cf = CFrame.new(x0 - n / 2, g + rise / 2 + 0.3, z1 + 0.1) * CFrame.Angles(0, 0, math.atan2(-rise, n)), color = "HotPink", material = "Neon", decor = true })
+	local len = math.sqrt(n * n + rise * rise)
+	b:part(m, "Neon_Edge", { size = Vector3.new(len, 0.2, 0.2), cf = CFrame.new(x0 - n / 2, g + rise / 2 + 0.3, z1 + 0.1) * CFrame.Angles(0, 0, math.atan2(-rise, n)), color = "NeonWhite", material = "Neon", decor = true })
 	return m
 end
 
