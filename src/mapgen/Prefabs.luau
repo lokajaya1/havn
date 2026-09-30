@@ -272,6 +272,86 @@ function Prefabs.markBelow(inst: Instance?): Instance?
 	return inst
 end
 
+-- Tandai semua part sebuah objek boleh berada di area objek TETAP tertentu (mis. dekor di atas lubang dansa); `areas` =
+-- nama area Layout.fixed dipisah koma. Tes zona tetap memastikan tidak ada volume yang menembus part objek tetap.
+function Prefabs.allowFixed(inst: Instance?, areas: string): Instance?
+	if not inst then
+		return nil
+	end
+	local list = inst:GetDescendants()
+	table.insert(list, inst)
+	for _, d in list do
+		if d:IsA("BasePart") then
+			d:SetAttribute("AllowFixed", areas)
+		end
+	end
+	return inst
+end
+
+-- Garland balon organik (B1) sepanjang garis patah `points` (tiap `step` stud 2 balon, ukuran & warna acak TETAP dari `seed`
+-- → build selalu sama). Balon = Part Ball (tanpa SpecialMesh → tetap ringan), dekor tembus, tanpa bayangan.
+-- floorY: dasar balon tidak di bawah ini. Mengembalikan jumlah balon.
+local PARTY_MIX = { -- warna campuran (bobot): monokrom dominan + sentuhan pink
+	{ "Black", "Plastic", 0.1, 30 },
+	{ "White", "Plastic", 0.1, 25 },
+	{ "PartySilver", "Metal", 0.35, 20 },
+	{ "PartyPink", "Plastic", 0.1, 15 },
+	{ "PartyBlush", "Plastic", 0.1, 10 },
+}
+function Prefabs.garland(b: any, parent: Instance, name: string, points: { Vector3 }, seed: number, opts: { step: number?, spread: number?, minSize: number?, maxSize: number?, floorY: number?, perStep: number?, minY: number?, maxX: number?, minX: number? }?): number
+	local o = opts or {}
+	local step, spread = o.step or 1, o.spread or 1.2
+	local lo, hi = o.minSize or 1.2, o.maxSize or 2.8
+	local s = seed
+	local function rnd(): number
+		s = (s * 16807) % 2147483647
+		return s / 2147483647
+	end
+	local m = b:model(parent, name)
+	local n = 0
+	for i = 1, #points - 1 do
+		local a, c = points[i], points[i + 1]
+		local len = (c - a).Magnitude
+		local k = math.max(1, math.floor(len / step + 0.5))
+		for j = 0, k - 1 do
+			local p = a:Lerp(c, j / k)
+			for _ = 1, o.perStep or 2 do
+				local d = Vector3.new(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1) * spread
+				local size = lo + (hi - lo) * rnd()
+				local pos = p + d
+				local y = math.max(pos.Y, (o.floorY or -math.huge) + size / 2, (o.minY or -math.huge) + size / 2)
+				local x = pos.X
+				if o.maxX then
+					x = math.min(x, o.maxX - size / 2)
+				end
+				if o.minX then
+					x = math.max(x, o.minX + size / 2)
+				end
+				local pick, acc, r = PARTY_MIX[1], 0, rnd() * 100
+				for _, mix in PARTY_MIX do
+					acc += mix[4]
+					if r <= acc then
+						pick = mix
+						break
+					end
+				end
+				n += 1
+				b:part(m, string.format("Balloon_%03d", n), {
+					size = Vector3.new(size, size, size),
+					cf = CFrame.new(x, y, pos.Z),
+					color = pick[1],
+					material = pick[2],
+					reflectance = pick[3],
+					shape = "Ball",
+					decor = true,
+					noShadow = true,
+				})
+			end
+		end
+	end
+	return n
+end
+
 -- Geser utuh semua part sebuah objek/zona (S1: area yang dipindah tangan user dipindah persis di kode, bentuk tetap).
 function Prefabs.shift(inst: Instance?, offset: Vector3): Instance?
 	if not inst then
