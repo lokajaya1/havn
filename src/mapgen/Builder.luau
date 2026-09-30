@@ -12,6 +12,7 @@ export type PartSpec = {
 	cf: CFrame,
 	color: string?,
 	material: string?,
+	materialVariant: string?, -- nama MaterialVariant di MaterialService (mis. "granite tile 3" = lantai dansa)
 	transparency: number?,
 	shape: string?, -- "Block" (default) | "Wedge" | "Cylinder" | "Ball"
 	decor: boolean?, -- true = tidak bisa ditabrak (hiasan)
@@ -95,6 +96,9 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 	local mat = spec.material or "Plastic"
 	p.Color = color(spec.color, mat)
 	p.Material = (Enum.Material :: any)[Palette.materials[mat] or mat]
+	if spec.materialVariant then
+		p.MaterialVariant = spec.materialVariant
+	end
 	p.Transparency = spec.transparency or 0
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth

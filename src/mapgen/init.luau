@@ -25,11 +25,12 @@ local zones: { [string]: (any, any) -> () } = {
 	Bay = require(script.Zones.Bay),
 	VipLounge = require(script.Zones.VipLounge),
 	Plaza = require(script.Zones.Plaza),
+	DanceStairs = require(script.Zones.DanceStairs),
 }
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V13", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V14", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -173,7 +174,7 @@ function MapGen.check(root: Instance): { string }
 				end
 				local box = aabb(c.CFrame, c.Size)
 				for _, r in Layout.fixed do
-					if touches(c, r) then
+					if touches(c, r) and c:GetAttribute("AllowFixed") ~= r.name then
 						table.insert(issues, c.Name .. " menabrak area " .. r.name)
 					end
 				end

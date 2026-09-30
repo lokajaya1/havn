@@ -177,6 +177,82 @@ function Prefabs.storefront(b: any, parent: Instance, x1: number, x2: number, zF
 	return m
 end
 
+-- Venue yang BISA DIMASUKI (R7, permintaan user: bangunan = tempat foto, bukan kotak). Cangkang dinding 2 tebal (P10),
+-- ruang dalam tinggi 14 (≥ A1), pintu 10 × 12 di tengah muka (A3), kaca gelap kiri-kanan pintu, balok atas padat sampai
+-- tinggi toko 25, papan nama + awning seperti storefront. kind: "arcade" | "studio" | "records" (isi dalam).
+export type VenueSpec = { name: string, text: string, kind: string, awning: string }
+function Prefabs.venue(b: any, parent: Instance, x1: number, x2: number, zFront: number, depth: number, g: number, s: VenueSpec)
+	local m = b:model(parent, s.name)
+	local H, IH, DW, DH = 25, 14, 10, 12
+	local cx = (x1 + x2) / 2
+	local zf, zb = zFront + 1, zFront + depth
+	local wx1, wx2 = x1 + 0.5, x2 - 0.5 -- sisi luar cangkang
+	local ix1, ix2, iz1, iz2 = wx1 + 2, wx2 - 2, zf + 2, zb - 2 -- ruang dalam
+	local function blk(name: string, ax: number, bx: number, ay: number, by: number, az: number, bz: number, colorKey: string, material: string, extra: { [string]: any }?)
+		local spec: { [string]: any } = { size = Vector3.new(bx - ax, by - ay, bz - az), cf = CFrame.new((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), color = colorKey, material = material }
+		for k, v in extra or {} do
+			spec[k] = v
+		end
+		return b:part(m, name, spec :: any)
+	end
+	blk("Wall_West", wx1, ix1, g, g + IH, zf, zb, "Black", "Concrete")
+	blk("Wall_East", ix2, wx2, g, g + IH, zf, zb, "Black", "Concrete")
+	blk("Wall_Back", ix1, ix2, g, g + IH, iz2, zb, "Black", "Concrete")
+	local upper = blk("Upper", wx1, wx2, g + IH, g + H, zf, zb, "Black", "Concrete")
+	blk("Parapet", wx1, wx2, g + H, g + H + 1, zf, zb, "Graphite", "Metal")
+	-- muka: kaca gelap kiri/kanan pintu, kusen hitam, balok atas pintu
+	blk("Glass_West", ix1, cx - DW / 2 - 0.6, g, g + DH, zf, zf + 0.4, "Smoke", "Plastic", { transparency = 0.45 })
+	blk("Glass_East", cx + DW / 2 + 0.6, ix2, g, g + DH, zf, zf + 0.4, "Smoke", "Plastic", { transparency = 0.45 })
+	blk("Door_Frame_West", cx - DW / 2 - 0.6, cx - DW / 2, g, g + IH, zf - 0.2, iz1, "Black", "Metal")
+	blk("Door_Frame_East", cx + DW / 2, cx + DW / 2 + 0.6, g, g + IH, zf - 0.2, iz1, "Black", "Metal")
+	blk("Header", ix1, ix2, g + DH, g + IH, zf, iz1, "Black", "Metal")
+	blk("Floor", ix1, ix2, g, g + 0.1, zf, iz2, "Black", "Granite", { floor = true, decor = false })
+	b:surfaceLight(upper, "Bottom", "CoolLight", 0.8, 14, 120)
+	-- papan nama & awning (bawah awning 12.8 ≥ A1)
+	b:part(m, "Awning", { size = Vector3.new(DW + 8, 0.6, 4), cf = CFrame.new(cx, g + 13.1, zf - 2), color = s.awning, material = "Metal" })
+	local board = b:part(m, "Sign_Board", { size = Vector3.new(x2 - x1 - 6, 4, 0.6), cf = CFrame.new(cx, g + 17.5, zf - 0.3), color = "Black", material = "Metal" })
+	b:sign(board, s.text, "Front", "NeonWhite")
+	b:part(m, "Neon_Sign", { size = Vector3.new(x2 - x1 - 6, 0.2, 0.2), cf = CFrame.new(cx, g + 15.3, zf - 0.5), color = "NeonWhite", material = "Neon", decor = true })
+	local inside = b:folder(m, "Interior")
+	if s.kind == "arcade" then
+		-- mesin arcade di DALAM (depan kit +X → menghadap timur), grid neon plafon, dinding foto "ARCADE 2000"
+		Prefabs.facing(b, inside, "Kit_ArcadeMachines", ix1 + 1.6, g, (iz1 + iz2) / 2, -90, "ArcadeMachines_01")
+		local k = 0
+		for z = iz1 + 2, iz2 - 1, 4 do
+			k += 1
+			b:part(inside, string.format("Neon_Grid_%02d", k), { size = Vector3.new(ix2 - ix1, 0.2, 0.2), cf = CFrame.new(cx, g + IH - 0.15, z), color = "NeonWhite", material = "Neon", decor = true })
+		end
+		local wall = b:part(inside, "Photo_Wall", { size = Vector3.new(14, 6, 0.2), cf = CFrame.new(cx + 2, g + 7, iz2 - 0.1), color = "Black", material = "Metal" })
+		b:sign(wall, s.text, "Front", "NeonWhite")
+	elseif s.kind == "studio" then
+		-- studio foto: dinding & lantai putih (cyclorama), bingkai hitam 12 × 10 berdiri, lampu panel dari kedua sisi
+		b:part(inside, "Cyc_Back", { size = Vector3.new(ix2 - ix1, IH, 0.2), cf = CFrame.new(cx, g + IH / 2, iz2 - 0.1), color = "White", material = "Plastic" })
+		b:part(inside, "Cyc_Floor", { size = Vector3.new(ix2 - ix1, 0.05, 8), cf = CFrame.new(cx, g + 0.125, iz2 - 4.2), color = "White", material = "Plastic", decor = true })
+		for i, dx in { -6.3, 6.3 } do
+			b:part(inside, "Frame_Post_0" .. i, { size = Vector3.new(0.6, 10, 0.6), cf = CFrame.new(cx + dx, g + 5, iz2 - 9), color = "Black", material = "Metal" })
+		end
+		b:part(inside, "Frame_Top", { size = Vector3.new(13.2, 0.6, 0.6), cf = CFrame.new(cx, g + 10.3, iz2 - 9), color = "Black", material = "Metal" })
+		b:surfaceLight(m:FindFirstChild("Wall_West") :: BasePart, "Right", "CoolLight", 1.5, 16, 90)
+		b:surfaceLight(m:FindFirstChild("Wall_East") :: BasePart, "Left", "CoolLight", 1.5, 16, 90)
+	elseif s.kind == "records" then
+		-- dinding piringan hitam (6 × 3) + rak rendah hitam bergaris neon di kedua sisi
+		local n = 0
+		for j = 0, 2 do
+			for i = 0, 5 do
+				n += 1
+				local p = CFrame.new(cx - 10 + i * 4, g + 3.5 + j * 3.5, iz2 - 0.1) * CFrame.Angles(0, math.rad(90), 0)
+				b:part(inside, string.format("Vinyl_%02d", n), { size = Vector3.new(0.1, 3, 3), cf = p, color = "Void", material = "Plastic", shape = "Cylinder", decor = true })
+				b:part(inside, string.format("Vinyl_Label_%02d", n), { size = Vector3.new(0.12, 1, 1), cf = p * CFrame.new(-0.02, 0, 0), color = "OffWhite", material = "Plastic", shape = "Cylinder", decor = true })
+			end
+		end
+		for i, x in { ix1 + 1, ix2 - 1 } do
+			b:part(inside, "Rack_0" .. i, { size = Vector3.new(2, 3.5, iz2 - iz1 - 6), cf = CFrame.new(x, g + 1.75, (iz1 + iz2) / 2 - 1), color = "Black", material = "Metal" })
+			b:part(inside, "Neon_Rack_0" .. i, { size = Vector3.new(0.2, 0.2, iz2 - iz1 - 6), cf = CFrame.new(x + (if i == 1 then 1.1 else -1.1), g + 3.3, (iz1 + iz2) / 2 - 1), color = "NeonWhite", material = "Neon", decor = true })
+		end
+	end
+	return m
+end
+
 -- Tandai semua part sebuah objek boleh di bawah lantai (tiang di air, benda apung, batu setengah terbenam).
 function Prefabs.markBelow(inst: Instance?): Instance?
 	if not inst then
