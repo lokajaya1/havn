@@ -29,7 +29,7 @@ local zones: { [string]: (any, any) -> () } = {
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V9", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V10", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -134,6 +134,18 @@ local function blocksNukePath(box: any): boolean
 	return false
 end
 
+-- Part di dalam klon kit (layar arcade, lampu telepon umum) = isi kit, bukan bangunan kita.
+local function inKit(inst: Instance, root: Instance): boolean
+	local cur: Instance? = inst
+	while cur and cur ~= root do
+		if cur:GetAttribute("Kit") then
+			return true
+		end
+		cur = cur.Parent
+	end
+	return false
+end
+
 -- Periksa pohon hasil build: nama, kembar, skrip, Anchored, area zona, area terlarang.
 function MapGen.check(root: Instance): { string }
 	local issues = {}
@@ -177,6 +189,14 @@ function MapGen.check(root: Instance): { string }
 				end
 				if not isFloor and blocksNukePath(box) then
 					table.insert(issues, c.Name .. " menutup jalur efek donasi")
+				end
+				-- D1 (Rencana_Workspace_R15.md §3): neon hanya garis tipis/titik, bukan panel (ukuran tengah ≤ 1 stud)
+				if c.Material == Enum.Material.Neon and not inKit(c, root) then
+					local s = { c.Size.X, c.Size.Y, c.Size.Z }
+					table.sort(s)
+					if s[2] > 1.001 then
+						table.insert(issues, ("%s: panel neon %.1f×%.1f×%.1f (maks garis ≤ 1 stud)"):format(c.Name, c.Size.X, c.Size.Y, c.Size.Z))
+					end
 				end
 			end
 			walk(c)

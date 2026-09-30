@@ -38,7 +38,7 @@ function Prefabs.stsCrane(b: any, parent: Instance, name: string, s: CraneSpec)
 	local teal, metal = "CraneTeal", "Metal"
 	for _, c in { { "SeaNorth", s.xSea, zc - hz }, { "SeaSouth", s.xSea, zc + hz }, { "LandNorth", s.xLand, zc - hz }, { "LandSouth", s.xLand, zc + hz } } do
 		b:part(m, "Leg_" .. c[1], { size = Vector3.new(3, H, 3), cf = CFrame.new(c[2], g + H / 2, c[3]), color = teal, material = metal })
-		b:part(m, "Neon_Leg_" .. c[1], { size = Vector3.new(3.3, 1, 3.3), cf = CFrame.new(c[2], g + 30, c[3]), color = "HotPink", material = "Neon" })
+		b:part(m, "Band_Leg_" .. c[1], { size = Vector3.new(3.3, 1, 3.3), cf = CFrame.new(c[2], g + 30, c[3]), color = "Black", material = "Metal" })
 		b:part(m, "Bogie_" .. c[1], { size = Vector3.new(4, 2, 5), cf = CFrame.new(c[2], g + 1, c[3]), color = "Steel", material = metal })
 	end
 	local span = math.abs(s.xLand - s.xSea)
@@ -71,10 +71,10 @@ function Prefabs.stsCrane(b: any, parent: Instance, name: string, s: CraneSpec)
 		end
 	end
 	b:part(m, "Tower_Cap", { size = Vector3.new(3, 2, 13), cf = CFrame.new(s.xLand, apexY + 1, zc), color = teal, material = metal })
-	b:part(m, "Neon_Tower_Cap", { size = Vector3.new(3.2, 0.5, 13.2), cf = CFrame.new(s.xLand, apexY + 2.25, zc), color = "HotPink", material = "Neon" })
+	b:part(m, "Neon_Tower_Cap", { size = Vector3.new(0.3, 0.3, 13.2), cf = CFrame.new(s.xLand, apexY + 2.15, zc), color = "NeonWhite", material = "Neon" })
 	-- rumah mesin (belakang) & kabin operator (di bawah lengan, sisi laut)
 	b:part(m, "Machinery_House", { size = Vector3.new(10, 8, 14), cf = CFrame.new(s.boomBack - 6, boomY + 8, zc), color = "Chrome", material = "Chrome" })
-	b:part(m, "Neon_Machinery", { size = Vector3.new(10.2, 0.5, 14.2), cf = CFrame.new(s.boomBack - 6, boomY + 11.5, zc), color = "Lime", material = "Neon" })
+	b:part(m, "Neon_Machinery", { size = Vector3.new(0.3, 0.3, 14.2), cf = CFrame.new(s.boomBack - 11.15, boomY + 11.85, zc), color = "NeonWhite", material = "Neon" })
 	b:part(m, "Cab", { size = Vector3.new(6, 6, 6), cf = CFrame.new(s.xSea - 6, boomY - 3, zc), color = "Chrome", material = "Chrome" })
 	b:part(m, "Cab_Glass", { size = Vector3.new(0.3, 3.5, 5.4), cf = CFrame.new(s.xSea - 9.1, boomY - 3, zc), color = "IceBlue", material = "Glass", transparency = 0.35 })
 	-- troli, kabel, spreader, kontainer menggantung di atas air
@@ -126,14 +126,14 @@ end
 function Prefabs.launchPad(b: any, parent: Instance, name: string, x: number, z: number, g: number)
 	local m = b:model(parent, name)
 	local up = CFrame.Angles(0, 0, math.rad(90))
-	b:part(m, "Neon_Rim", { size = Vector3.new(0.2, 17, 17), cf = CFrame.new(x, g + 0.1, z) * up, color = "HotPink", material = "Neon", shape = "Cylinder" })
+	b:part(m, "Pad_Rim", { size = Vector3.new(0.2, 17, 17), cf = CFrame.new(x, g + 0.1, z) * up, color = "OffWhite", material = "Plastic", shape = "Cylinder" })
 	b:part(m, "Pad_Disk", { size = Vector3.new(0.4, 16, 16), cf = CFrame.new(x, g + 0.2, z) * up, color = "Steel", material = "DiamondPlate", shape = "Cylinder" })
 	for i, yaw in { 45, -45 } do
 		b:part(m, "Mark_Cross_0" .. i, { size = Vector3.new(11, 0.1, 1.2), cf = CFrame.new(x, g + 0.45, z) * CFrame.Angles(0, math.rad(yaw), 0), color = "SafetyYellow", material = "Plastic", decor = true })
 	end
 	for i, d in { { 0, -11 }, { 0, 11 } } do
 		b:part(m, "Beacon_Pole_0" .. i, { size = Vector3.new(8, 0.8, 0.8), cf = CFrame.new(x + d[1], g + 4, z + d[2]) * up, color = "Chrome", material = "Metal", shape = "Cylinder" })
-		b:part(m, "Beacon_Light_0" .. i, { size = Vector3.new(1.4, 1.4, 1.4), cf = CFrame.new(x + d[1], g + 8.7, z + d[2]), color = if i % 2 == 0 then "IceBlue" else "HotPink", material = "Neon", shape = "Ball" })
+		b:part(m, "Beacon_Light_0" .. i, { size = Vector3.new(0.8, 0.8, 0.8), cf = CFrame.new(x + d[1], g + 8.4, z + d[2]), color = "NeonWhite", material = "Neon", shape = "Ball" })
 	end
 	return m
 end
@@ -211,7 +211,7 @@ function Prefabs.umbrella(b: any, parent: Instance, name: string, x: number, z: 
 	local up = CFrame.Angles(0, 0, math.rad(90))
 	b:part(m, "Pole", { size = Vector3.new(8, 0.35, 0.35), cf = CFrame.new(x, g + 4, z) * up, color = "Chrome", material = "Metal", shape = "Cylinder" })
 	b:part(m, "Canopy", { size = Vector3.new(0.5, 9, 9), cf = CFrame.new(x, g + 8.25, z) * up, color = colorKey, material = "Fabric", shape = "Cylinder" })
-	b:part(m, "Neon_Rim", { size = Vector3.new(0.2, 9.3, 9.3), cf = CFrame.new(x, g + 7.95, z) * up, color = "IceBlue", material = "Neon", shape = "Cylinder" })
+	b:part(m, "Canopy_Rim", { size = Vector3.new(0.2, 9.3, 9.3), cf = CFrame.new(x, g + 7.95, z) * up, color = "OffWhite", material = "Plastic", shape = "Cylinder" })
 	return m
 end
 
