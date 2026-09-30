@@ -175,6 +175,97 @@ function Prefabs.storefront(b: any, parent: Instance, x1: number, x2: number, zF
 	return m
 end
 
+-- Tandai semua part sebuah objek boleh di bawah lantai (tiang di air, benda apung, batu setengah terbenam).
+function Prefabs.markBelow(inst: Instance?)
+	if not inst then
+		return
+	end
+	if inst:IsA("BasePart") then
+		inst:SetAttribute("AllowBelowGround", true)
+	end
+	for _, d in inst:GetDescendants() do
+		if d:IsA("BasePart") then
+			d:SetAttribute("AllowBelowGround", true)
+		end
+	end
+end
+
+-- Kursi berjemur Y2K: rangka krom + bantal warna + Seat. Panjang di sumbu X lokal, kepala di +X lokal.
+function Prefabs.lounger(b: any, parent: Instance, name: string, cf: CFrame, colorKey: string)
+	local m = b:model(parent, name)
+	b:part(m, "Frame", { size = Vector3.new(7, 0.4, 2.6), cf = cf * CFrame.new(0, 1.2, 0), color = "Chrome", material = "Chrome" })
+	for i, d in { { -3.2, -1.1 }, { -3.2, 1.1 }, { 3.2, -1.1 }, { 3.2, 1.1 } } do
+		b:part(m, "Leg_0" .. i, { size = Vector3.new(0.3, 1, 0.3), cf = cf * CFrame.new(d[1], 0.5, d[2]), color = "Chrome", material = "Chrome" })
+	end
+	b:part(m, "Cushion", { size = Vector3.new(4.4, 0.5, 2.4), cf = cf * CFrame.new(-1, 1.65, 0), color = colorKey, material = "Plastic" })
+	b:part(m, "Backrest", { size = Vector3.new(2.8, 0.5, 2.4), cf = cf * CFrame.new(2.2, 2.3, 0) * CFrame.Angles(0, 0, math.rad(35)), color = colorKey, material = "Plastic" })
+	b:seat(m, "Seat", cf * CFrame.new(-0.5, 1.95, 0), Vector3.new(4, 0.2, 2))
+	return m
+end
+
+-- Payung pantai: tiang krom + kanopi cakram + tepi neon.
+function Prefabs.umbrella(b: any, parent: Instance, name: string, x: number, z: number, g: number, colorKey: string)
+	local m = b:model(parent, name)
+	local up = CFrame.Angles(0, 0, math.rad(90))
+	b:part(m, "Pole", { size = Vector3.new(8, 0.35, 0.35), cf = CFrame.new(x, g + 4, z) * up, color = "Chrome", material = "Metal", shape = "Cylinder" })
+	b:part(m, "Canopy", { size = Vector3.new(0.5, 9, 9), cf = CFrame.new(x, g + 8.25, z) * up, color = colorKey, material = "Fabric", shape = "Cylinder" })
+	b:part(m, "Neon_Rim", { size = Vector3.new(0.2, 9.3, 9.3), cf = CFrame.new(x, g + 7.95, z) * up, color = "IceBlue", material = "Neon", shape = "Cylinder" })
+	return m
+end
+
+-- Dermaga kayu di atas air dari (x1) ke laut (x2 < x1), lebar w, dek atas tepat y g; tiang silinder tiap 12 stud
+-- sampai dasar laut, pagar krom 3.5 stud di kedua sisi, ujung berbentuk T.
+function Prefabs.pier(b: any, parent: Instance, name: string, x1: number, x2: number, zc: number, w: number, g: number, floor: number)
+	local m = b:model(parent, name)
+	local len = x1 - x2
+	local deck = b:part(m, "Deck", { size = Vector3.new(len, 1, w), cf = CFrame.new((x1 + x2) / 2, g - 0.5, zc), color = "Wood", material = "Wood" })
+	local head = b:part(m, "Deck_Head", { size = Vector3.new(16, 1, 20), cf = CFrame.new(x2 - 8, g - 0.5, zc), color = "Wood", material = "Wood" })
+	local up = CFrame.Angles(0, 0, math.rad(90))
+	local n = 0
+	local function pylon(x: number, z: number)
+		n += 1
+		b:part(m, string.format("Pylon_%02d", n), { size = Vector3.new(g - 1 - floor, 1.2, 1.2), cf = CFrame.new(x, (g - 1 + floor) / 2, z) * up, color = "Wood", material = "Wood", shape = "Cylinder" })
+	end
+	for x = x1 - 6, x2 + 1, -12 do
+		pylon(x, zc - w / 2 + 0.6)
+		pylon(x, zc + w / 2 - 0.6)
+	end
+	for _, d in { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } } do
+		pylon(x2 - 8 + d[1] * 7.4, zc + d[2] * 9.4)
+	end
+	for i, side in { -1, 1 } do
+		local z = zc + side * (w / 2 - 0.2)
+		b:part(m, "Rail_Top_0" .. i, { size = Vector3.new(len - 2, 0.3, 0.3), cf = CFrame.new((x1 + x2) / 2 - 1, g + 3.5, z), color = "Chrome", material = "Metal" })
+		local k = 0
+		for x = x1 - 2, x2, -8 do
+			k += 1
+			b:part(m, string.format("Rail_Post_%d_%02d", i, k), { size = Vector3.new(0.3, 3.5, 0.3), cf = CFrame.new(x, g + 1.75, z), color = "Chrome", material = "Metal" })
+		end
+	end
+	for i, side in { -1, 1 } do
+		b:part(m, "Neon_Head_0" .. i, { size = Vector3.new(0.6, 6, 0.6), cf = CFrame.new(x2 - 15.5, g + 3, zc + side * 9.5), color = if i == 1 then "HotPink" else "IceBlue", material = "Neon" })
+	end
+	Prefabs.markBelow(deck)
+	Prefabs.markBelow(head)
+	for _, p in m:GetChildren() do
+		if string.match(p.Name, "^Pylon_") then
+			Prefabs.markBelow(p)
+		end
+	end
+	return m
+end
+
+-- Ponton renang apung: dek putih + strip pink + tangga, permukaan dek 0.75 di atas permukaan air.
+function Prefabs.pontoon(b: any, parent: Instance, name: string, x: number, z: number, waterY: number)
+	local m = b:model(parent, name)
+	b:part(m, "Deck", { size = Vector3.new(16, 1.5, 16), cf = CFrame.new(x, waterY, z), color = "White", material = "Plastic", allowBelowGround = true })
+	b:part(m, "Stripe", { size = Vector3.new(16.2, 0.3, 16.2), cf = CFrame.new(x, waterY - 0.3, z), color = "HotPink", material = "Plastic", allowBelowGround = true })
+	for i, dz in { -1.2, 1.2 } do
+		b:part(m, "Ladder_Rail_0" .. i, { size = Vector3.new(0.3, 4, 0.3), cf = CFrame.new(x - 8.3, waterY, z + dz), color = "Chrome", material = "Metal", allowBelowGround = true })
+	end
+	return m
+end
+
 -- Tambat (bollard) baja di tepi dermaga.
 function Prefabs.bollard(b: any, parent: Instance, name: string, x: number, z: number, g: number)
 	return b:part(parent, name, { size = Vector3.new(1.8, 1.4, 1.4), cf = CFrame.new(x, g + 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), color = "Steel", material = "Metal", shape = "Cylinder" })

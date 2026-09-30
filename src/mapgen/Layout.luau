@@ -19,7 +19,9 @@ return {
 	slabBottomY = -2, -- dasar slab lantai (tertanam 2 stud ke terrain → tepi tidak pernah bolong)
 	beachY = 4, -- puncak pasir pantai & batu pemecah ombak (terrain yang TERLIHAT)
 	baseY = -16, -- dasar terrain
-	sea = { surfaceY = 0, floorY = -12 },
+	-- air voxel sampai y 0. BUKTI raycast Studio 30 Sep 14:20: permukaan air dirender TEPAT y 0.00 (beda dengan darat
+	-- yang dirender batas voxel + 2). Benda apung memakai renderY.
+	sea = { surfaceY = 0, floorY = -12, renderY = 0 },
 	-- batas map = dinding DoorVVIP (zona Boundary)
 	boundary = area("Boundary", -172, 164, -208, 104),
 	-- lantai part (slab) yang bisa diinjak
@@ -75,7 +77,7 @@ return {
 		VipLounge = area("VipLounge", 92, 152, -64, 40),
 		Plaza = area("Plaza", 52, 92, -124, 44),
 		Beach = area("Beach", -104, -44, -64, 104),
-		Bay = area("Bay", -168, -104, -208, 104),
+		Bay = area("Bay", -220, -84, -208, 104), -- teluk + dermaga (mulai tepi pasir x −88) + pemecah ombak + laut luar
 		Street = area("Street", -44, 164, 44, 104),
 	} :: { [string]: Area },
 	-- lantai dansa cekung (bagian dari objek tetap): lantai beton 51.1 × 115.2 di (2.95, −5.72, −32.42)
