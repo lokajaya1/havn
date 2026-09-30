@@ -2,6 +2,8 @@
 -- MapGen/Builder — gateway pembuat instance map (satu-satunya tempat Instance.new di MapGen).
 -- Semua part: Anchored; bayangan & tabrakan mengikuti anggaran (Rencana_Workspace.md §5):
 --   ukuran terbesar < 2 stud atau Neon/tak terlihat → CastShadow off; < 1 stud atau decor → tanpa tabrakan/sentuh/query.
+-- Monokrom (Rencana_Workspace_R15.md §3): Neon selalu NeonWhite, kaca selalu Smoke; CanTouch off kecuali Seat & SpawnLocation
+-- (tidak ada skrip yang memakai Touched di Map); klon kit: neon putih, kontainer di-tint gelap, RenderFidelity Automatic.
 
 local Palette = require(script.Parent.Palette)
 
@@ -18,9 +20,17 @@ export type PartSpec = {
 	allowBelowGround: boolean?, -- true = sengaja di bawah lantai (fender dinding dermaga, tiang di air)
 }
 
-local function color(key: string?): Color3
-	local c = Palette.colors[key or "Blockout"] or Palette.colors.Blockout
+local function rgb(c: { number }): Color3
 	return Color3.fromRGB(c[1], c[2], c[3])
+end
+
+local function color(key: string?, material: string?): Color3
+	if material == "Neon" then
+		return rgb(Palette.colors.NeonWhite)
+	elseif material == "Glass" then
+		return rgb(Palette.colors.Smoke)
+	end
+	return rgb(Palette.colors[key or "Blockout"] or Palette.colors.Blockout)
 end
 
 local Builder = {}
@@ -82,8 +92,8 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 	p.Anchored = true
 	p.Size = spec.size
 	p.CFrame = spec.cf
-	p.Color = color(spec.color)
 	local mat = spec.material or "Plastic"
+	p.Color = color(spec.color, mat)
 	p.Material = (Enum.Material :: any)[Palette.materials[mat] or mat]
 	p.Transparency = spec.transparency or 0
 	p.TopSurface = Enum.SurfaceType.Smooth
@@ -91,9 +101,9 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 	local biggest = math.max(spec.size.X, spec.size.Y, spec.size.Z)
 	local invisible = (spec.transparency or 0) >= 1
 	p.CastShadow = not (biggest < 2 or invisible or mat == "Neon" or spec.floor == true)
+	p.CanTouch = false
 	if spec.decor or biggest < 1 then
 		p.CanCollide = false
-		p.CanTouch = false
 		p.CanQuery = false
 	end
 	if spec.collisionGroup then
@@ -117,8 +127,8 @@ function Builder:spawn(parent: Instance, name: string, cf: CFrame): SpawnLocatio
 	s.Neutral = true
 	s.Duration = 10
 	s.Enabled = true
-	s.Color = color("HotPink")
-	s.Material = Enum.Material.Neon
+	s.Color = color("Graphite")
+	s.Material = Enum.Material.SmoothPlastic
 	s.TopSurface = Enum.SurfaceType.Smooth
 	s.BottomSurface = Enum.SurfaceType.Smooth
 	s.CastShadow = false
@@ -171,9 +181,9 @@ function Builder:sign(board: BasePart, text: string, face: string, colorKey: str
 	t.Size = UDim2.fromScale(1, 1)
 	t.BackgroundTransparency = 1
 	t.TextScaled = true
-	t.Font = Enum.Font.FredokaOne
-	t.TextColor3 = color(colorKey)
-	t.TextStrokeTransparency = 0.2
+	t.Font = Enum.Font.GothamBlack -- geometris tebal, mendekati Inter ExtraBold huruf DJ STAGE
+	t.TextColor3 = if colorKey == "Black" then color("Black") else color("NeonWhite") -- huruf putih di panel gelap (D3)
+	t.TextStrokeTransparency = 1
 	t.Text = text
 	t.Parent = gui
 	gui.Parent = board
@@ -263,6 +273,8 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 	end)
 	local pivot = CFrame.new((lo.X + hi.X) / 2, lo.Y, (lo.Z + hi.Z) / 2)
 	local k = scale or 1
+	local keepNeon = Palette.neonKeep[kitName] == true
+	local tintKit = Palette.containerKits[kitName] == true
 	eachPart(c, function(p)
 		local rel = pivot:ToObjectSpace(p.CFrame)
 		p.CFrame = cf * (rel - rel.Position + rel.Position * k)
@@ -270,10 +282,35 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 			p.Size = p.Size * k
 		end
 		p.Anchored = true
+		local isNeon = p.Material == Enum.Material.Neon
+		if isNeon and not keepNeon then
+			p.Color = rgb(Palette.colors.NeonWhite)
+		end
+		if not p:IsA("Seat") then
+			p.CanTouch = false
+		end
+		local biggest = math.max(p.Size.X, p.Size.Y, p.Size.Z)
+		if biggest < 2 or isNeon or p.Transparency >= 1 then
+			p.CastShadow = false
+		end
+		if p:IsA("MeshPart") then
+			pcall(function()
+				(p :: any).RenderFidelity = Enum.RenderFidelity.Automatic
+			end)
+		end
+		if tintKit then
+			local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+			if sa then
+				pcall(function()
+					(sa :: any).Color = rgb(Palette.containerTint)
+				end)
+			end
+		end
 		self.parts += 1
 	end)
 	c.Name = name
 	c:SetAttribute("KitSource", nil)
+	c:SetAttribute("Kit", kitName) -- penanda klon kit (isi kit dikecualikan dari aturan D1)
 	table.insert(self.kitUses, { kit = kitName, name = name, heading = heading })
 	c.Parent = parent
 	return c, (hi - lo) * k
