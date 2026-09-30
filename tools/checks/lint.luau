@@ -10,6 +10,7 @@ local NL = string.char(10)
 local STRICT = {
 	"src/server",
 	"src/client",
+	"src/mapgen",
 	"src/legacy/ServerScriptService/MusicServer",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/MusicClient",
 	"src/legacy/ReplicatedStorage/MusicShared.luau",
