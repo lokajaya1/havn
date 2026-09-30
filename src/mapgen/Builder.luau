@@ -30,6 +30,7 @@ function Builder.new(rootName: string, kit: Instance?)
 	self.kit = kit
 	self.parts = 0
 	self.terrainOps = {} :: { any }
+	self.missingKit = {} :: { string }
 	return self
 end
 
@@ -96,6 +97,27 @@ function Builder:part(parent: Instance, name: string, spec: PartSpec): BasePart
 	return p
 end
 
+-- Papan tulisan Y2K (SurfaceGui) di satu sisi part.
+function Builder:sign(board: BasePart, text: string, face: string, colorKey: string)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "SignGui"
+	gui.Face = (Enum.NormalId :: any)[face]
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	local t = Instance.new("TextLabel")
+	t.Name = "Text"
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.TextScaled = true
+	t.Font = Enum.Font.FredokaOne
+	t.TextColor3 = color(colorKey)
+	t.TextStrokeTransparency = 0.2
+	t.Text = text
+	t.Parent = gui
+	gui.Parent = board
+end
+
 -- Label melayang (hanya untuk blockout / tinjauan).
 function Builder:label(parent: Instance, adornee: BasePart, text: string)
 	local gui = Instance.new("BillboardGui")
@@ -114,6 +136,54 @@ function Builder:label(parent: Instance, adornee: BasePart, text: string)
 	t.Text = text
 	t.Parent = gui
 	gui.Parent = parent
+end
+
+local function eachPart(inst: Instance, fn: (BasePart) -> ())
+	if inst:IsA("BasePart") then
+		fn(inst)
+	end
+	for _, d in inst:GetDescendants() do
+		if d:IsA("BasePart") then
+			fn(d)
+		end
+	end
+end
+
+-- Salin mesh dari ServerStorage.MapKit (dicari rekursif), taruh dengan tengah-bawahnya di cf (menapak tanah),
+-- beri nama. Isi kit bernama generik ("Part", "Meshes/…") → Piece_NN / Group_NN.
+function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: string): Instance?
+	local src = self.kit and self.kit:FindFirstChild(kitName, true)
+	if not src then
+		table.insert(self.missingKit, kitName)
+		return nil
+	end
+	local Naming = require(script.Parent.Naming)
+	local c = src:Clone()
+	local i = 0
+	for _, d in c:GetDescendants() do
+		if (d:IsA("BasePart") or d:IsA("Model") or d:IsA("Folder")) and Naming.problem(d.Name) then
+			i += 1
+			d.Name = Naming.fallback(d.ClassName, i)
+		end
+	end
+	-- kotak pembatas lama → pindahkan supaya tengah-bawah = cf (tanpa GetBoundingBox/PivotTo: jalan juga di Lune)
+	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	eachPart(c, function(p)
+		local h = p.Size / 2
+		lo = Vector3.new(math.min(lo.X, p.CFrame.X - h.X), math.min(lo.Y, p.CFrame.Y - h.Y), math.min(lo.Z, p.CFrame.Z - h.Z))
+		hi = Vector3.new(math.max(hi.X, p.CFrame.X + h.X), math.max(hi.Y, p.CFrame.Y + h.Y), math.max(hi.Z, p.CFrame.Z + h.Z))
+	end)
+	local pivot = CFrame.new((lo.X + hi.X) / 2, lo.Y, (lo.Z + hi.Z) / 2)
+	local move = cf * pivot:Inverse()
+	eachPart(c, function(p)
+		p.CFrame = move * p.CFrame
+		p.Anchored = true
+		self.parts += 1
+	end)
+	c.Name = name
+	c:SetAttribute("KitSource", nil)
+	c.Parent = parent
+	return c
 end
 
 return Builder
