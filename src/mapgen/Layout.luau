@@ -35,6 +35,7 @@ return {
 	beachSlope = { minX = -136, maxX = -88 },
 	boardwalk = area("Boardwalk", -60, -44, -64, 104), -- dek kayu y 6
 	road = area("Road", -44, 164, 48, 64), -- jalan klub (aspal)
+	sidewalk = area("Sidewalk", -44, 164, 64, 76), -- trotoar depan deret toko
 	quayWall = { x1 = -106, x2 = -104, minZ = -208, maxZ = -64, bottomY = -14 },
 	-- lubang terrain di dalam bibir lubang dansa (tepi tersembunyi di dalam part bibir)
 	pitCarve = { minX = -40, maxX = 44, minZ = -108, maxZ = 36, minY = -8, maxY = 8 },
@@ -46,13 +47,15 @@ return {
 		area("DJ STAGE entrance W", -71.0, -40.5, -174.3, -156.9),
 		area("DJ STAGE entrance E", 43.1, 73.7, -174.3, -156.9),
 		area("DanceFloorPit", -43.6, 49.5, -112.0, 42.4), -- bibir luar lubang dansa (atas y 7.21)
-		area("PitStrip_West", 39.8, 49.5, -123.6, 79.1),
-		area("PitStrip_East", 70.3, 80.0, -123.6, 79.1),
+		-- lajur Granite timur lubang dansa (satu-satunya yang tersisa di Studio; x 39.85…49.36, dicek 30 Sep 14:05),
+		-- dipotong sampai z 44 di V4 (K4). Lajur kedua (x 70…80) sudah tidak ada sejak KOSONGKAN → tidak dicadangkan.
+		area("PitStrip_West", 39.8, 49.5, -123.6, 44.1),
 	} :: { Area },
 	-- Objek lama yang berdiri DI ATAS lantai: slab boleh di bawahnya, props tidak boleh menabrak.
 	standing = {
 		area("DonationBoards", 83.1, 86.8, -89.6, -4.8),
-		area("TimePlayedLeaderboard", -1.2, 21.0, 73.3, 76.7),
+		-- dipindah utuh di V4 ke sisi barat plaza spawn, menghadap timur (ke pad spawn), dasar tepat y 6
+		area("TimePlayedLeaderboard", -23.8, -20.2, 76.8, 99.2),
 		area("360Cam", 53.9, 63.5, -111.0, -98.0),
 		area("DJ STAGE stairs W", -60.4, -37.4, -157.2, -146.6),
 		area("DJ STAGE stairs E", 40.0, 63.0, -157.2, -146.6),
@@ -63,7 +66,7 @@ return {
 	zones = {
 		Ground = area("Ground", -108, 164, -208, 104),
 		Boundary = area("Boundary", -176, 168, -212, 108),
-		Spawn = area("Spawn", -24, 24, 76, 100),
+		Spawn = area("Spawn", -24, 24, 64, 100), -- gerbang di z 72 + pad di z 86
 		Stage = area("Stage", -44, 52, -140, -112),
 		Quay = area("Quay", -168, -56, -188, -64), -- termasuk lengan derek di atas teluk
 		ContainerWall = area("ContainerWall", -104, 164, -208, 104), -- utara (x ≤ 88) + timur (x 152…164)

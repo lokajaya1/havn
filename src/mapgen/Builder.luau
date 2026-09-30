@@ -126,6 +126,21 @@ function Builder:spawn(parent: Instance, name: string, cf: CFrame): SpawnLocatio
 	return s
 end
 
+-- Tempat duduk (Seat tak terlihat) di atas bangku mesh: pemain bisa duduk, tidak menghalangi jalan.
+function Builder:seat(parent: Instance, name: string, cf: CFrame, size: Vector3): BasePart
+	local s = Instance.new("Seat")
+	s.Name = name
+	s.Anchored = true
+	s.Size = size
+	s.CFrame = cf
+	s.Transparency = 1
+	s.CanCollide = false
+	s.CastShadow = false
+	s.Parent = parent
+	self.parts += 1
+	return s
+end
+
 -- Papan tulisan Y2K (SurfaceGui) di satu sisi part.
 function Builder:sign(board: BasePart, text: string, face: string, colorKey: string)
 	local gui = Instance.new("SurfaceGui")

@@ -22,6 +22,11 @@ return {
 		Steel = { 70, 74, 80 },
 		SafetyYellow = { 242, 196, 36 },
 		CraneTeal = { 42, 140, 140 },
+		PastelPink = { 255, 182, 213 },
+		PastelMint = { 182, 245, 214 },
+		PastelBlue = { 183, 221, 255 },
+		Cream = { 245, 236, 214 },
+		White = { 245, 245, 245 },
 		Blockout = { 200, 200, 205 },
 	},
 	materials = {
@@ -36,5 +41,6 @@ return {
 		Plastic = "SmoothPlastic",
 		Sand = "Sand",
 		DiamondPlate = "DiamondPlate",
+		Pavement = "Pavement",
 	},
 }

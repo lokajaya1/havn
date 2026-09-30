@@ -136,6 +136,45 @@ function Prefabs.launchPad(b: any, parent: Instance, name: string, x: number, z:
 	return m
 end
 
+-- Toko Y2K 2 lantai (lantai dasar 14, atas 11 stud — tinggi lantai komersial ±3.9 m): muka menghadap utara (−Z) di
+-- zFront, kaca etalase + bingkai krom, awning ≥ 10 stud di atas trotoar, papan neon bernama, jendela atas, parapet.
+export type ShopSpec = { name: string, text: string, body: string, accent: string, awning: string, shutter: boolean? }
+function Prefabs.storefront(b: any, parent: Instance, x1: number, x2: number, zFront: number, depth: number, g: number, s: ShopSpec)
+	local m = b:model(parent, s.name)
+	local w = x2 - x1
+	local cx = (x1 + x2) / 2
+	local H = 25
+	local zf = zFront + 1 -- muka bangunan (1 stud di belakang garis trotoar untuk bingkai & kaca)
+	b:part(m, "Body", { size = Vector3.new(w - 1, H, depth - 1), cf = CFrame.new(cx, g + H / 2, zf + (depth - 1) / 2), color = s.body, material = "Concrete" })
+	b:part(m, "Parapet", { size = Vector3.new(w - 1, 1, depth - 1), cf = CFrame.new(cx, g + H + 0.5, zf + (depth - 1) / 2), color = "Chrome", material = "Chrome" })
+	-- lantai dasar: etalase kaca / rolling door, bingkai krom, kickplate
+	local gw = w - 6
+	if s.shutter then
+		b:part(m, "Shutter", { size = Vector3.new(gw, 10, 0.4), cf = CFrame.new(cx, g + 5, zf - 0.2), color = "Steel", material = "DiamondPlate" })
+	else
+		b:part(m, "Window_Shop", { size = Vector3.new(gw, 9, 0.3), cf = CFrame.new(cx, g + 5.5, zf - 0.15), color = "IceBlue", material = "Glass", transparency = 0.35 })
+		b:part(m, "Kickplate", { size = Vector3.new(gw, 1, 0.5), cf = CFrame.new(cx, g + 0.5, zf - 0.25), color = "Chrome", material = "Chrome" })
+	end
+	for i, dx in { -gw / 2 - 0.5, gw / 2 + 0.5 } do
+		b:part(m, "Frame_Post_0" .. i, { size = Vector3.new(1, 11, 0.8), cf = CFrame.new(cx + dx, g + 5.5, zf - 0.4), color = "Chrome", material = "Chrome" })
+	end
+	b:part(m, "Frame_Head", { size = Vector3.new(gw + 2, 1, 0.8), cf = CFrame.new(cx, g + 11.5, zf - 0.4), color = "Chrome", material = "Chrome" })
+	-- awning miring (bawah 12 stud di atas lantai) menjorok 4 stud ke trotoar
+	b:part(m, "Awning", { size = Vector3.new(gw + 2, 1.5, 4), cf = CFrame.new(cx, g + 12.75, zf - 2) * CFrame.Angles(math.rad(-12), 0, 0), color = s.awning, material = "Plastic" })
+	-- papan neon nama toko
+	local board = b:part(m, "Sign_Board", { size = Vector3.new(gw, 4, 0.6), cf = CFrame.new(cx, g + 16.5, zf - 0.3), color = "Asphalt", material = "Metal" })
+	b:sign(board, s.text, "Front", s.accent)
+	for i, dy in { -2.2, 2.2 } do
+		b:part(m, "Neon_Sign_0" .. i, { size = Vector3.new(gw, 0.3, 0.3), cf = CFrame.new(cx, g + 16.5 + dy, zf - 0.45), color = s.accent, material = "Neon" })
+	end
+	-- lantai atas: 2 jendela kaca biru es + ambang krom
+	for i, dx in { -w / 4, w / 4 } do
+		b:part(m, "Window_Upper_0" .. i, { size = Vector3.new(w / 3, 5, 0.3), cf = CFrame.new(cx + dx, g + 21.5, zf - 0.15), color = "PastelBlue", material = "Glass", transparency = 0.25 })
+		b:part(m, "Sill_0" .. i, { size = Vector3.new(w / 3 + 0.6, 0.4, 0.8), cf = CFrame.new(cx + dx, g + 18.8, zf - 0.4), color = "Chrome", material = "Chrome" })
+	end
+	return m
+end
+
 -- Tambat (bollard) baja di tepi dermaga.
 function Prefabs.bollard(b: any, parent: Instance, name: string, x: number, z: number, g: number)
 	return b:part(parent, name, { size = Vector3.new(1.8, 1.4, 1.4), cf = CFrame.new(x, g + 0.9, z) * CFrame.Angles(0, 0, math.rad(90)), color = "Steel", material = "Metal", shape = "Cylinder" })

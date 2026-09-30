@@ -74,13 +74,14 @@ return function(b: any, L: any)
 	for _, f in L.fixed do
 		table.insert(holes, rect(f))
 	end
-	local bw, road, sand = rect(L.boardwalk), rect(L.road), rect(L.beachSand)
+	local bw, road, sand, walk = rect(L.boardwalk), rect(L.road), rect(L.beachSand), rect(L.sidewalk)
 
-	-- urutan prioritas: dek kayu → jalan aspal → beton (sisanya), pasir pantai bukan slab
+	-- urutan prioritas: dek kayu → jalan aspal → trotoar → beton (sisanya), pasir pantai bukan slab
 	local layers = {
 		{ name = "Boardwalk", material = "Wood", color = "Wood", area = bw, minus = {} },
 		{ name = "Road", material = "Asphalt", color = "Asphalt", area = road, minus = { bw } },
-		{ name = "Concrete", material = "Concrete", color = "Concrete", area = rect(L.walkable), minus = { bw, road, sand } },
+		{ name = "Sidewalk", material = "Pavement", color = "ConcreteDark", area = walk, minus = { bw, road } },
+		{ name = "Concrete", material = "Concrete", color = "Concrete", area = rect(L.walkable), minus = { bw, road, sand, walk } },
 	}
 	local slabs = b:folder(nil, "Slabs")
 	for _, layer in layers do
