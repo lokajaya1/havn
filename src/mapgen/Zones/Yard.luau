@@ -23,6 +23,6 @@ return function(b: any, L: any)
 	b:clone(props, "Kit_TireStack", at(148.5, G, -140, 0), "TireStack_02", 1.4)
 	local lights = b:folder(nil, "Lights")
 	for n, z in { -104, -72 } do
-		b:clone(lights, "StreetLightPole_01_A", at(94, G, z, 180), string.format("StreetLight_%02d", n))
+		Prefabs.facing(b, lights, "StreetLightPole_01_A", 94, G, z, 0, string.format("StreetLight_%02d", n))
 	end
 end

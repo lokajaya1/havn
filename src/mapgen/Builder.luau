@@ -34,6 +34,7 @@ function Builder.new(rootName: string, kit: Instance?)
 	self.parts = 0
 	self.terrainOps = {} :: { any }
 	self.missingKit = {} :: { string }
+	self.kitUses = {} :: { { kit: string, name: string, heading: number? } } -- dicek terhadap KitFront
 	return self
 end
 
@@ -211,8 +212,9 @@ end
 
 -- Salin mesh dari ServerStorage.MapKit (dicari rekursif), taruh dengan tengah-bawahnya di cf (menapak tanah),
 -- beri nama, opsional diskalakan. Isi kit bernama generik ("Part", "Meshes/…") → Piece_NN / Group_NN.
+-- heading = arah tujuan sisi depan (dari Prefabs.facing/seatFacing); kit berarah tanpa heading ditolak CEK (KitFront).
 -- Mengembalikan (instance, ukuran kotak pembatas setelah skala).
-function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: string, scale: number?): (Instance?, Vector3)
+function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: string, scale: number?, heading: number?): (Instance?, Vector3)
 	local src = self.kit and self.kit:FindFirstChild(kitName, true)
 	if not src then
 		table.insert(self.missingKit, kitName)
@@ -272,6 +274,7 @@ function Builder:clone(parent: Instance, kitName: string, cf: CFrame, name: stri
 	end)
 	c.Name = name
 	c:SetAttribute("KitSource", nil)
+	table.insert(self.kitUses, { kit = kitName, name = name, heading = heading })
 	c.Parent = parent
 	return c, (hi - lo) * k
 end
