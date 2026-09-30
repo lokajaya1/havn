@@ -46,7 +46,8 @@ return function(b: any, L: any)
 	b:clone(props, "Bus_Stop_01_A", at(96, G, 68, 0), "BusStop_01")
 	b:seat(props, "Seat_BusStop_01", CFrame.new(96, G + 1.8, 68), Vector3.new(14, 0.4, 1.6))
 	for i, p in { { -34, 67 }, { -20, 67 }, { 20, 67 } } do
-		b:clone(props, "MetalBench_01_A", at(p[1], G, p[2], 90), string.format("Bench_%02d", i))
+		-- bangku kit memanjang di sumbu X (8.1 stud) → sejajar jalan, Seat (7 × 1.6) searah bangku menghadap jalan (utara)
+		b:clone(props, "MetalBench_01_A", at(p[1], G, p[2], 0), string.format("Bench_%02d", i))
 		b:seat(props, string.format("Seat_Bench_%02d", i), CFrame.new(p[1], G + 1.8, p[2]), Vector3.new(7, 0.4, 1.6))
 	end
 	for i, x in { 64, 132 } do
