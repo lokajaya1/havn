@@ -30,7 +30,7 @@ local zones: { [string]: (any, any) -> () } = {
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V17", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V18", layout = Layout, mood = Mood, kitFront = KitFront }
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 

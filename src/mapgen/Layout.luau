@@ -91,7 +91,7 @@ return {
 		Beach = area("Beach", -104, -44, -64, 104),
 		Bay = area("Bay", -220, -84, -208, 104), -- teluk + dermaga (mulai tepi pasir x −88) + pemecah ombak + laut luar
 		Street = area("Street", -44, 164, 32, 104), -- S1: halte di sisi utara jalan (z ±39)
-		Party = area("Party", -48, 52, -112, 76), -- B1: dekor ulang tahun sementara (gerbang → lubang dansa)
+		Party = area("Party", -48, 110, -112, 100), -- B1: dekor ulang tahun sementara (gerbang → lubang dansa) + B2 HAVN STUDIO
 	} :: { [string]: Area },
 	-- B1 "HAVN BIRTHDAY" (Rencana_Workspace_Birthday.md): zona SEMENTARA di sumbu inti. Angka terukur 1 Okt: bibir lubang y 7.21,
 	-- bibir selatan z 32.04…42.34, bibir barat x −43.46…−33.95, timur x 39.85…49.36, lantai dansa y −5.44 (x −22.6…28.5,
@@ -105,6 +105,9 @@ return {
 		canopy = { westX = -42.8, eastX = 48.8, lines = { -75, -45, -15 }, topY = 27, sag = 3, bulbEvery = 3.5 },
 		cake = { x = 3, z = -1.5, floorY = -5.44 }, -- tepi pita z 7.65 → 11.15 dari undakan selatan z 18.8 (A4 ≥ 10)
 		confetti = { texture = "rbxassetid://3077044894", rate = 3, y = 42, minX = -22, maxX = 28, minZ = -90, maxZ = 25 }, -- tekstur = confetti Nuke (B0)
+		-- B2 spot foto di HAVN STUDIO (terukur dari Prefabs.venue V17): ruang x 82.5…105.5, lantai 6.1, plafon 20, cyclorama z 97.8,
+		-- bingkai foto tiang x 87.4…88.0 & 100.0…100.6 (z 88.7…89.3), balok atas y 16…16.6; pintu x 89…99.
+		studio = { cx = 94, frameZ = 89, postOuter = 7.9, frameTop = 16.6, floorY = 6.1, ceilY = 20, wallZ = 97.8, cornerX = { 84.5, 103.5 }, cornerZ = 96 },
 	},
 	-- S1 (sentuhan user 30 Sep, Rencana_Workspace_Sentuhan.md): seluruh VIP Lounge (termasuk dinding DoorVIP) digeser
 	-- tangan Δ(−22.37, 0, +5.01) → dibulatkan (beda ≤ 0.04). Dermaga dinaikkan 0.27 (dek atas 6.27, di atas pasir render).

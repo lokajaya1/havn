@@ -8,6 +8,7 @@
 --   Canopy  3 garis lampu peri tiang-ke-tiang di atas lantai dansa, 6 gugus balon, bola cermin
 --   Cake    kue raksasa 3 tingkat (padat) di lantai dansa = pusat foto
 --   Confetti 3 emitter ringan (pink/putih/perak) di atas lantai dansa
+--   Studio  (B2) spot foto di HAVN STUDIO: garland mengelilingi bingkai foto, kolom balon di sudut, "HAPPY BIRTHDAY" di cyclorama
 -- Semua dekor tembus & tanpa bayangan (kamera Popper hanya terhalang part CanCollide), kecuali kue. Tanpa skrip.
 
 local Prefabs = require(script.Parent.Parent.Prefabs)
@@ -120,6 +121,29 @@ return function(b: any, L: any)
 	for _, c in { { "Confetti_Pink", "PartyPink" }, { "Confetti_White", "White" }, { "Confetti_Silver", "PartySilver" } } do
 		b:confetti(emitter, c[1], c[2], F.texture, F.rate)
 	end
+
+	-- 7) spot foto HAVN STUDIO (B2): garland di luar bingkai (bukaan 12 × 10 tetap bebas), kolom balon di 2 sudut belakang,
+	--    pita tulisan di atas cyclorama (terlihat lewat bingkai dari pintu, di atas kepala avatar tertinggi)
+	local S = P.studio
+	local studio = b:folder(nil, "Studio")
+	local small = { minSize = 0.9, maxSize = 1.8, spread = 0.7, step = 0.9 }
+	for i, side in { -1, 1 } do
+		local x = S.cx + side * (S.postOuter + 0.5)
+		local label = if side < 0 then "West" else "East"
+		Prefabs.garland(b, studio, "Frame_Garland_" .. label, { Vector3.new(x, S.floorY + 0.9, S.frameZ), Vector3.new(x, S.frameTop, S.frameZ) }, 6001 + i, {
+			minSize = small.minSize, maxSize = small.maxSize, spread = small.spread, step = small.step, floorY = S.floorY,
+			maxX = if side < 0 then S.cx - S.postOuter + 1.9 else nil, -- tidak masuk bukaan bingkai (tepi dalam tiang 88.0 / 100.0)
+			minX = if side > 0 then S.cx + S.postOuter - 1.9 else nil,
+		})
+		Prefabs.garland(b, studio, "Corner_Balloons_" .. label, { Vector3.new(S.cornerX[i], S.floorY + 0.9, S.cornerZ), Vector3.new(S.cornerX[i], S.floorY + 5, S.cornerZ) }, 6101 + i, {
+			minSize = 1.2, maxSize = 2.0, spread = 0.6, step = 0.9, floorY = S.floorY,
+		})
+	end
+	Prefabs.garland(b, studio, "Frame_Garland_Top", { Vector3.new(S.cx - S.postOuter - 0.5, S.frameTop + 1, S.frameZ), Vector3.new(S.cx + S.postOuter + 0.5, S.frameTop + 1, S.frameZ) }, 6201, {
+		minSize = small.minSize, maxSize = small.maxSize, spread = small.spread, step = small.step, minY = S.frameTop,
+	})
+	local banner = b:part(studio, "Text_Backdrop", { size = Vector3.new(20, 2.8, 0.1), cf = CFrame.new(S.cx, S.frameTop + 1.4 - 0.2, S.wallZ - 0.1), transparency = 1, decor = true })
+	b:balloonText(banner, "HAPPY BIRTHDAY", "Front", "White", "PartyPink")
 
 	-- lubang dansa & lajur granit timur = objek tetap: dekor di atas/di bibirnya diizinkan (tes: tanpa menembus part lubang)
 	for _, f in { arch, letters, canopy, b.root:FindFirstChild("Cake"), b.root:FindFirstChild("Confetti") } do
