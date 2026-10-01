@@ -101,7 +101,9 @@ return {
 		gate = { z = 72, colOuterX = 14, topY = 24.4, logoHalfX = 5 }, -- logo HAVN |x| ≤ 4 di kedua muka balok: TIDAK disentuh
 		arch = { z = 37.2, halfWidth = 14.8, legTop = 16 }, -- bukaan bersih ≥ 24 × 16 di atas bibir selatan
 		-- B1b: HAPPY di ATAS BIRTHDAY (terbaca atas → bawah), huruf lebih besar (tampak dari spawn)
-		letters = { x = 1, z = -98, birthdayY = 38.2, birthdayH = 9, birthdayW = 56, happyY = 47.8, happyH = 8, happyW = 34, clusterDX = 34 },
+		-- B3 (user 07:56 "tulisan terbang", 08:02 "gantry menghalangi DJ STAGE"): tulisan = BUNTING — kartu huruf kecil digantung
+		-- di kabel lampu kanopi (garis ke-3, z −15), terbaca dari selatan & utara (sisi utara urutan dibalik). Tanpa papan/gantry.
+		bunting = { line = 3, text = "HAPPY BIRTHDAY", cardW = 3.6, cardH = 4.4, gap = 0.6, centerX = 3 },
 		canopy = { westX = -42.8, eastX = 48.8, lines = { -75, -45, -15 }, topY = 27, sag = 3, bulbEvery = 3.5 },
 		cake = { x = 3, z = -1.5, floorY = -5.44 }, -- tepi pita z 7.65 → 11.15 dari undakan selatan z 18.8 (A4 ≥ 10)
 		confetti = { texture = "rbxassetid://3077044894", rate = 3, y = 42, minX = -22, maxX = 28, minZ = -90, maxZ = 25 }, -- tekstur = confetti Nuke (B0)
