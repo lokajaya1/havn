@@ -4,8 +4,9 @@
 -- Pasang: G.build("Party", "JALAN") · lepas sesudah acara: workspace.Map.Party.Parent = nil (Ctrl+Z bisa).
 --   Gate    garland balon di sisi luar kolom & atas balok gerbang — logo "HAVN" (|x| ≤ 4 di kedua muka balok) TIDAK disentuh
 --   Arch    lengkung balon di bibir selatan (bukaan bersih 24 × 11 = A1/A3, puncak ±20 di atas bibir)
---   Letters "HAPPY" / "BIRTHDAY" melayang di atas ujung utara lubang, di atas garis pandang layar panggung (y 36.8)
---   Canopy  3 garis lampu peri tiang-ke-tiang di atas lantai dansa, 6 gugus balon, bola cermin
+--   Bunting kartu huruf "HAPPY BIRTHDAY" digantung di kabel lampu kanopi (B3; dulu tulisan melayang lalu gantry → menutupi
+--           panggung), terbaca dari dua arah
+--   Canopy  3 garis lampu peri tiang-ke-tiang di atas lantai dansa, 6 gugus balon terikat di kabel (B3), bola cermin
 --   Cake    kue raksasa 3 tingkat (padat) di lantai dansa = pusat foto
 --   Confetti 3 emitter ringan (pink/putih/perak) di atas lantai dansa
 --   Studio  (B2) spot foto di HAVN STUDIO: garland mengelilingi bingkai foto, kolom balon di sudut, "HAPPY BIRTHDAY" di cyclorama
@@ -44,18 +45,6 @@ return function(b: any, L: any)
 	table.insert(pts, Vector3.new(a.halfWidth, RIM + 1.4, a.z))
 	Prefabs.garland(b, arch, "Arch_Balloons", pts, 3001, { floorY = RIM })
 
-	-- 3) tulisan melayang menghadap selatan (spawn & lantai dansa)
-	local letters = b:folder(nil, "Letters")
-	local T = P.letters
-	for _, row in { { "Text_Happy", "HAPPY", T.happyY, T.happyH, T.happyW }, { "Text_Birthday", "BIRTHDAY", T.birthdayY, T.birthdayH, T.birthdayW } } do
-		local board = b:part(letters, row[1], { size = Vector3.new(row[5], row[4], 0.2), cf = CFrame.new(T.x, row[3] + row[4] / 2, T.z), transparency = 1, decor = true })
-		b:balloonText(board, row[2], "Back", "White", "PartyPink")
-	end
-	for i, dx in { -T.clusterDX, T.clusterDX } do
-		local x = T.x + dx
-		Prefabs.garland(b, letters, "Cluster_Letters_0" .. i, { Vector3.new(x, T.birthdayY + 3, T.z), Vector3.new(x, T.happyY + T.happyH - 2, T.z) }, 4001 + i, { spread = 1.6, perStep = 2, step = 1.2 })
-	end
-
 	-- 4) kanopi: tiang di bibir barat & timur, tali melengkung + bola lampu neon, gugus balon, bola cermin
 	local canopy = b:folder(nil, "Canopy")
 	local C = P.canopy
@@ -84,8 +73,40 @@ return function(b: any, L: any)
 			x += C.bulbEvery
 		end
 	end
-	for i, p in { { -12, 21, -60 }, { 18, 21, -60 }, { -12, 22, -30 }, { 18, 22, -30 }, { -12, 20, 5 }, { 18, 20, 5 } } do
-		Prefabs.garland(b, canopy, string.format("Cluster_%02d", i), { Vector3.new(p[1], p[2] - 0.8, p[3]), Vector3.new(p[1], p[2] + 0.8, p[3]) }, 5001 + i, { spread = 1.3, perStep = 4, step = 1.6, minSize = 1.8, maxSize = 2.6 })
+	-- gugus balon diikat DI kabel (B3): pusat gugus tepat di bawah kabel, balon atas menyentuh kabel
+	local ci = 0
+	for li, z in C.lines do
+		-- kabel bunting: gugus di ujung kabel (di luar deretan kartu), supaya huruf tidak tertutup balon
+		local xs = if li == P.bunting.line then { C.westX + 8, C.eastX - 8 } else { -12, 18 }
+		for _, x in xs do
+			ci += 1
+			local wy = stringY(x) -- jalur gugus menembus kabel → balon teratas pasti menyentuh kabel (terikat)
+			Prefabs.garland(b, canopy, string.format("Cluster_%02d", ci), { Vector3.new(x, wy - 2.4, z), Vector3.new(x, wy + 0.2, z) }, 5000 + ci, { spread = 0.8, perStep = 3, step = 0.9, minSize = 1.8, maxSize = 2.4 })
+		end
+	end
+	-- bunting: kartu hitam bergaris pink, huruf putih; sisi selatan (Back) terbaca kiri→kanan = x naik, sisi utara (Front) urutan
+	-- dibalik supaya terbaca dari lantai dansa juga. Tepi atas kartu tepat di kabel (tergantung).
+	local B = P.bunting
+	local bunting = b:model(canopy, "Bunting")
+	local bz = C.lines[B.line]
+	local chars = {}
+	for ch in string.gmatch(B.text, ".") do
+		table.insert(chars, ch)
+	end
+	local pitch = B.cardW + B.gap
+	local x0 = B.centerX - (#chars - 1) * pitch / 2
+	for i, ch in chars do
+		local back = chars[#chars + 1 - i] -- huruf sisi utara di slot yang sama (urutan terbalik)
+		if ch ~= " " or back ~= " " then -- slot spasi di satu sisi = kartu polos di sisi itu (jeda antar kata)
+			local x = x0 + (i - 1) * pitch
+			local card = b:part(bunting, string.format("Card_%02d", i), { size = Vector3.new(B.cardW, B.cardH, 0.15), cf = CFrame.new(x, stringY(x) - 0.06 - B.cardH / 2, bz), color = "Black", material = "Plastic", decor = true, noShadow = true })
+			if ch ~= " " then
+				b:balloonText(card, ch, "Back", "White", "PartyPink")
+			end
+			if back ~= " " then
+				b:balloonText(card, back, "Front", "White", "PartyPink")
+			end
+		end
 	end
 	local mz = C.lines[2]
 	local topBall = stringY(P.cake.x) - 1.2
@@ -146,7 +167,7 @@ return function(b: any, L: any)
 	b:balloonText(banner, "HAPPY BIRTHDAY", "Front", "White", "PartyPink")
 
 	-- lubang dansa & lajur granit timur = objek tetap: dekor di atas/di bibirnya diizinkan (tes: tanpa menembus part lubang)
-	for _, f in { arch, letters, canopy, b.root:FindFirstChild("Cake"), b.root:FindFirstChild("Confetti") } do
+	for _, f in { arch, canopy, b.root:FindFirstChild("Cake"), b.root:FindFirstChild("Confetti") } do
 		Prefabs.allowFixed(f, PIT)
 	end
 end
