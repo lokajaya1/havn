@@ -36,6 +36,8 @@ local STRICT = {
 	-- ruangan DONASI
 	"src/legacy/ServerScriptService/DonationServer",
 	"src/legacy/ReplicatedStorage/DonationConfig.luau",
+	-- ruangan TEMA (themeMap)
+	"src/legacy/ReplicatedStorage/Config/ThemeMap.luau",
 }
 local REPORT = { "src/legacy" }
 
