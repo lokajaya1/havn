@@ -145,6 +145,12 @@
     },
     "StarterGui": {
       "$className": "StarterGui",
+      "CarrySelectGUI": {
+        "$className": "ScreenGui",
+        "LocalScript": {
+          "$path": "src/legacy/StarterGui/CarrySelectGUI/LocalScript.client.luau"
+        }
+      },
       "CommandPanel": {
         "$path": "src/legacy/StarterGui/CommandPanel.client.luau"
       },
@@ -162,6 +168,31 @@
       },
       "InfoTopBar": {
         "$path": "src/legacy/StarterGui/InfoTopBar.client.luau"
+      },
+      "LiveScreen": {
+        "$className": "ScreenGui",
+        "$ignoreUnknownInstances": true,
+        "$properties": {
+          "ResetOnSpawn": false
+        },
+        "LiveScreenHandler": {
+          "$path": "src/legacy/StarterGui/LiveScreen/LiveScreenHandler.client.luau"
+        },
+        "AutoResize": {
+          "$path": "src/legacy/StarterGui/LiveScreen/AutoResize.client.luau"
+        }
+      },
+      "MenuUI": {
+        "$className": "ScreenGui",
+        "$properties": {
+          "ResetOnSpawn": false
+        },
+        "UltimateMenu": {
+          "$path": "src/legacy/StarterGui/MenuUI/UltimateMenu.client.luau"
+        },
+        "DynamicTools": {
+          "$path": "src/legacy/StarterGui/MenuUI/DynamicTools.client.luau"
+        }
       },
       "MoneyGunUI": {
         "$path": "src/legacy/StarterGui/MoneyGunUI.client.luau"
@@ -262,7 +293,8 @@
       "Sign": {
         "$className": "Tool",
         "LocalScript": {
-          "$className": "LocalScript",
+          "$path": "src/legacy/StarterPack/Sign/SignUI.client.luau",
+          "$ignoreUnknownInstances": true,
           "RemoteEvent": {
             "$className": "RemoteEvent",
             "Script": {
