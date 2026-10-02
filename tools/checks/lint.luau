@@ -36,8 +36,14 @@ local STRICT = {
 	-- ruangan DONASI
 	"src/legacy/ServerScriptService/DonationServer",
 	"src/legacy/ReplicatedStorage/DonationConfig.luau",
-	-- ruangan TEMA (themeMap)
+	-- ruangan TEMA (themeMap + themeColor)
 	"src/legacy/ReplicatedStorage/Config/ThemeMap.luau",
+	"src/legacy/ReplicatedStorage/Config/ThemeColor.luau",
+	"src/legacy/ReplicatedStorage/Modules/ThemeColor",
+	-- ruangan TAS (inventory)
+	"src/legacy/ReplicatedStorage/Config/Inventory.luau",
+	"src/legacy/ReplicatedStorage/Modules/Inventory.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/CustomBackpackUI.client.luau",
 }
 local REPORT = { "src/legacy" }
 

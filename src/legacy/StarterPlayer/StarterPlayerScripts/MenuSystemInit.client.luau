@@ -18,22 +18,28 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local modules = RS:WaitForChild("CustomUIModules")
 local Responsive = require(modules:WaitForChild("Responsive"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 -- ════════════════════════════════════════════════════════════
 -- THEME
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): THEME.X
+-- membaca token tema SEKARANG saat dipakai → hover/refresh ikut tema.
+-- SCRIM (overlay gelap di atas foto avatar/community) & LIKE (hati) =
+-- warna tetap, tidak ikut tema.
 -- ════════════════════════════════════════════════════════════
 
-local THEME = {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
+local THEME = ThemeColor.view({
+	BG         = "BG",
+	CARD       = "CARD",
+	CARD_HOVER = "CARD_HOVER",
+	LINE       = "LINE",
+	TEXT       = "TEXT",
+	TEXT_DIM   = "TEXT_DIM",
+	ACCENT     = "ACCENT",
+}, {
 	SCRIM      = Color3.fromRGB(12, 12, 13),
 	LIKE       = Color3.fromRGB(235, 86, 96),
-}
+})
 
 -- Scrim: gelap saat avatar tampil (biar avatar kebaca di atas background),
 -- hampir bening saat avatar disembunyikan (biar background community bersih).
@@ -202,6 +208,7 @@ if not gui then
 		DisplayOrder = 10, Parent = playerGui,
 	})
 end
+ThemeColor.mark(gui)
 
 local oldFrame = gui:FindFirstChild("MenuFrame")
 if oldFrame then oldFrame:Destroy() end
@@ -216,13 +223,13 @@ local frame = new("Frame", {
 	ClipsDescendants = true, Parent = gui,
 })
 corner(frame, 16)
-stroke(frame, THEME.LINE, 1, 0.88)
+ThemeColor.glow(stroke(frame, THEME.LINE, 1, 0.88), "panel") -- garis tepi bergerak (themeColor)
 
 local closeBtn = new("TextButton", {
 	Name = "CloseButton", AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10, 0, 8), Size = UDim2.new(0, 26, 0, 26),
-	BackgroundTransparency = 1, Text = "×", TextColor3 = THEME.TEXT_DIM,
-	Font = Enum.Font.BuilderSans, TextSize = cfg.titleSize + 8,
+	BackgroundTransparency = 1, Text = "X", TextColor3 = THEME.TEXT_DIM,
+	Font = Enum.Font.BuilderSansBold, TextSize = cfg.titleSize,
 	BorderSizePixel = 0, AutoButtonColor = false, ZIndex = 20, Parent = frame,
 })
 closeBtn.MouseEnter:Connect(function()
@@ -456,6 +463,8 @@ local nameLabel = new("TextLabel", {
 	TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 	LayoutOrder = 1, Parent = textContainer,
 })
+-- Warna nama = aksen tema warna pilihan pemain yang dibuka (paintTargetName), bukan lukis ulang tema kita.
+ThemeColor.skip(nameLabel)
 
 local usernameLabel = new("TextLabel", {
 	Name = "PlayerUsername", Size = UDim2.new(1, 0, 0, cfg.statsSize + 5),
@@ -644,9 +653,21 @@ end)
 -- TARGET
 -- ════════════════════════════════════════════════════════════
 
+-- Nama di kartu = aksen tema pemain itu (sama dengan nametag di atas kepala); tema polos / bukan di server = ACCENT kita.
+local targetThemeConn
+local function paintTargetName()
+	local plr = currentUserId and Players:GetPlayerByUserId(currentUserId)
+	nameLabel.TextColor3 = (plr and ThemeColor.nameColor(plr)) or THEME.ACCENT
+end
+ThemeColor.onChanged(paintTargetName)
+
 local function setTarget(userId)
 	if type(userId) ~= "number" or userId < 1 then return end
 	currentUserId = userId
+	if targetThemeConn then targetThemeConn:Disconnect() end
+	local target = Players:GetPlayerByUserId(userId)
+	targetThemeConn = target and target:GetAttributeChangedSignal(ThemeColor.ATTR):Connect(paintTargetName)
+	paintTargetName()
 	avatarImage.Image = string.format("rbxthumb://type=Avatar&id=%d&w=352&h=352", userId)
 	if CommunityInfo then
 		CommunityInfo.ApplyTo(gui, userId)
@@ -851,7 +872,7 @@ local function applyConfig(c)
 	usernameLabel.TextSize = c.statsSize + 1
 	statsLabel.Size = UDim2.new(1, 0, 0, c.statsSize + 5)
 	statsLabel.TextSize = c.statsSize
-	closeBtn.TextSize = c.titleSize + 8
+	closeBtn.TextSize = c.titleSize
 
 	eyeBtn.Size = UDim2.new(0, c.eyeSize, 0, c.eyeSize)
 	eyeLabel.TextSize = math.floor(c.eyeSize * 0.62)

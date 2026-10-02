@@ -1,5 +1,5 @@
 -- StarterPlayerScripts/DonationClient  (LocalScript)
--- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft): pill "Donate" → [✕][⬡ Robux][💰 Komunitas] → panel DONATE desain v1.5 (judul, kartu PROFILE di
+-- Tombol donasi di topbar kiri (sebelah Info, _G.TopbarLeft): pill "Donate" → [X][⬡ Robux][💰 Komunitas] → panel DONATE desain v1.5 (judul, kartu PROFILE di
 -- kiri: avatar 3D sendiri + total donasi + peringkat; grid 2 kolom kartu tier di kanan) + kotak pesan sebelum membeli.
 -- Layar sempit (panel < PROFILE_MIN px, mis. HP portrait): kartu Profile disembunyikan, grid selebar panel.
 -- Alur: pilih tier → (opsional) tulis pesan → Donate → SetMessage ke server (difilter di sana) → prompt beli Roblox.
@@ -20,6 +20,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local Config = require(RS:WaitForChild("DonationConfig"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 local msgFolder = RS:WaitForChild("DonationMessageSystem", 30)
 local setMessage = msgFolder and msgFolder:WaitForChild("SetMessage", 30)
 if not setMessage then
@@ -35,17 +36,10 @@ do
 		waited += 0.1
 	end
 end
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG = Color3.fromRGB(16, 16, 17), CARD = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39), LINE = Color3.fromRGB(255, 255, 255),
-	TEXT = Color3.fromRGB(238, 238, 240), TEXT_DIM = Color3.fromRGB(148, 148, 154),
-	ACCENT = Color3.fromRGB(212, 175, 55), DANGER = Color3.fromRGB(226, 96, 96),
-	SUCCESS = Color3.fromRGB(96, 196, 132),
-}
+local T = ThemeColor.tokens -- tabel bersama themeColor: T.X dibaca saat melukis → ikut tema pilihan pemain
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD = Enum.Font.BuilderSansBold, MEDIUM = Enum.Font.BuilderSansMedium, REGULAR = Enum.Font.BuilderSans,
 }
-local ON_ACCENT = Color3.fromRGB(18, 18, 20)
 local TF = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local ROBUX = utf8.char(0xE002)
 
@@ -79,7 +73,12 @@ local function stroke(p, tr, color)
 end
 local function tw(o, props)
 	if o and o.Parent then
-		TweenSvc:Create(o, TF, props):Play()
+		-- Warna tujuan tersimpan dari tema lama (hover base/over) → warna yang sama di tema sekarang.
+		local goal = {}
+		for k, v in pairs(props) do
+			goal[k] = (typeof(v) == "Color3") and ThemeColor.live(v) or v
+		end
+		TweenSvc:Create(o, TF, goal):Play()
 	end
 end
 local function viewport()
@@ -122,14 +121,21 @@ end
 -- ── Panel ──────────────────────────────────────────────────────────────────
 local gui = new("ScreenGui", { Name = "DonationGui", ResetOnSpawn = false, IgnoreGuiInset = true,
 	DisplayOrder = 61, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
+ThemeColor.mark(gui)
 local panel = new("Frame", { Name = "Panel", AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = T.BG,
 	Visible = false, Parent = gui })
 corner(14, panel)
-stroke(panel, 0.85)
-new("TextLabel", { Name = "Title", Position = UDim2.new(0, 20, 0, 14), Size = UDim2.new(1, -170, 0, 30),
+ThemeColor.glow(stroke(panel, 0.85), "panel") -- garis tepi bergerak (themeColor)
+-- Bisa digeser dari kepala panel (area atas 70 px, judul, garis penanda); dibuat PERTAMA → di bawah tombol kepala.
+local dragArea = new("Frame", { Name = "DragArea", Size = UDim2.new(1, 0, 0, 70), BackgroundTransparency = 1, Parent = panel })
+local grip = new("Frame", { Name = "Grip", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 5),
+	Size = UDim2.new(0, 28, 0, 3), BackgroundColor3 = T.ACCENT, BackgroundTransparency = 0.35, BorderSizePixel = 0,
+	Parent = panel })
+corner(2, grip)
+local titleLbl = new("TextLabel", { Name = "Title", Position = UDim2.new(0, 20, 0, 14), Size = UDim2.new(1, -170, 0, 30),
 	BackgroundTransparency = 1, Text = "DONATE", Font = FONT.BOLD, TextSize = 22, TextColor3 = T.TEXT,
 	TextXAlignment = Enum.TextXAlignment.Left, Parent = panel })
-new("TextLabel", { Name = "Subtitle", Position = UDim2.new(0, 20, 0, 42), Size = UDim2.new(1, -170, 0, 18),
+local subLbl = new("TextLabel", { Name = "Subtitle", Position = UDim2.new(0, 20, 0, 42), Size = UDim2.new(1, -170, 0, 18),
 	BackgroundTransparency = 1, Text = "Support HAVN — thank you so much! ❤", Font = FONT.REGULAR, TextSize = 14,
 	TextColor3 = T.TEXT_DIM, TextXAlignment = Enum.TextXAlignment.Left, Parent = panel })
 local closeBtn = new("TextButton", { Name = "Close", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 16),
@@ -172,6 +178,7 @@ corner(12, profile)
 stroke(profile, 0.88)
 local view = new("ViewportFrame", { Name = "AvatarView", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
 	Ambient = Color3.fromRGB(150, 152, 158), LightColor = Color3.fromRGB(255, 255, 255), ZIndex = 2, Parent = profile })
+ThemeColor.skip(view) -- lampu viewport & salinan avatar = konten, tidak ikut tema
 local world = new("WorldModel", { Parent = view })
 local viewCam = new("Camera", { FieldOfView = CAM_FOV, Parent = view })
 view.CurrentCamera = viewCam
@@ -319,7 +326,7 @@ stroke(cancelBtn, 0.85)
 hover(cancelBtn, T.CARD, T.CARD_HOVER)
 local payBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -20),
 	Size = UDim2.new(0.5, -25, 0, 40), BackgroundColor3 = T.ACCENT, Text = "Donate", Font = FONT.BOLD, TextSize = 16,
-	TextColor3 = ON_ACCENT, AutoButtonColor = false, ZIndex = 5, Parent = modal })
+	TextColor3 = T.ON_ACCENT, AutoButtonColor = false, ZIndex = 5, Parent = modal })
 corner(10, payBtn)
 -- Tes donasi admin: di atas tombol Cancel/Donate, hanya terlihat untuk IsAdmin.
 local testRow = new("Frame", { Name = "AdminTest", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -68),
@@ -358,12 +365,35 @@ local busy = false
 local skipMessage = false -- pesan ditolak → tekan Donate lagi = donasi tanpa pesan
 local lastInvoke = -math.huge
 
+-- Posisi bawaan = TENGAH layar (antara topbar & hotbar). Digeser → tetap di situ sampai ditutup; dibuka lagi → tengah.
+local customPos, reclamp = false, nil
+local function ensureDrag() -- _G.MenuUI (UltimateMenu) pasti ada saat panel pertama dibuka
+	if reclamp or not (_G.MenuUI and _G.MenuUI.makeDraggable) then
+		return
+	end
+	local ok, r = pcall(_G.MenuUI.makeDraggable, panel, { dragArea, grip, titleLbl, subLbl }, function()
+		customPos = true
+	end)
+	if ok and type(r) == "function" then
+		reclamp = r
+	end
+end
+local function centerTop(h)
+	local vp, top = viewport(), panelTop()
+	return math.max(top, math.min(math.floor((vp.Y - h) / 2), math.floor(vp.Y) - HOTBAR_SPACE - h))
+end
+
 local function layout()
 	local vp = viewport()
 	local top = panelTop()
 	local w = math.min(PANEL_W, vp.X - 24)
-	panel.Size = UDim2.new(0, w, 0, math.max(260, math.min(PANEL_H, vp.Y - top - HOTBAR_SPACE)))
-	panel.Position = UDim2.new(0.5, 0, 0, top)
+	local h = math.max(260, math.min(PANEL_H, vp.Y - top - HOTBAR_SPACE))
+	panel.Size = UDim2.new(0, w, 0, h)
+	if customPos and reclamp then
+		reclamp()
+	else
+		panel.Position = UDim2.new(0.5, 0, 0, centerTop(h))
+	end
 	local wide = w >= PROFILE_MIN
 	profile.Visible = wide
 	local left = wide and (PROFILE_W + 30) or 16
@@ -380,9 +410,12 @@ end
 local function close()
 	closeModal()
 	panel.Visible = false
+	customPos = false
 	syncProfile()
 end
 local function open()
+	customPos = false -- selalu dibuka di tengah
+	ensureDrag()
 	panel.Visible = true
 	paintProfile()
 	layout()
@@ -576,7 +609,7 @@ makeCard = function(i, tier)
 		TextColor3 = T.TEXT_DIM, Parent = card })
 	local pill = new("TextLabel", { Name = "Pill", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10),
 		Size = UDim2.new(1, -24, 0, 28), BackgroundColor3 = T.ACCENT, Text = "DONATE", Font = FONT.BOLD, TextSize = 14,
-		TextColor3 = ON_ACCENT, Parent = card })
+		TextColor3 = T.ON_ACCENT, Parent = card })
 	corner(14, pill)
 	card.Activated:Connect(function()
 		openModal(tier)
@@ -637,13 +670,15 @@ end)
 
 -- ── Tombol topbar: baris KIRI sebelah Info (_G.TopbarLeft dari InfoTopBar) ──────
 -- Cadangan: baris kanan _G.TopbarLayout (order 24) kalau InfoTopBar tidak ada.
--- Tombol topbar = pill "Donate" (gaya tombol Info). Klik → pill melebar jadi [✕] [⬡ Robux] [💰 Komunitas];
--- Robux = panel DONATE, 💰 = popup Komunitas, ✕ / Escape = kembali "Donate". Lebar ikut isi (AutomaticSize X),
+-- Tombol topbar = pill "Donate" (gaya tombol Info). Klik → pill melebar jadi [X] [⬡ Robux] [💰 Komunitas];
+-- Robux = panel DONATE, 💰 = popup Komunitas, X / Escape = kembali "Donate". Lebar ikut isi (AutomaticSize X),
 -- jadi baris topbar (InfoTopBar LeftRow) ikut bergeser rapi di semua perangkat.
+-- Gaya themeColor tombol topbar: latar TOPBAR, teks/X TEXT_STRONG; sorot ACCENT (hover, ⬡, 💰) tetap. Pill ini ikut
+-- dilukis ulang lewat ScreenGui tempatnya menumpang (InfoTopbarGui / _G.TopbarGui, keduanya di-mark skripnya).
 local collapseTop -- function() (diisi makeTopButton)
 local function makeTopButton(size, parent)
 	local pillF = new("Frame", { Name = "DonateBtn", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, size),
-		BackgroundColor3 = T.CARD, BorderSizePixel = 0, Parent = parent })
+		BackgroundColor3 = T.TOPBAR, BorderSizePixel = 0, Parent = parent })
 	corner(size / 2, pillF)
 	local st = stroke(pillF, 0.35, T.ACCENT)
 	st.Thickness = 1
@@ -653,8 +688,9 @@ local function makeTopButton(size, parent)
 	local pop = new("UIScale", { Scale = 1, Parent = pillF })
 	local main = new("TextButton", { Name = "Main", LayoutOrder = 0, AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.new(0, 0, 1, 0), BackgroundTransparency = 1, Text = "Donate", Font = FONT.BOLD, TextSize = 15,
-		TextColor3 = T.TEXT, AutoButtonColor = false, Parent = pillF })
+		TextColor3 = T.TEXT_STRONG, AutoButtonColor = false, Parent = pillF })
 	new("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16), Parent = main })
+	ThemeColor.hoverHost(main, pillF) -- garis sorot hover mengikuti bentuk PIL (bukan kotak teks di dalamnya)
 	local ICON = size - 10
 	local function icon(order, name, text, color)
 		local b = new("TextButton", { Name = name, LayoutOrder = order, Size = UDim2.new(0, ICON, 0, ICON),
@@ -664,7 +700,8 @@ local function makeTopButton(size, parent)
 		hover(b, T.BG, T.CARD_HOVER)
 		return b
 	end
-	local closeI = icon(1, "Close", "✕", T.TEXT)
+	local closeI = icon(1, "Close", "X", T.TEXT_STRONG)
+	closeI.TextSize = 15
 	local robuxI = icon(2, "Robux", ROBUX, T.ACCENT)
 	local commI = icon(3, "Community", "💰", T.ACCENT)
 	local expanded = false
@@ -684,7 +721,7 @@ local function makeTopButton(size, parent)
 		tw(main, { TextColor3 = T.ACCENT })
 	end)
 	main.MouseLeave:Connect(function()
-		tw(main, { TextColor3 = T.TEXT })
+		tw(main, { TextColor3 = T.TEXT_STRONG })
 	end)
 	main.Activated:Connect(function()
 		setExpanded(true)

@@ -159,7 +159,7 @@ local function paintQueueBtn(songId, btn)
 		btn.BackgroundColor3 = C.playing; btn.TextColor3 = C.onAccent
 		btn.Text = "♪"; btn.TextSize = 12
 	elseif status == "diAntrian" then
-		btn.BackgroundColor3 = C.inQueue; btn.TextColor3 = C.white
+		btn.BackgroundColor3 = C.inQueue; btn.TextColor3 = UI.textOn(C.inQueue)
 		btn.Text = "✓"; btn.TextSize = 12
 	elseif S.liveLocked then -- live: request dikunci
 		btn.BackgroundColor3 = C.bgLight; btn.TextColor3 = C.muted
@@ -275,8 +275,8 @@ local function libItem(song, parent, lo, mineView)
 	-- antrian
 	local qBtn = w.button({
 		Size = UDim2.new(0, 32, 0, 32), Position = UDim2.new(1, -68, 0, 6),
-		BackgroundColor3 = unavail and C.muted or C.accent,
-		Text = unavail and "✕" or "▶",
+		BackgroundColor3 = unavail and C.track or C.accent, -- tidak tersedia = isi nonaktif (TRACK), bukan warna teks redup
+		Text = unavail and "X" or "▶",
 		TextColor3 = unavail and C.white or C.onAccent,
 		TextSize = 10, Parent = ct,
 	})
@@ -333,7 +333,7 @@ local function libItem(song, parent, lo, mineView)
 			if mineView then remote:FireServer("RemoveMySong", song.Id)
 			else remote:FireServer("RemoveSong", song.Id) end
 		end)
-		rm.MouseEnter:Connect(function() tws(rm, { BackgroundColor3 = C.danger,  TextColor3 = C.white }) end)
+		rm.MouseEnter:Connect(function() tws(rm, { BackgroundColor3 = C.danger,  TextColor3 = UI.textOn(C.danger) }) end)
 		rm.MouseLeave:Connect(function() tws(rm, { BackgroundColor3 = C.bgLight, TextColor3 = C.gray  }) end)
 	end
 end
@@ -440,7 +440,8 @@ local function creatorSection(group, parent, lo)
 			renderRows(songs, songList, false)
 		end
 		arrow.Text  = open and "▲" or "▼"
-		local bg    = open and C.bgLight or C.bgCard
+		-- Terbuka/hover = CARD_HOVER (themeColor: bgLight = CARD = latar kartu, jadi tidak terlihat beda).
+		local bg    = open and C.hover or C.bgCard
 		local listH = open and totalH or 0
 		if animate then
 			tw(header,   UI.SEC_TW, { BackgroundColor3 = bg })
@@ -466,7 +467,7 @@ local function creatorSection(group, parent, lo)
 		setOpen(willOpen, true)
 	end)
 
-	UI.hover(header, C.bgCard, C.bgLight)
+	UI.hover(header, C.bgCard, C.hover)
 	if openCreator == creator then setOpen(true, false) end
 end
 
@@ -596,7 +597,7 @@ function L.updateQueue(songs)
 			rm.MouseButton1Click:Connect(function()
 				remote:FireServer("RemoveFromQueue", { index = myIdx, id = myId })
 			end)
-			rm.MouseEnter:Connect(function() tws(rm, { BackgroundColor3 = C.danger,  TextColor3 = C.white }) end)
+			rm.MouseEnter:Connect(function() tws(rm, { BackgroundColor3 = C.danger,  TextColor3 = UI.textOn(C.danger) }) end)
 			rm.MouseLeave:Connect(function() tws(rm, { BackgroundColor3 = C.bgLight, TextColor3 = C.gray  }) end)
 		end
 	end

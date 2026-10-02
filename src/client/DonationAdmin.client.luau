@@ -14,6 +14,7 @@ local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local Config = require(RS:WaitForChild("DonationConfig"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 local remotes = RS:WaitForChild("DonationRemotes", 30)
 local testFn = remotes and remotes:WaitForChild("TestDonation", 30)
 local fxFn = remotes and remotes:WaitForChild("TestEffect", 30)
@@ -24,18 +25,10 @@ if not (testFn and fxFn and editFn and donatePanel) then
 	return -- panel donasi / remote tidak ada: admin panel tidak dibuat
 end
 
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG = Color3.fromRGB(16, 16, 17), CARD = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39), LINE = Color3.fromRGB(255, 255, 255),
-	TEXT = Color3.fromRGB(238, 238, 240), TEXT_DIM = Color3.fromRGB(148, 148, 154),
-	ACCENT = Color3.fromRGB(212, 175, 55), DANGER = Color3.fromRGB(226, 96, 96),
-	SUCCESS = Color3.fromRGB(96, 196, 132),
-}
+local T = ThemeColor.tokens -- tabel bersama themeColor: T.X dibaca saat melukis → ikut tema pilihan pemain
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD = Enum.Font.BuilderSansBold, MEDIUM = Enum.Font.BuilderSansMedium, REGULAR = Enum.Font.BuilderSans,
 }
-local ON_ACCENT = Color3.fromRGB(18, 18, 20)
-local GREEN = T.SUCCESS or Color3.fromRGB(96, 196, 132)
 local ROBUX = utf8.char(0xE002)
 local PANEL_W, PANEL_H, SIDEBAR_W = 720, 470, 156
 local REASON = {
@@ -99,6 +92,7 @@ local adminBtn = button("ADMIN", { Name = "AdminBtn", AnchorPoint = Vector2.new(
 -- ── Panel admin ────────────────────────────────────────────────────────────
 local gui = new("ScreenGui", { Name = "DonationAdminGui", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 62,
 	Enabled = false, Parent = playerGui })
+ThemeColor.mark(gui)
 -- Active = klik di area panel tidak tembus ke panel donasi di belakangnya (tembus → tombol "Effects" ikut terklik).
 local panel = new("Frame", { Name = "Panel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
 	BackgroundColor3 = T.BG, Active = true, Parent = gui })
@@ -146,7 +140,7 @@ local tabs = {}
 local function showTab(name)
 	for n, p in pages do
 		p.Visible = n == name
-		tabs[n].TextColor3 = n == name and ON_ACCENT or T.TEXT
+		tabs[n].TextColor3 = n == name and T.ON_ACCENT or T.TEXT
 		tabs[n].BackgroundColor3 = n == name and T.ACCENT or T.CARD
 	end
 	status.Text = ""
@@ -183,7 +177,7 @@ local function playerPicker(parent, order)
 			if q == "" or string.find(string.lower(text), q, 1, true) then
 				local mine = (picked or player.UserId) == p.UserId
 				local b = button(text, { Name = "P" .. p.UserId, Font = FONT.MEDIUM, TextSize = 12,
-					TextColor3 = mine and ON_ACCENT or T.TEXT, BackgroundColor3 = mine and T.ACCENT or T.CARD,
+					TextColor3 = mine and T.ON_ACCENT or T.TEXT, BackgroundColor3 = mine and T.ACCENT or T.CARD,
 					TextTruncate = Enum.TextTruncate.AtEnd, Parent = list })
 				b.Activated:Connect(function()
 					picked = p ~= player and p.UserId or nil
@@ -256,7 +250,7 @@ local function buildTierGrid()
 	for i, t in Config.tiers do
 		local on = t.productId == chosenId
 		local b = button(tierName(t), { Name = "Tier" .. t.robux, LayoutOrder = i, Font = FONT.MEDIUM, TextSize = 13,
-			BackgroundColor3 = on and T.ACCENT or T.CARD, TextColor3 = on and ON_ACCENT or T.TEXT, Parent = tierGrid })
+			BackgroundColor3 = on and T.ACCENT or T.CARD, TextColor3 = on and T.ON_ACCENT or T.TEXT, Parent = tierGrid })
 		b.Activated:Connect(function()
 			chosenId = t.productId
 			buildTierGrid()
@@ -293,7 +287,7 @@ allBtn.Activated:Connect(function()
 end)
 paintAll()
 local sendBtn = button("SEND FAKE DONATION", { Name = "Send", LayoutOrder = 9, Size = UDim2.new(1, 0, 0, 40),
-	BackgroundColor3 = T.ACCENT, TextColor3 = ON_ACCENT, Parent = dp })
+	BackgroundColor3 = T.ACCENT, TextColor3 = T.ON_ACCENT, Parent = dp })
 sendBtn.Activated:Connect(function()
 	if call(testFn, chosenId, msg.Text, everywhere, donTarget()) then
 		msg.Text = ""
@@ -332,7 +326,7 @@ local function chipRow(parent, at, field, value, onPick)
 	for i, o in OPTIONS[field] do
 		local on = (value or false) == o[2]
 		local b = button(o[1], { Name = tostring(o[2]), LayoutOrder = i, Font = FONT.MEDIUM, TextSize = 12,
-			BackgroundColor3 = on and T.ACCENT or T.CARD, TextColor3 = on and ON_ACCENT or T.TEXT, Parent = row })
+			BackgroundColor3 = on and T.ACCENT or T.CARD, TextColor3 = on and T.ON_ACCENT or T.TEXT, Parent = row })
 		b.Activated:Connect(function()
 			onPick(o[2])
 		end)
@@ -368,7 +362,7 @@ buildMix = function()
 		Size = UDim2.new(1, 0, 0, 18), Font = FONT.MEDIUM, TextSize = 13, TextColor3 = T.TEXT, TextWrapped = true, Parent = mixBox })
 	local any = mix.fx or mix.cam or mix.big
 	local runBtn = button("▶  TEST EFFECT", { Name = "Run", LayoutOrder = 11, Size = UDim2.new(1, 0, 0, 40),
-		BackgroundColor3 = any and T.ACCENT or T.CARD, TextColor3 = any and ON_ACCENT or T.TEXT_DIM, Parent = mixBox })
+		BackgroundColor3 = any and T.ACCENT or T.CARD, TextColor3 = any and T.ON_ACCENT or T.TEXT_DIM, Parent = mixBox })
 	runBtn.Activated:Connect(function()
 		if not (mix.fx or mix.cam or mix.big) then
 			status.TextColor3 = T.DANGER
@@ -486,7 +480,7 @@ local function buildForm(t)
 		BackgroundTransparency = 1, Parent = form })
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), Parent = actions })
 	local testBtn = button("▶ Tes donasi", { Name = "Test", Size = UDim2.new(0, 116, 1, 0), BackgroundColor3 = T.ACCENT,
-		TextColor3 = ON_ACCENT, TextSize = 13, Parent = actions })
+		TextColor3 = T.ON_ACCENT, TextSize = 13, Parent = actions })
 	testBtn.Activated:Connect(function()
 		if drafts[t.productId] then
 			status.TextColor3 = T.DANGER
@@ -530,7 +524,7 @@ buildProducts = function()
 			dirty and "  ●" or "")
 		local b = button(text, { Name = "P" .. t.productId, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 30), Font = FONT.MEDIUM,
 			TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
-			BackgroundColor3 = on and T.ACCENT or T.CARD, TextColor3 = on and ON_ACCENT or (dirty and T.ACCENT or T.TEXT),
+			BackgroundColor3 = on and T.ACCENT or T.CARD, TextColor3 = on and T.ON_ACCENT or (dirty and T.ACCENT or T.TEXT),
 			Parent = plist })
 		new("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = b })
 		b.Activated:Connect(function()
@@ -541,8 +535,8 @@ buildProducts = function()
 	buildForm(shown)
 	local n = dirtyCount()
 	saveAllBtn.Text = n > 0 and ("💾  SIMPAN (%d produk berubah)"):format(n) or "Tersimpan ✓"
-	saveAllBtn.BackgroundColor3 = n > 0 and GREEN or T.CARD
-	saveAllBtn.TextColor3 = n > 0 and ON_ACCENT or T.TEXT_DIM
+	saveAllBtn.BackgroundColor3 = n > 0 and T.SUCCESS or T.CARD
+	saveAllBtn.TextColor3 = n > 0 and T.ON_ACCENT or T.TEXT_DIM
 end
 buildProducts()
 saveAllBtn.Activated:Connect(function()

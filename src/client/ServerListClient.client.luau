@@ -8,6 +8,8 @@ local RS       = game:GetService("ReplicatedStorage")
 local UIS      = game:GetService("UserInputService")
 local TweenSvc = game:GetService("TweenService")
 
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -20,22 +22,15 @@ local getFn    = remotes:WaitForChild("GetServers")
 local joinEv   = remotes:WaitForChild("JoinServer")
 local noticeEv = remotes:WaitForChild("Notice")
 
--- ── Tema (dari UltimateMenu, fallback identik CommandPanel) ────────────────
+-- ── Tema: ThemeColor.tokens (themeColor) — T.X dibaca saat melukis ─────────
 do
 	local waited = 0
 	while not _G.MenuConfig and waited < 10 do task.wait(0.1); waited += 0.1 end
 end
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG = Color3.fromRGB(16, 16, 17), CARD = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39), LINE = Color3.fromRGB(255, 255, 255),
-	TEXT = Color3.fromRGB(238, 238, 240), TEXT_DIM = Color3.fromRGB(148, 148, 154),
-	ACCENT = Color3.fromRGB(212, 175, 55), DANGER = Color3.fromRGB(226, 96, 96),
-	SUCCESS = Color3.fromRGB(96, 196, 132),
-}
+local T = ThemeColor.tokens
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD = Enum.Font.BuilderSansBold, MEDIUM = Enum.Font.BuilderSansMedium, REGULAR = Enum.Font.BuilderSans,
 }
-local ON_ACCENT = Color3.fromRGB(18, 18, 20)
 local TF = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local TS = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 
@@ -102,18 +97,24 @@ end
 -- ── UI dasar ───────────────────────────────────────────────────────────────
 local gui = new("ScreenGui", { Name = "ServerListGui", ResetOnSpawn = false, IgnoreGuiInset = true,
 	DisplayOrder = 60, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
+ThemeColor.mark(gui)
 
 local overlay = new("TextButton", { Name = "Overlay", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(),
 	BackgroundTransparency = 1, Text = "", AutoButtonColor = false, Visible = false, Parent = gui })
 
 local panel = new("Frame", { Name = "Panel", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 64),
 	BackgroundColor3 = T.BG, Visible = false, Parent = gui })
-corner(14, panel); stroke(panel, 0.85, T.ACCENT)
+corner(14, panel); ThemeColor.glow(stroke(panel, 0.85, T.ACCENT), "panel") -- garis tepi bergerak (themeColor)
 
+-- Penanda bisa digeser (garis kecil di tengah atas, di DALAM panel → tidak menimpa tombol topbar).
+local grip = new("Frame", { Name = "Grip", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4),
+	Size = UDim2.new(0, 28, 0, 3), BackgroundColor3 = T.ACCENT, BackgroundTransparency = 0.35, BorderSizePixel = 0,
+	Parent = panel })
+corner(2, grip)
 local header = new("Frame", { Size = UDim2.new(1, -24, 0, 36), Position = UDim2.new(0, 12, 0, 10),
 	BackgroundTransparency = 1, Active = true, Parent = panel })
 globe(header, 16, T.TEXT, UDim2.new(0, 8, 0.5, 0))
-new("TextLabel", { Position = UDim2.new(0, 26, 0, 0), Size = UDim2.new(1, -210, 1, 0), BackgroundTransparency = 1,
+local titleLbl = new("TextLabel", { Position = UDim2.new(0, 26, 0, 0), Size = UDim2.new(1, -210, 1, 0), BackgroundTransparency = 1,
 	Text = "SERVER LIST", TextColor3 = T.TEXT, Font = FONT.BOLD, TextSize = 17,
 	TextXAlignment = Enum.TextXAlignment.Left, Parent = header })
 local countLbl = new("TextLabel", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -124, 0.5, 0),
@@ -124,8 +125,8 @@ local refreshBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Positi
 	Font = FONT.BOLD, TextSize = 13, AutoButtonColor = false, Parent = header })
 corner(10, refreshBtn)
 local closeBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
-	Size = UDim2.new(0, 32, 0, 32), BackgroundColor3 = T.DANGER, Text = "×", TextColor3 = Color3.new(1, 1, 1),
-	Font = FONT.BOLD, TextSize = 22, AutoButtonColor = false, Parent = header })
+	Size = UDim2.new(0, 32, 0, 32), BackgroundColor3 = T.DANGER, Text = "X", TextColor3 = Color3.new(1, 1, 1),
+	Font = FONT.BOLD, TextSize = 16, AutoButtonColor = false, Parent = header })
 corner(10, closeBtn)
 
 local search = new("TextBox", { Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 0, 54),
@@ -165,10 +166,15 @@ noticeEv.OnClientEvent:Connect(showToast)
 
 -- Drag & drop lewat judul panel (helper yang sama dengan panel "/").
 -- customPos/reclamp dideklarasi DI SINI (sebelum dipakai); dulu di bawah -> jadi global (selene).
-local customPos, reclamp = false, nil
+-- Posisi bawaan = TENGAH layar (antara topbar & hotbar); setelah digeser, dibuka lagi → kembali ke tengah.
+local customPos, reclamp, isDragging = false, nil, nil
 if _G.MenuUI and _G.MenuUI.makeDraggable then
-	local ok, r = pcall(_G.MenuUI.makeDraggable, panel, { header }, function() customPos = true end)
-	if ok and type(r) == "function" then reclamp = r end
+	local ok, r, d = pcall(_G.MenuUI.makeDraggable, panel, { header, titleLbl }, function() customPos = true end)
+	if ok and type(r) == "function" then reclamp, isDragging = r, d end
+end
+local function centerTop(h)
+	local vp, top = viewport(), panelTop()
+	return math.max(top, math.min(math.floor((vp.Y - h) / 2), math.floor(vp.Y) - HOTBAR_SPACE - h))
 end
 
 -- ── ukuran responsif ──────────────────────────────────────────────────────
@@ -176,8 +182,13 @@ local cols, panelW, maxH = 2, 600, 400
 local function fitHeight(count)
 	local rows = math.max(1, math.ceil(count / cols))
 	local want = 110 + rows * CARD_H + (rows - 1) * GAP + 8
-	panel.Size = UDim2.new(0, panelW, 0, math.clamp(want, math.min(200, maxH), maxH))
-	if customPos and reclamp then pcall(reclamp) end
+	local h = math.clamp(want, math.min(200, maxH), maxH)
+	panel.Size = UDim2.new(0, panelW, 0, h)
+	if customPos then
+		if reclamp then pcall(reclamp) end
+	elseif panel.Visible then
+		tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, centerTop(h)) }) -- tinggi berubah → tetap di tengah
+	end
 end
 local function layout()
 	local vp, top = viewport(), panelTop()
@@ -187,17 +198,17 @@ local function layout()
 		panelW = math.min(math.floor(math.clamp(vp.X * 0.5, 300, 640)), math.floor(vp.X) - 16)
 	end
 	maxH = math.max(160, math.floor(math.min(vp.Y * 0.8, vp.Y - top - HOTBAR_SPACE)))
-	if not customPos then panel.Position = UDim2.new(0.5, 0, 0, top) end
 	cols = (panelW >= 520) and 2 or 1
 	grid.CellSize = (cols == 2) and UDim2.new(0.5, -GAP / 2, 0, CARD_H) or UDim2.new(1, 0, 0, CARD_H)
 	panel.Size = UDim2.new(0, panelW, 0, panel.Size.Y.Offset > 0 and panel.Size.Y.Offset or 200)
+	if not customPos then panel.Position = UDim2.new(0.5, 0, 0, centerTop(panel.Size.Y.Offset)) end
 end
 
 -- ── kartu server ──────────────────────────────────────────────────────────
 local selfId
 local function tag(parent, text, color)
 	local l = new("TextLabel", { Size = UDim2.new(0, 0, 0, 18), AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundColor3 = color, Text = text, TextColor3 = ON_ACCENT, Font = FONT.BOLD, TextSize = 11, Parent = parent })
+		BackgroundColor3 = color, Text = text, TextColor3 = T.ON_ACCENT, Font = FONT.BOLD, TextSize = 11, Parent = parent })
 	corner(6, l)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7), Parent = l })
 	return l
@@ -251,7 +262,7 @@ local function card(v, order)
 		corner(13, more)
 	end
 
-	local label, color, txt = "JOIN", T.SUCCESS, ON_ACCENT
+	local label, color, txt = "JOIN", T.SUCCESS, T.ON_ACCENT
 	if isSelf then label, color = "PLAYING", T.ACCENT elseif full then label, color, txt = "FULL", T.DANGER, Color3.new(1, 1, 1) end
 	local btn = new("TextButton", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0),
 		Size = UDim2.new(0, 88, 0, 30), BackgroundColor3 = color, Text = label, TextColor3 = txt,
@@ -319,11 +330,12 @@ local openGen = 0
 local function open()
 	openGen += 1
 	local g = openGen
+	customPos = false -- selalu dibuka di tengah
 	layout()
 	overlay.Visible, panel.Visible = true, true
 	overlay.BackgroundTransparency = 1
 	tw(overlay, TS, { BackgroundTransparency = 0.45 })
-	local top = panelTop()
+	local top = centerTop(panel.Size.Y.Offset)
 	panel.Position = UDim2.new(0.5, 0, 0, top - 14)
 	tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, top) })
 	render()
@@ -342,7 +354,7 @@ local function close()
 	pcall(search.ReleaseFocus, search)
 	tw(overlay, TF, { BackgroundTransparency = 1 })
 	-- Seperti panel "/": ditutup di tempat, posisi default lagi saat dibuka berikutnya.
-	if not customPos then tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, panelTop() - 14) }) end
+	if not customPos then tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, centerTop(panel.Size.Y.Offset) - 14) }) end
 	customPos = false
 	task.delay(0.22, function()
 		if openGen ~= g then return end
@@ -351,7 +363,10 @@ local function close()
 end
 local function toggle() if panel.Visible then close() else open() end end
 
-overlay.Activated:Connect(close)
+overlay.Activated:Connect(function()
+	if isDragging and isDragging() then return end -- ekor gerakan drag, bukan klik di luar panel
+	close()
+end)
 closeBtn.Activated:Connect(close)
 refreshBtn.Activated:Connect(refresh)
 local filterGen = 0
@@ -390,15 +405,16 @@ task.spawn(function()
 	end
 	local old = _G.TopbarGui:FindFirstChild("ServerListBtn")
 	if old then old:Destroy() end
+	-- Gaya themeColor tombol topbar: latar TOPBAR, hover CARD_HOVER, ikon TEXT_STRONG (_G.TopbarGui di-mark UltimateMenu).
 	local btn = new("TextButton", { Name = "ServerListBtn", Size = UDim2.new(0, BTN_SZ, 0, BTN_SZ),
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -150, 0, 13), BackgroundColor3 = T.CARD,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -150, 0, 13), BackgroundColor3 = T.TOPBAR,
 		BorderSizePixel = 0, Text = "", AutoButtonColor = false, Parent = _G.TopbarGui })
-	globe(btn, 14, T.TEXT)
+	globe(btn, 14, T.TEXT_STRONG)
 	corner(BTN_SZ / 2, btn)
 	local st = stroke(btn, 0.35, T.ACCENT)
 	st.Thickness = 0.5
 	btn.MouseEnter:Connect(function() tw(btn, TF, { BackgroundColor3 = T.CARD_HOVER }); tw(st, TF, { Transparency = 0.1 }) end)
-	btn.MouseLeave:Connect(function() tw(btn, TF, { BackgroundColor3 = T.CARD }); tw(st, TF, { Transparency = 0.35 }) end)
+	btn.MouseLeave:Connect(function() tw(btn, TF, { BackgroundColor3 = T.TOPBAR }); tw(st, TF, { Transparency = 0.35 }) end)
 	btn.MouseButton1Down:Connect(function() tw(btn, TF, { Size = UDim2.new(0, BTN_SZ - 3, 0, BTN_SZ - 3) }) end)
 	btn.MouseButton1Up:Connect(function() tw(btn, TF, { Size = UDim2.new(0, BTN_SZ, 0, BTN_SZ) }) end)
 	btn.Activated:Connect(toggle)

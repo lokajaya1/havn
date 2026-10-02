@@ -1,6 +1,8 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Warna tombol keluar: ReplicatedStorage.Modules.ThemeColor (themeColor) → ikut tema pilihan pemain.
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local camFolder = workspace:WaitForChild("360Cam")
@@ -23,17 +25,18 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "360CamGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
+ThemeColor.mark(screenGui)
 
 local exitButton = Instance.new("TextButton")
 exitButton.Name = "ExitButton"
 exitButton.Size = UDim2.new(0.088, 0, 0.052, 0)
 exitButton.Position = UDim2.new(0.9, 0, 0.585, 0)
 exitButton.AnchorPoint = Vector2.new(0, 0)
-exitButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+exitButton.BackgroundColor3 = ThemeColor.tokens.BG
 exitButton.BackgroundTransparency = 0.2
 exitButton.BorderSizePixel = 0
 exitButton.Text = "Exit 360 Cam"
-exitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+exitButton.TextColor3 = ThemeColor.tokens.TEXT_STRONG
 exitButton.Font = Enum.Font.GothamBold
 exitButton.TextSize = 14
 exitButton.Visible = false

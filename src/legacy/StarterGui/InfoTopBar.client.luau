@@ -6,6 +6,7 @@
 -- Yang diubah hanya TEMA: warna + font disamakan dengan DanceClient /
 -- UltimateMenu (dibaca dari _G.MenuConfig bila sudah ada), plus tombol Info
 -- tidak lagi menimpa panel Menu.
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor) — dibaca saat melukis → ikut tema pilihan pemain.
 
 local Players             = game:GetService("Players")
 local TweenService        = game:GetService("TweenService")
@@ -13,6 +14,9 @@ local UIS                 = game:GetService("UserInputService")
 local GuiService          = game:GetService("GuiService")
 local GroupService        = game:GetService("GroupService")
 local AvatarEditorService = game:GetService("AvatarEditorService")
+local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -59,16 +63,7 @@ do
 	end
 end
 
-local TH = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-	SUCCESS    = Color3.fromRGB(96, 196, 132),
-}
+local TH = ThemeColor.tokens
 
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD    = Enum.Font.BuilderSansBold,
@@ -77,24 +72,25 @@ local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 }
 
 -- Nama kunci lama dipertahankan supaya seluruh kode di bawah tidak berubah.
-local C = {
-	Black   = TH.CARD,
-	Panel   = TH.BG,
-	Header  = TH.BG,
-	Card    = TH.CARD,
-	Hover   = TH.CARD_HOVER,
-	Gold    = TH.ACCENT,
-	GoldHov = TH.ACCENT,
-	GoldDim = TH.TEXT_DIM,
-	Border  = TH.LINE,
-	Text    = TH.TEXT,
-	Dim     = TH.TEXT_DIM,
-	Red     = TH.TEXT_DIM,
-	White   = TH.TEXT,
-	Discord = TH.ACCENT,
-	SWR     = TH.ACCENT,
-	Green   = TH.SUCCESS,
-}
+-- ThemeColor.view: C.X = token tema SEKARANG (dibaca saat dipakai, juga di hover/leave/refresh).
+local C = ThemeColor.view({
+	Black   = "CARD",
+	Panel   = "BG",
+	Header  = "BG",
+	Card    = "CARD",
+	Hover   = "CARD_HOVER",
+	Gold    = "ACCENT",
+	GoldHov = "ACCENT",
+	GoldDim = "TEXT_DIM",
+	Border  = "LINE",
+	Text    = "TEXT",
+	Dim     = "TEXT_DIM",
+	Red     = "TEXT_DIM",
+	White   = "TEXT",
+	Discord = "ACCENT",
+	SWR     = "ACCENT",
+	Green   = "SUCCESS",
+})
 
 -- Panel solid seperti panel lain; hanya overlay yang transparan.
 local T = {
@@ -142,8 +138,11 @@ local function mkStroke(p, color, thick)
 	return s
 end
 
+-- Warna tujuan yang tersimpan dari tema lama (mis. accentColor saat tombol diklik) → warna yang sama di tema sekarang.
 local function tw(obj, info, props)
-	TweenService:Create(obj, info, props):Play()
+	local goal = {}
+	for k, v in pairs(props) do goal[k] = (typeof(v) == "Color3") and ThemeColor.live(v) or v end
+	TweenService:Create(obj, info, goal):Play()
 end
 
 local function popIn(f, w, h)
@@ -222,6 +221,7 @@ sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 sg.IgnoreGuiInset = true
 sg.DisplayOrder   = -1
 sg.Parent         = playerGui
+ThemeColor.mark(sg)
 
 -- ══════════════════════════════════════════════════════════════
 --  TOPBAR BUTTON  (dibuat dulu, baru updateBtnPosition dipanggil)
@@ -242,12 +242,13 @@ rowList.Padding           = UDim.new(0, ROW_PAD)
 rowList.SortOrder         = Enum.SortOrder.LayoutOrder
 rowList.Parent            = leftRow
 
+-- Gaya themeColor tombol topbar: latar TOPBAR, hover CARD_HOVER, teks TEXT_STRONG (sorot ACCENT saat hover tetap).
 local topBtn = Instance.new("TextButton")
 topBtn.Name                   = "InfoTopbarButton"
 topBtn.LayoutOrder            = 1
 topBtn.AutomaticSize          = Enum.AutomaticSize.X
 topBtn.Size                   = UDim2.new(0, 0, 0, BTN_H)
-topBtn.BackgroundColor3       = C.Black
+topBtn.BackgroundColor3       = TH.TOPBAR
 topBtn.BackgroundTransparency = T.Btn
 topBtn.BorderSizePixel        = 0
 topBtn.Text                   = ""
@@ -276,7 +277,7 @@ btnLabel.AutomaticSize          = Enum.AutomaticSize.X
 btnLabel.Size                   = UDim2.new(0, 0, 1, 0)
 btnLabel.BackgroundTransparency = 1
 btnLabel.Text                   = "Info"
-btnLabel.TextColor3             = C.White
+btnLabel.TextColor3             = TH.TEXT_STRONG
 btnLabel.TextSize               = BTN_TEXT
 btnLabel.Font                   = FONT.BOLD
 btnLabel.Parent                 = topBtn
@@ -418,8 +419,8 @@ if not IS_MOBILE then
 		tw(btnStroke, TI.Mid, { Thickness = 1, Transparency = 0.1 })
 	end)
 	topBtn.MouseLeave:Connect(function()
-		tw(topBtn,    TI.Mid, { BackgroundColor3 = C.Black })
-		tw(btnLabel,  TI.Mid, { TextColor3 = C.White })
+		tw(topBtn,    TI.Mid, { BackgroundColor3 = TH.TOPBAR })
+		tw(btnLabel,  TI.Mid, { TextColor3 = TH.TEXT_STRONG })
 		tw(btnStroke, TI.Mid, { Thickness = 1, Transparency = 0.35 })
 	end)
 end
@@ -459,6 +460,18 @@ local function makeHeader(parent, titleText, accentColor)
 	hdr.Parent                 = parent
 	rnd(12, hdr)
 
+	-- penanda bisa digeser (kepala panel = pegangan drag, lihat draggable di bawah)
+	local grip = Instance.new("Frame")
+	grip.Name                   = "Grip"
+	grip.AnchorPoint            = Vector2.new(0.5, 0)
+	grip.Position               = UDim2.new(0.5, 0, 0, 4)
+	grip.Size                   = UDim2.new(0, 28, 0, 3)
+	grip.BackgroundColor3       = C.Gold
+	grip.BackgroundTransparency = 0.35
+	grip.BorderSizePixel        = 0
+	grip.Parent                 = hdr
+	rnd(2, grip)
+
 	local sep = Instance.new("Frame")
 	sep.Size             = UDim2.new(1, 0, 0, 1)
 	sep.Position         = UDim2.new(0, 0, 1, -1)
@@ -484,9 +497,9 @@ local function makeHeader(parent, titleText, accentColor)
 	cl.BackgroundColor3       = C.Card
 	cl.BackgroundTransparency = 0
 	cl.BorderSizePixel        = 0
-	cl.Text                   = "✕"
+	cl.Text                   = "X"
 	cl.TextSize               = 13
-	cl.Font                   = FONT.REGULAR
+	cl.Font                   = FONT.BOLD
 	cl.TextColor3             = C.Dim
 	cl.Parent                 = hdr
 	rnd(7, cl)
@@ -499,7 +512,34 @@ local function makeHeader(parent, titleText, accentColor)
 			tw(cl, TI.Fast, { BackgroundColor3 = C.Card, TextColor3 = C.Dim })
 		end)
 	end
-	return cl
+	return cl, hdr, ttl
+end
+
+-- Panel Info & popup bisa digeser dari kepalanya (helper _G.MenuUI.makeDraggable, sama dengan panel "/", Server List,
+-- Donate); posisi bawaan tetap TENGAH layar dan dibuka lagi → kembali ke tengah (openMain / makePopupCtrl).
+local dragOf = {} -- panel → { reclamp, isDragging }
+local function draggable(panel, hdr, ttl)
+	task.spawn(function()
+		local t0 = os.clock()
+		while not (_G.MenuUI and _G.MenuUI.makeDraggable) and os.clock() - t0 < 15 do
+			task.wait(0.2)
+		end
+		local MUI = _G.MenuUI
+		if not (MUI and MUI.makeDraggable) then return end
+		local ok, reclamp, isDragging = pcall(MUI.makeDraggable, panel, { hdr, ttl })
+		if not (ok and type(reclamp) == "function") then return end
+		dragOf[panel] = { reclamp, isDragging }
+		local cam = workspace.CurrentCamera
+		if cam then -- layar diputar / diubah ukurannya → panel yang digeser tetap di dalam layar
+			cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+				task.defer(pcall, reclamp)
+			end)
+		end
+	end)
+end
+local function dragging(panel)
+	local d = dragOf[panel]
+	return d ~= nil and type(d[2]) == "function" and d[2]() == true
 end
 
 local function makePopup(ov, w, h, accent, title)
@@ -514,7 +554,8 @@ local function makePopup(ov, w, h, accent, title)
 	rnd(12, p)
 	mkStroke(p, C.Border, 0.8)
 
-	local closeBtn = makeHeader(p, title, accent)
+	local closeBtn, hdr, ttl = makeHeader(p, title, accent)
+	draggable(p, hdr, ttl)
 	return p, closeBtn
 end
 
@@ -611,9 +652,10 @@ mainPanel.BackgroundTransparency = T.Panel
 mainPanel.BorderSizePixel        = 0
 mainPanel.Parent                 = mainOv
 rnd(12, mainPanel)
-mkStroke(mainPanel, C.Border, 0.8)
+ThemeColor.glow(mkStroke(mainPanel, C.Border, 0.8), "panel") -- garis tepi bergerak (themeColor)
 
-local pClose = makeHeader(mainPanel, "Info", C.Gold)
+local pClose, mainHdr, mainTtl = makeHeader(mainPanel, "Info", C.Gold)
+draggable(mainPanel, mainHdr, mainTtl)
 
 local cCon = Instance.new("Frame")
 cCon.Size                   = UDim2.new(1, -16, 0, CARD_N * CARD_H + (CARD_N - 1) * CARD_GAP)
@@ -766,6 +808,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 local function makePopupCtrl(ov, popup, w, h)
 	local function open()
+		popup.Position = UDim2.new(0.5, 0, 0.5, 0) -- selalu dibuka di tengah (walau tadi digeser)
 		ov.Visible = true
 		popIn(popup, w, h)
 	end
@@ -795,6 +838,7 @@ local function openMain()
 	if isPanelOpen then closeMain(); return end
 	isPanelOpen = true
 	_G.PanelCoordinator.NotifyOpen("Info")
+	mainPanel.Position = UDim2.new(0.5, 0, 0.5, 0) -- selalu dibuka di tengah (walau tadi digeser)
 	mainOv.Visible = true
 	popIn(mainPanel, PW, PANEL_H)
 end
@@ -816,7 +860,8 @@ end
 
 if type(_G.PanelCoordinator.OnChange) == "function" then
 	_G.PanelCoordinator.OnChange(function(activePanel)
-		setBtnHidden(activePanel ~= nil and activePanel ~= "Info")
+		-- Inventory (bawah layar) tidak menutupi baris topbar → tombol tetap tampil
+		setBtnHidden(activePanel ~= nil and activePanel ~= "Info" and activePanel ~= "Inventory")
 	end)
 else
 	-- Coordinator versi lama tanpa OnChange: pantau langsung panel Menu.
@@ -841,7 +886,9 @@ end
 -- ══════════════════════════════════════════════════════════════
 topBtn.MouseButton1Click:Connect(openMain)
 pClose.MouseButton1Click:Connect(closeMain)
-mainOvBtn.MouseButton1Click:Connect(closeMain)
+mainOvBtn.MouseButton1Click:Connect(function()
+	if not dragging(mainPanel) then closeMain() end -- ekor gerakan drag bukan klik di luar panel
+end)
 
 cardSWR.MouseButton1Click:Connect(function()
 	closeMain()
@@ -861,13 +908,19 @@ cardCommun.MouseButton1Click:Connect(function()
 end)
 
 swrClose.MouseButton1Click:Connect(closeSWR)
-swrOvBtn.MouseButton1Click:Connect(closeSWR)
+swrOvBtn.MouseButton1Click:Connect(function()
+	if not dragging(swrPopup) then closeSWR() end
+end)
 
 dcClose.MouseButton1Click:Connect(closeDC)
-dcOvBtn.MouseButton1Click:Connect(closeDC)
+dcOvBtn.MouseButton1Click:Connect(function()
+	if not dragging(dcPopup) then closeDC() end
+end)
 
 commClose.MouseButton1Click:Connect(closeComm)
-commOvBtn.MouseButton1Click:Connect(closeComm)
+commOvBtn.MouseButton1Click:Connect(function()
+	if not dragging(commPopup) then closeComm() end
+end)
 
 -- API baris kiri untuk skrip lain (mis. DonationClient): tombol diberi tinggi BTN_H.
 -- add: tombol ikut baris kiri (landscape) / baris kanan di bawah tombol Menu (portrait), lihat updateBtnPosition.

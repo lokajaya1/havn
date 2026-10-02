@@ -1,11 +1,14 @@
 -- SettingsClient — StarterPlayer > StarterPlayerScripts
--- Tema mengikuti UltimateMenu / DanceClient (dibaca dari _G.MenuConfig).
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): T.X dibaca saat melukis → ikut tema yang dipilih.
 
 local Players         = game:GetService("Players")
 local RunService      = game:GetService("RunService")
 local TweenService    = game:GetService("TweenService")
 local TextChatService = game:GetService("TextChatService")
 local Stats           = game:GetService("Stats")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -23,27 +26,13 @@ end
 if not waitDeps() then return end
 
 local UI  = _G.MenuUI
-local C   = _G.MenuConfig.colors
-
-local T = _G.MenuConfig.theme or {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-	DANGER     = Color3.fromRGB(226, 96, 96),
-	SUCCESS    = Color3.fromRGB(96, 196, 132),
-}
+local T   = ThemeColor.tokens
 
 local FONT = _G.MenuConfig.font or {
 	BOLD    = Enum.Font.BuilderSansBold,
 	MEDIUM  = Enum.Font.BuilderSansMedium,
 	REGULAR = Enum.Font.BuilderSans,
 }
-
-local TEXT_ON_ACCENT = C.textOnAccent or Color3.fromRGB(18, 18, 20)
 
 local TW = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local function tw(obj, props)
@@ -162,6 +151,7 @@ task.spawn(function()
 		Name = "SettingsHUD", ResetOnSpawn = false, IgnoreGuiInset = true,
 		DisplayOrder = 200, Parent = pg,
 	})
+	ThemeColor.mark(hud)
 
 	local function makeHUD(y, text)
 		local label = UI.text({
@@ -233,10 +223,11 @@ local function Switch(parent, initState)
 	local W, H, PAD = 38, 20, 3
 	local thumbSize  = H - PAD * 2
 
+	-- Gaya themeColor: hidup = jalur ACCENT + kenop TEXT_STRONG, mati = jalur TRACK + kenop TEXT.
 	local pill = UI.button({
 		Size = UDim2.new(0, W, 0, H), AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
-		BackgroundColor3 = initState and T.ACCENT or T.CARD_HOVER,
+		BackgroundColor3 = initState and T.ACCENT or T.TRACK,
 		Text = "", Parent = parent,
 	})
 	UI.corner(H / 2).Parent = pill
@@ -244,15 +235,16 @@ local function Switch(parent, initState)
 	local thumb = UI.frame({
 		Size = UDim2.new(0, thumbSize, 0, thumbSize), AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, initState and (W - thumbSize - PAD) or PAD, 0.5, 0),
-		BackgroundColor3 = initState and TEXT_ON_ACCENT or T.TEXT, Parent = pill,
+		BackgroundColor3 = initState and T.TEXT_STRONG or T.TEXT, Parent = pill,
 	})
 	UI.corner(thumbSize / 2).Parent = thumb
+	UI.stroke(T.BG, 1, 0.7).Parent = thumb
 
 	local function set(on)
-		tw(pill, { BackgroundColor3 = on and T.ACCENT or T.CARD_HOVER })
+		tw(pill, { BackgroundColor3 = on and T.ACCENT or T.TRACK })
 		tw(thumb, {
 			Position         = UDim2.new(0, on and (W - thumbSize - PAD) or PAD, 0.5, 0),
-			BackgroundColor3 = on and TEXT_ON_ACCENT or T.TEXT,
+			BackgroundColor3 = on and T.TEXT_STRONG or T.TEXT,
 		})
 	end
 
@@ -265,7 +257,7 @@ local function ActionButton(parent, labelClosed, labelOpen)
 	local btn = UI.button({
 		Size = UDim2.new(0, W, 0, H), AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0), BackgroundColor3 = T.ACCENT,
-		Text = labelClosed, TextColor3 = TEXT_ON_ACCENT,
+		Text = labelClosed, TextColor3 = T.ON_ACCENT,
 		Font = FONT.MEDIUM, TextSize = 11, Parent = parent,
 	})
 	UI.corner(8).Parent = btn
@@ -284,7 +276,7 @@ local function ActionButton(parent, labelClosed, labelOpen)
 		else
 			tw(btn, {
 				BackgroundColor3 = hovered and T.TEXT or T.ACCENT,
-				TextColor3       = TEXT_ON_ACCENT,
+				TextColor3       = T.ON_ACCENT,
 			})
 			tw(btnStroke, { Transparency = 1 })
 		end
@@ -405,6 +397,44 @@ local function build()
 			if themeBtn.Parent then setThemeState(open) end
 		end
 	end)
+
+	-- ── TAMPILAN ───────────────────────────────────────────
+	-- Tema warna (themeColor): panel pemilih ThemeColorClient (StarterPlayerScripts) — _G.ToggleThemeColor.
+
+	Cat(content, L(), "TAMPILAN")
+
+	local tcRow = Row(content, L(), "Themes (game pass)")
+	local tcChip = UI.button({
+		Size = UDim2.new(0, 0, 0, 24), AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0), BackgroundColor3 = T.CHIP,
+		Text = ThemeColor.label(ThemeColor.current), TextColor3 = T.ON_ACCENT,
+		Font = FONT.BOLD, TextSize = 11, Parent = tcRow,
+	})
+	UI.corner(7).Parent = tcChip
+	UI.padding(0, 0, 10, 10).Parent = tcChip
+	-- Label baris memberi ruang selebar chip (nama tema beda panjang) → tidak bertumpuk di HP sempit.
+	local tcLabel = tcRow:FindFirstChildOfClass("TextLabel")
+	local function fitLabel()
+		if tcLabel and tcChip.AbsoluteSize.X > 0 then
+			tcLabel.Size = UDim2.new(1, -(tcChip.AbsoluteSize.X + 24), 1, 0)
+		end
+	end
+	tcChip:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitLabel)
+	fitLabel()
+	bindHover(tcChip, function(on)
+		tw(tcChip, { BackgroundColor3 = on and T.ACCENT or T.CHIP })
+	end)
+	tcChip.Activated:Connect(function()
+		if type(_G.ToggleThemeColor) ~= "function" then
+			warn("[Settings] _G.ToggleThemeColor belum tersedia")
+			return
+		end
+		_G.ToggleThemeColor()
+	end)
+	local stopTheme = ThemeColor.onChanged(function(id)
+		if tcChip.Parent then tcChip.Text = ThemeColor.label(id) end
+	end)
+	tcChip.Destroying:Connect(stopTheme)
 
 	-- ── GENERAL ────────────────────────────────────────────
 
@@ -613,9 +643,12 @@ local function build()
 		if _G.ThemeMapMenu and type(_G.ThemeMapMenu.Close) == "function" then
 			pcall(_G.ThemeMapMenu.Close)
 		end
+		if _G.ThemeColorMenu and type(_G.ThemeColorMenu.Close) == "function" then
+			pcall(_G.ThemeColorMenu.Close)
+		end
 
 		resetBtn.Text = "Tersetel ulang"
-		tw(resetBtn, { BackgroundColor3 = T.ACCENT, TextColor3 = TEXT_ON_ACCENT })
+		tw(resetBtn, { BackgroundColor3 = T.ACCENT, TextColor3 = T.ON_ACCENT })
 		task.delay(0.9, function()
 			if not resetBtn.Parent then return end
 			resetBtn.Text = "Reset setting"

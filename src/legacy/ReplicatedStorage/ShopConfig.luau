@@ -39,6 +39,18 @@ ShopConfig.gamepasses = {
 		giftProduct         = 3715173055,
 		giftProductRegional = 0,
 	},
+	{
+		-- themeColor: membuka semua tema warna UI berbayar (Settings › Themes). Nama WAJIB sama dengan
+		-- Config.ThemeColor.passName. Gift = developer product "Themes" (20 R$); owner rank ≥ adminRankMin gift gratis.
+		id                  = 2006030346,
+		legacyIds           = {},
+		name                = "Themes",
+		desc                = "Buka semua tema warna UI (Settings › Themes)",
+		icon                = "rbxassetid://103867908310819",
+		color               = Color3.fromRGB(200, 120, 255),
+		giftProduct         = 3715959464,
+		giftProductRegional = 0,
+	},
 }
 
 -- ═══════════════════════════════════════════════════════════

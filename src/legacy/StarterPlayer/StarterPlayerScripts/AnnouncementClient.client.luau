@@ -26,21 +26,22 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local Responsive = require(ReplicatedStorage:WaitForChild("CustomUIModules")
 	:WaitForChild("Responsive"))
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local GlobalAnnouncementEvent = ReplicatedStorage:WaitForChild("GlobalAnnouncementEvent")
 
 -- ════════════════════════════════════════════════════════════
--- THEME (sama dengan MenuSystemInit)
+-- THEME (ReplicatedStorage.Modules.ThemeColor — themeColor)
 -- ════════════════════════════════════════════════════════════
 
-local THEME = {
-	CARD   = Color3.fromRGB(26, 26, 28),
-	LINE   = Color3.fromRGB(255, 255, 255),
-	TEXT   = Color3.fromRGB(238, 238, 240),
-	ACCENT = Color3.fromRGB(212, 175, 55),
-}
+-- Tabel token BERSAMA (diisi ulang saat pemain ganti tema): THEME.CARD / LINE / TEXT / ACCENT dibaca saat baris dibuat.
+local THEME = ThemeColor.tokens
 
-local ACCENT_HEX = "#D4AF37"
+-- Warna nama di RichText = ACCENT tema SEKARANG, dihitung tiap pesan masuk (warna di dalam teks RichText tidak ikut
+-- lukis ulang ThemeColor). Classic Gold → "#D4AF37" seperti sebelumnya.
+local function accentHex(): string
+	return string.format("#%06X", ThemeColor.Rules.key(THEME.ACCENT))
+end
 
 local TWEEN_IN  = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local TWEEN_OUT = TweenInfo.new(0.16, Enum.EasingStyle.Quad,  Enum.EasingDirection.In)
@@ -111,6 +112,7 @@ if not gui then
 		Enabled = true, Parent = playerGui,
 	})
 end
+ThemeColor.mark(gui)
 
 local oldStack = gui:FindFirstChild("Stack")
 if oldStack then oldStack:Destroy() end
@@ -281,7 +283,7 @@ GlobalAnnouncementEvent.OnClientEvent:Connect(function(data)
 	local entry = makeRow({
 		userId = tonumber(data.userId) or 0,
 		rich   = string.format('<font color="%s"><b>%s</b></font>  %s',
-			ACCENT_HEX, escape(name), escape(trim(data.text))),
+			accentHex(), escape(name), escape(trim(data.text))),
 	})
 	table.insert(rows, entry)
 

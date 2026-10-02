@@ -43,6 +43,10 @@
 --  • Tinggi tag selalu sama, punya title atau tidak — nama tidak lompat.
 --  • Animasi title dijalankan client (TitlePlate), bukan server.
 --  • Ganti Role cuma menulis ulang label, tidak membangun ulang tag.
+--  • Warna NAMA = aksen tema warna pilihan pemain itu (atribut Player
+--    "ThemeColor" dari ServerScriptService.ThemeColor, Rules.nameColor),
+--    dilihat semua pemain. Tema polos (Default) = putih seperti dulu.
+--    Ganti tema cuma mewarnai ulang label, tidak membangun ulang tag.
 -- ═══════════════════════════════════════════════════════════
 
 local Players     = game:GetService("Players")
@@ -52,6 +56,8 @@ local TextService = game:GetService("TextService")
 local TextChat    = game:GetService("TextChatService")
 
 local RankConfig = require(SSS:WaitForChild("RankConfig"))
+local ThemeConfig = require(RS:WaitForChild("Config"):WaitForChild("ThemeColor"))
+local ThemeRules  = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"):WaitForChild("Rules"))
 
 local TitleStyle
 do
@@ -88,6 +94,8 @@ local NAME_Y   = ROLE_Y - GAP_N_R - NAME_H
 local STATUS_Y = NAME_Y - GAP_S - STATUS_H
 local TITLE_Y_WITH_STATUS = STATUS_Y - GAP_S - TITLE_H           -- 0
 local TITLE_Y_NO_STATUS   = NAME_Y - GAP_T_N - TITLE_H           -- title nempel nama
+
+local NAME_COLOR = Color3.fromRGB(238, 238, 238) -- nama tema polos (Default)
 
 local STATUS_STYLE = {
 	afk = { text = Color3.fromRGB(255, 195, 40),  bg = Color3.fromRGB(20, 20, 26), bgT = 0.15 },
@@ -129,6 +137,11 @@ end
 local function addConn(plr, c)
 	if not playerConns[plr] then playerConns[plr] = {} end
 	table.insert(playerConns[plr], c)
+end
+
+-- Warna nama: aksen tema warna pilihan pemain (ThemeColor), atau NAME_COLOR.
+local function nameColorOf(player)
+	return ThemeRules.nameColor(ThemeConfig, player:GetAttribute("ThemeColor")) or NAME_COLOR
 end
 
 local function roleOf(player)
@@ -314,7 +327,7 @@ local function applyTag(player, character)
 	end
 
 	makeLabel("NameLabel", NAME_Y, NAME_H,
-		player.DisplayName, Color3.fromRGB(238, 238, 238), 0.5)
+		player.DisplayName, nameColorOf(player), 0.5)
 
 	makeLabel("RoleLabel", ROLE_Y, ROLE_H,
 		roleData.displayText or "GUEST", roleColor, 1)
@@ -343,6 +356,15 @@ local function refreshRole(player)
 	lbl.TextColor3 = roleData.color or Color3.fromRGB(255, 255, 255)
 end
 
+-- Ganti tema warna cukup mewarnai ulang nama (tag tidak dibangun ulang).
+local function refreshName(player)
+	local char = player.Character
+	local head = char and char:FindFirstChild("Head")
+	local bill = head and head:FindFirstChild("OverheadTag")
+	local lbl  = bill and bill:FindFirstChild("NameLabel")
+	if lbl then lbl.TextColor3 = nameColorOf(player) end
+end
+
 -- ── Player setup ──────────────────────────────────────────
 
 local function setupPlayer(player)
@@ -350,6 +372,10 @@ local function setupPlayer(player)
 
 	addConn(player, player:GetAttributeChangedSignal("Role"):Connect(function()
 		refreshRole(player)
+	end))
+
+	addConn(player, player:GetAttributeChangedSignal("ThemeColor"):Connect(function()
+		refreshName(player)
 	end))
 
 	-- Aksesoris sering selesai dimuat SETELAH tag dibangun → ukur ulang.

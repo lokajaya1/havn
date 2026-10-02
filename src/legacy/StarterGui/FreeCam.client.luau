@@ -2,7 +2,7 @@
 -- StarterPlayer > StarterPlayerScripts
 
 -- PC  : WASD=gerak | Space=naik | LShift=turun | Q/E=FOV | [/]=speed | Arrow/Mouse=rotasi | H=hide UI | F8=toggle
--- MOB : D-Pad=gerak | ▲▼=naik/turun | +/−=speed | F+/F−=FOV | Swipe=rotasi | Pinch=zoom | ⊘=hide UI | ×=close
+-- MOB : D-Pad=gerak | ▲▼=naik/turun | +/−=speed | F+/F−=FOV | Swipe=rotasi | Pinch=zoom | ⊘=hide UI | X=close
 
 local Players              = game:GetService("Players")
 local RunService           = game:GetService("RunService")
@@ -10,6 +10,9 @@ local UserInputService     = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local TweenService         = game:GetService("TweenService")
 local StarterGui           = game:GetService("StarterGui")
+local ReplicatedStorage    = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local LP   = Players.LocalPlayer
 local Cam  = workspace.CurrentCamera
@@ -97,16 +100,19 @@ local UI = {}
 
 local function rgb(r, g, b) return Color3.fromRGB(r, g, b) end
 
-local THEME = {
-	Dark   = rgb(14, 14, 14),
-	Panel  = rgb(24, 24, 27),
-	White  = rgb(235, 235, 235),
-	Icon   = rgb(230, 230, 232),
-	Muted  = rgb(150, 150, 155),
-	Gold   = rgb(210, 165, 25),
-	Red    = rgb(225, 130, 130),
-	Grey   = rgb(180, 180, 180),
-}
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): THEME.X / T.X membaca token tema SEKARANG saat
+-- dipakai. FreecamCtrl & FreecamHUD di-mark → ikut dilukis ulang saat pemain ganti tema.
+local T = ThemeColor.tokens
+local THEME = ThemeColor.view({
+	Dark   = "BG",
+	Panel  = "CARD",
+	White  = "TEXT",
+	Icon   = "TEXT",
+	Muted  = "TEXT_DIM",
+	Gold   = "ACCENT",
+	Red    = "DANGER",
+	Grey   = "TEXT_DIM",
+})
 local TW = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local function corner(p, r)
@@ -117,7 +123,7 @@ end
 
 local function stroke(p, col, thick, trans)
 	local s = Instance.new("UIStroke")
-	s.Color        = col or rgb(80, 80, 80)
+	s.Color        = col or T.BORDER
 	s.Thickness    = thick or 1.5
 	s.Transparency = trans or 0.4
 	s.Parent       = p
@@ -206,7 +212,9 @@ local function hideAllUI()
 	hiddenGuis, savedCoreGuiStates = {}, {}
 	for _, cgType in ipairs(CORE_GUI_TO_HIDE) do
 		local ok, wasEnabled = pcall(StarterGui.GetCoreGuiEnabled, StarterGui, cgType)
-		savedCoreGuiStates[cgType] = (ok and wasEnabled) or true
+		-- Simpan keadaan ASLI (dulu `(ok and wasEnabled) or true` selalu true → keluar freecam menyalakan lagi CoreGui yang
+		-- sengaja dimatikan, mis. Backpack bawaan saat inventory HAVN dipakai → hotbar dobel).
+		savedCoreGuiStates[cgType] = if ok then wasEnabled else true
 		pcall(StarterGui.SetCoreGuiEnabled, StarterGui, cgType, false)
 	end
 	for _, sg in ipairs(PGui:GetChildren()) do
@@ -302,6 +310,7 @@ local function buildUI()
 	ctrlSG.Enabled        = false
 	ctrlSG.Parent         = PGui
 	UI.CtrlSG = ctrlSG
+	ThemeColor.mark(ctrlSG)
 
 	local hudSG = Instance.new("ScreenGui")
 	hudSG.Name           = "FreecamHUD"
@@ -310,6 +319,7 @@ local function buildUI()
 	hudSG.Enabled        = false
 	hudSG.Parent         = PGui
 	UI.HudSG = hudSG
+	ThemeColor.mark(hudSG)
 
 	-- ── CamZone: full-screen layer untuk drag/pinch (paling bawah) ──
 	UI.CamZone = makeButton({
@@ -352,13 +362,13 @@ local function buildUI()
 		opt.parent = rcFrame
 		opt.size   = UDim2.fromOffset(BTN, BTN)
 		opt.zi     = 50
-		opt.stroke = rgb(255, 255, 255)
+		opt.stroke = T.LINE -- garis tipis (transparansi 0,88) → LINE
 		local b = makeButton(opt)
 		b.LayoutOrder = order
 		return b
 	end
 
-	UI.CloseBtn = makeRC(1, { name = "CloseBtn", text = "×",  fs = 18, fg = THEME.Red })
+	UI.CloseBtn = makeRC(1, { name = "CloseBtn", text = "X",  fs = 14, fg = THEME.Red })
 	UI.HideBtn  = makeRC(2, { name = "HideBtn",  text = "⊘",  fs = 14 })
 	UI.SpdPlus  = makeRC(3, { name = "SpdPlus",  text = "+",  fg = THEME.Muted })
 	UI.SpdMinus = makeRC(4, { name = "SpdMinus", text = "−",  fg = THEME.Muted })
@@ -400,7 +410,7 @@ local function buildUI()
 	local center = Instance.new("Frame")
 	center.Size                   = UDim2.fromOffset(PAD, PAD)
 	center.Position               = UDim2.fromOffset(PSTEP, PSTEP)
-	center.BackgroundColor3       = rgb(30, 30, 30)
+	center.BackgroundColor3       = T.CARD
 	center.BackgroundTransparency = 0.5
 	center.BorderSizePixel        = 0
 	center.ZIndex                 = 9
@@ -825,4 +835,4 @@ wireInput()
 
 print("✅ [FreeCam v2] Ready — responsive UI (" .. (IS_TOUCH and "touch" or "desktop") .. ")")
 print("   PC  : WASD=gerak | Space=naik | LShift=turun | Q/E=FOV | [/]=speed | Arrow/Mouse=rotasi | H=hide UI | F8=toggle")
-print("   MOB : D-Pad=gerak | ▲▼=naik/turun | +/− & F+/F−=speed/FOV | Swipe=rotasi | Pinch=zoom | ⊘=hide UI | ×=close")
+print("   MOB : D-Pad=gerak | ▲▼=naik/turun | +/− & F+/F−=speed/FOV | Swipe=rotasi | Pinch=zoom | ⊘=hide UI | X=close")

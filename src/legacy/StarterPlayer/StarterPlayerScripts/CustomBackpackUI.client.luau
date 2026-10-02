@@ -1,809 +1,903 @@
--- CustomBackpackUI (LocalScript — StarterPlayerScripts)
+-- StarterPlayerScripts/CustomBackpackUI (LocalScript) — tas / inventory HAVN (claude/Rencana_Inventory.md).
+-- Menggantikan backpack bawaan Roblox (CoreGui Backpack dimatikan). Gaya clean-modern, warna dari ThemeColor (ikut tema):
+--   • Hotbar bawah-tengah: slot 1–9, 0 (HP 3–6). Klik / tombol angka = pakai ↔ lepas (seperti Roblox). Slot yang dipakai =
+--     garis aksen bergerak. Hover (mouse) = tooltip nama + ToolTip.
+--   • Kiri hotbar: ikon TAS (jumlah tool) + tombol ˅ di bawahnya = sembunyikan hotbar (layar bersih, tinggal tas; tombol
+--     angka tetap jalan); ˄ = tampilkan lagi.
+--   • ` (Backquote, Mac & Windows) / klik tas = jendela INVENTORY: semua tool + kotak cari (nama / ToolTip). Klik kartu =
+--     pakai. Seret kartu ke slot hotbar = atur (tukar); seret slot keluar hotbar = lepas dari hotbar (layar sentuh: tahan
+--     sebentar lalu seret). ` / tas / X / Esc = tutup. Ikut PanelCoordinator (satu panel terbuka → tidak bertumpuk).
+--   • Backspace (buang tool) = perilaku bawaan Roblox (Tool.CanBeDropped), tidak disentuh skrip ini.
+--   • Gamepad: LB / RB = tool sebelumnya / berikutnya.
+-- Logika murni: ReplicatedStorage.Modules.Inventory · angka: ReplicatedStorage.Config.Inventory.
+-- (Dulu skrip ini prototipe hotbar emas yang Disabled; diganti total, nama & tempat dipertahankan.)
 
-local Players             = game:GetService("Players")
-local UserInputService    = game:GetService("UserInputService")
-local TweenService        = game:GetService("TweenService")
-local StarterGui          = game:GetService("StarterGui")
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local TextChatService = game:GetService("TextChatService")
+local RS = game:GetService("ReplicatedStorage")
 
-local player   = Players.LocalPlayer
-local backpack = player:WaitForChild("Backpack")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- ══════════════════════════════════════════════════════════
--- SLOT ORDER (tool lain tetap muncul di inventory panel)
--- ══════════════════════════════════════════════════════════
-local SLOT_ORDER = {
-	"GlowStick",
-	"Sign",
-	"WaterGun",
-	"Money Gun",
-}
-
--- ══════════════════════════════════════════════════════════
--- WARNA
--- ══════════════════════════════════════════════════════════
-local C = {
-	BG          = Color3.fromRGB(14, 14, 14),
-	SLOT_IDLE   = Color3.fromRGB(24, 22, 15),
-	SLOT_ACT    = Color3.fromRGB(42, 35, 10),
-	SLOT_HOVER  = Color3.fromRGB(32, 28, 12),
-	BORDER      = Color3.fromRGB(55, 55, 55),
-	BORDER_ACT  = Color3.fromRGB(195, 155, 35),
-	GOLD        = Color3.fromRGB(195, 155, 35),
-	TEXT_TOOL   = Color3.fromRGB(200, 200, 200),
-	TEXT_NUM    = Color3.fromRGB(80, 70, 28),
-	TEXT_DIM    = Color3.fromRGB(130, 125, 100),
-	INV_BG      = Color3.fromRGB(14, 14, 14),
-	INV_CELL    = Color3.fromRGB(24, 22, 15),
-	INV_TITLE   = Color3.fromRGB(195, 155, 35),
-	TIP_BG      = Color3.fromRGB(10, 10, 10),
-	TIP_TEXT    = Color3.fromRGB(215, 215, 215),
-	TIP_SUB     = Color3.fromRGB(100, 95, 50),
-}
-
-local SLOT_SIZE = 52
-local GAP       = 5
-local ICON_SIZE = 30
-
--- ══════════════════════════════════════════════════════════
--- DISABLE DEFAULT ROBLOX BACKPACK GUI
--- ══════════════════════════════════════════════════════════
+-- Backpack bawaan dimatikan SECEPATNYA (sebelum menunggu modul) supaya hotbar Roblox tidak sempat muncul.
 local function disableDefault()
-	pcall(function()
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
-	end)
+	pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false)
 end
-
 disableDefault()
 task.spawn(function()
-	for _ = 1, 10 do
-		task.wait(0.1)
+	for _ = 1, 20 do
+		task.wait(0.25)
 		disableDefault()
 	end
 end)
 
-player.CharacterAdded:Connect(function()
-	task.spawn(function()
-		for _ = 1, 10 do
-			task.wait(0.1)
-			disableDefault()
+local Modules = RS:WaitForChild("Modules")
+local ThemeColor = require(Modules:WaitForChild("ThemeColor"))
+local Rules = require(Modules:WaitForChild("Inventory"))
+local Config = require(RS:WaitForChild("Config"):WaitForChild("Inventory"))
+local Responsive = require(RS:WaitForChild("CustomUIModules"):WaitForChild("Responsive"))
+
+local T = ThemeColor.tokens
+local FONT = { BOLD = Enum.Font.BuilderSansBold, MEDIUM = Enum.Font.BuilderSansMedium, REGULAR = Enum.Font.BuilderSans }
+local PAD = 12 -- padding jendela inventory
+local HEAD_H, SEARCH_H, HINT_H = 24, 32, 12
+
+-- ── helper ────────────────────────────────────────────────────────────────────────────────────────────────────────
+local function new(class, props)
+	local o = Instance.new(class)
+	for k, v in props do
+		if k ~= "Parent" then
+			o[k] = v
 		end
-	end)
-end)
-
--- ══════════════════════════════════════════════════════════
--- GUI SETUP
--- ══════════════════════════════════════════════════════════
-local playerGui = player:WaitForChild("PlayerGui")
-if playerGui:FindFirstChild("CustomBackpack") then
-	playerGui.CustomBackpack:Destroy()
+	end
+	if props.Parent then
+		o.Parent = props.Parent
+	end
+	return o
+end
+local function corner(p, r)
+	new("UICorner", { CornerRadius = r, Parent = p })
+end
+local function stroke(p, color, tr, th)
+	return new("UIStroke", {
+		Color = color, Transparency = tr, Thickness = th or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = p,
+	})
+end
+local function tw(o, t, props)
+	TweenService:Create(o, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
 end
 
-local gui = Instance.new("ScreenGui")
-gui.Name            = "CustomBackpack"
-gui.ResetOnSpawn    = false
-gui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder    = 10
-gui.IgnoreGuiInset  = false
-gui.Parent          = playerGui
-
-local BAR_H = SLOT_SIZE + GAP * 2
-
--- ══════════════════════════════════════════════════════════
--- HOTBAR FRAME
--- ══════════════════════════════════════════════════════════
-local bar = Instance.new("Frame")
-bar.Name                   = "HotBar"
-bar.AnchorPoint            = Vector2.new(0.5, 1)
-bar.Position               = UDim2.new(0.5, 0, 1, -10)
-bar.Size                   = UDim2.new(0, 100, 0, BAR_H)
-bar.BackgroundColor3       = C.BG
-bar.BackgroundTransparency = 0.25
-bar.BorderSizePixel        = 0
-bar.Parent                 = gui
-Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 10)
-local barStroke            = Instance.new("UIStroke", bar)
-barStroke.Color            = C.GOLD
-barStroke.Thickness        = 1
-barStroke.Transparency     = 0.7
-
--- ══════════════════════════════════════════════════════════
--- TOMBOL INVENTORY (🎒)
--- ══════════════════════════════════════════════════════════
-local invBtn = Instance.new("Frame")
-invBtn.Name                   = "InvBtn"
-invBtn.Size                   = UDim2.new(0, SLOT_SIZE, 0, SLOT_SIZE)
-invBtn.AnchorPoint            = Vector2.new(0, 0.5)
-invBtn.Position               = UDim2.new(0, GAP, 0.5, 0) -- FIX: posisi awal sebelum rebuildHotbar
-invBtn.BackgroundColor3       = Color3.fromRGB(20, 18, 10)
-invBtn.BackgroundTransparency = 0.3
-invBtn.BorderSizePixel        = 0
-invBtn.Parent                 = bar
-Instance.new("UICorner", invBtn).CornerRadius = UDim.new(0, 8)
-local invBtnStroke            = Instance.new("UIStroke", invBtn)
-invBtnStroke.Color            = C.GOLD
-invBtnStroke.Thickness        = 1
-invBtnStroke.Transparency     = 0.4
-
-local invIconLbl = Instance.new("TextLabel", invBtn)
-invIconLbl.Size                   = UDim2.new(1, 0, 0.65, 0)
-invIconLbl.Position               = UDim2.new(0, 0, 0, 4)
-invIconLbl.BackgroundTransparency = 1
-invIconLbl.Text                   = "🎒"
-invIconLbl.TextSize               = 20
-invIconLbl.Font                   = Enum.Font.GothamBold
-invIconLbl.TextXAlignment         = Enum.TextXAlignment.Center
-invIconLbl.TextYAlignment         = Enum.TextYAlignment.Center
-invIconLbl.ZIndex                 = 3
-
-local invHintLbl = Instance.new("TextLabel", invBtn)
-invHintLbl.Size                   = UDim2.new(1, 0, 0, 12)
-invHintLbl.Position               = UDim2.new(0, 0, 1, -14)
-invHintLbl.BackgroundTransparency = 1
-invHintLbl.Text                   = "[ ` ]"
-invHintLbl.TextColor3             = C.TEXT_NUM
-invHintLbl.TextSize               = 7
-invHintLbl.Font                   = Enum.Font.Gotham
-invHintLbl.TextXAlignment         = Enum.TextXAlignment.Center
-invHintLbl.ZIndex                 = 3
-
-local invBtnClick = Instance.new("TextButton", invBtn)
-invBtnClick.Size                   = UDim2.new(1, 0, 1, 0)
-invBtnClick.BackgroundTransparency = 1
-invBtnClick.Text                   = ""
-invBtnClick.ZIndex                 = 10
-
--- ══════════════════════════════════════════════════════════
--- TOOLTIP
--- ══════════════════════════════════════════════════════════
-local tip = Instance.new("Frame")
-tip.Size                   = UDim2.new(0, 160, 0, 46)
-tip.BackgroundColor3       = C.TIP_BG
-tip.BackgroundTransparency = 0.1
-tip.BorderSizePixel        = 0
-tip.Visible                = false
-tip.ZIndex                 = 80
-tip.Parent                 = gui
-Instance.new("UICorner", tip).CornerRadius = UDim.new(0, 7)
-local tipStroke            = Instance.new("UIStroke", tip)
-tipStroke.Color            = C.GOLD
-tipStroke.Thickness        = 1
-tipStroke.Transparency     = 0.5
-
-local tipName = Instance.new("TextLabel", tip)
-tipName.Size                   = UDim2.new(1, -10, 0, 22)
-tipName.Position               = UDim2.new(0, 7, 0, 4)
-tipName.BackgroundTransparency = 1
-tipName.TextColor3             = C.TIP_TEXT
-tipName.TextSize               = 11
-tipName.Font                   = Enum.Font.GothamBold
-tipName.TextXAlignment         = Enum.TextXAlignment.Left
-tipName.Text                   = ""
-
-local tipSub = Instance.new("TextLabel", tip)
-tipSub.Size                   = UDim2.new(1, -10, 0, 16)
-tipSub.Position               = UDim2.new(0, 7, 0, 26)
-tipSub.BackgroundTransparency = 1
-tipSub.TextColor3             = C.TIP_SUB
-tipSub.TextSize               = 9
-tipSub.Font                   = Enum.Font.Gotham
-tipSub.TextXAlignment         = Enum.TextXAlignment.Left
-tipSub.Text                   = ""
-
--- ══════════════════════════════════════════════════════════
--- INVENTORY PANEL
--- ══════════════════════════════════════════════════════════
-local invPanel = Instance.new("Frame")
-invPanel.Name                   = "InventoryPanel"
-invPanel.Size                   = UDim2.new(0, 360, 0, 320)
-invPanel.AnchorPoint            = Vector2.new(0.5, 1)
-invPanel.Position               = UDim2.new(0.5, 0, 1, -(BAR_H + 10 + 8))
-invPanel.BackgroundColor3       = C.INV_BG
-invPanel.BackgroundTransparency = 0.06
-invPanel.BorderSizePixel        = 0
-invPanel.Visible                = false
-invPanel.ZIndex                 = 30
-invPanel.Parent                 = gui
-Instance.new("UICorner", invPanel).CornerRadius = UDim.new(0, 12)
-local invPanelStroke            = Instance.new("UIStroke", invPanel)
-invPanelStroke.Color            = C.GOLD
-invPanelStroke.Thickness        = 1
-invPanelStroke.Transparency     = 0.4
-
-local invHeader = Instance.new("Frame", invPanel)
-invHeader.Size                   = UDim2.new(1, 0, 0, 38)
-invHeader.BackgroundColor3       = Color3.fromRGB(20, 17, 7)
-invHeader.BackgroundTransparency = 0.1
-invHeader.BorderSizePixel        = 0
-invHeader.ZIndex                 = 31
-Instance.new("UICorner", invHeader).CornerRadius = UDim.new(0, 12)
-
-local invHeaderFix = Instance.new("Frame", invPanel)
-invHeaderFix.Size                   = UDim2.new(1, 0, 0, 12)
-invHeaderFix.Position               = UDim2.new(0, 0, 0, 26)
-invHeaderFix.BackgroundColor3       = Color3.fromRGB(20, 17, 7)
-invHeaderFix.BackgroundTransparency = 0.1
-invHeaderFix.BorderSizePixel        = 0
-invHeaderFix.ZIndex                 = 31
-
-local invHeaderLbl = Instance.new("TextLabel", invHeader)
-invHeaderLbl.Size                   = UDim2.new(1, -12, 1, 0)
-invHeaderLbl.Position               = UDim2.new(0, 12, 0, 0)
-invHeaderLbl.BackgroundTransparency = 1
-invHeaderLbl.Text                   = "🎒  Inventory"
-invHeaderLbl.TextColor3             = C.INV_TITLE
-invHeaderLbl.TextSize               = 13
-invHeaderLbl.Font                   = Enum.Font.GothamBold
-invHeaderLbl.TextXAlignment         = Enum.TextXAlignment.Left
-invHeaderLbl.ZIndex                 = 32
-
-local invCloseLbl = Instance.new("TextLabel", invHeader)
-invCloseLbl.Size                   = UDim2.new(0, 90, 1, 0)
-invCloseLbl.Position               = UDim2.new(1, -95, 0, 0)
-invCloseLbl.BackgroundTransparency = 1
-invCloseLbl.Text                   = "[ ` ] tutup"
-invCloseLbl.TextColor3             = Color3.fromRGB(70, 65, 35)
-invCloseLbl.TextSize               = 9
-invCloseLbl.Font                   = Enum.Font.Gotham
-invCloseLbl.TextXAlignment         = Enum.TextXAlignment.Right
-invCloseLbl.ZIndex                 = 32
-
-local invDiv = Instance.new("Frame", invPanel)
-invDiv.Size                   = UDim2.new(1, -16, 0, 1)
-invDiv.Position               = UDim2.new(0, 8, 0, 39)
-invDiv.BackgroundColor3       = C.GOLD
-invDiv.BackgroundTransparency = 0.5
-invDiv.BorderSizePixel        = 0
-invDiv.ZIndex                 = 32
-
-local invCountLbl = Instance.new("TextLabel", invPanel)
-invCountLbl.Size                   = UDim2.new(1, -16, 0, 14)
-invCountLbl.Position               = UDim2.new(0, 12, 0, 42)
-invCountLbl.BackgroundTransparency = 1
-invCountLbl.Text                   = ""
-invCountLbl.TextColor3             = Color3.fromRGB(70, 65, 35)
-invCountLbl.TextSize               = 9
-invCountLbl.Font                   = Enum.Font.Gotham
-invCountLbl.TextXAlignment         = Enum.TextXAlignment.Left
-invCountLbl.ZIndex                 = 32
-
-local invScroll = Instance.new("ScrollingFrame", invPanel)
-invScroll.Size                   = UDim2.new(1, -10, 1, -62)
-invScroll.Position               = UDim2.new(0, 5, 0, 57)
-invScroll.BackgroundTransparency = 1
-invScroll.BorderSizePixel        = 0
-invScroll.ScrollBarThickness     = 3
-invScroll.ScrollBarImageColor3   = C.GOLD
-invScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
-invScroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
-invScroll.ZIndex                 = 31
-
-local invGrid = Instance.new("UIGridLayout", invScroll)
-invGrid.CellSize            = UDim2.new(0, 68, 0, 82)
-invGrid.CellPadding         = UDim2.new(0, 6, 0, 6)
-invGrid.SortOrder           = Enum.SortOrder.LayoutOrder
-invGrid.StartCorner         = Enum.StartCorner.TopLeft
-invGrid.HorizontalAlignment = Enum.HorizontalAlignment.Left
-
-local invPad = Instance.new("UIPadding", invScroll)
-invPad.PaddingLeft   = UDim.new(0, 4)
-invPad.PaddingTop    = UDim.new(0, 4)
-invPad.PaddingBottom = UDim.new(0, 8)
-invPad.PaddingRight  = UDim.new(0, 4)
-
--- ══════════════════════════════════════════════════════════
--- STATE
--- ══════════════════════════════════════════════════════════
-local activeSlot = nil
-local slotFrames = {}
-local invOpen    = false
-
--- ══════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════
-local function findTool(name)
-	if not name or name == "" then return nil end
-	return backpack:FindFirstChild(name)
-		or (player.Character and player.Character:FindFirstChild(name))
+-- Ikon digambar dari Frame (bukan emoji/aset) → tajam & ikut warna tema.
+local function bagIcon(parent)
+	local g = new("Frame", { Name = "BagIcon", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, Parent = parent })
+	local handle = new("Frame", { Name = "Handle", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0),
+		Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, Parent = g })
+	corner(handle, UDim.new(1, 0))
+	local hs = stroke(handle, T.TEXT_STRONG, 0, 2)
+	local body = new("Frame", { Name = "Body", Position = UDim2.fromOffset(1, 6), Size = UDim2.new(1, -2, 1, -6),
+		BackgroundColor3 = T.TEXT_STRONG, BorderSizePixel = 0, Parent = g })
+	corner(body, UDim.new(0, 5))
+	local pocket = new("Frame", { Name = "Pocket", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12),
+		Size = UDim2.fromOffset(8, 2), BackgroundColor3 = T.CARD, BorderSizePixel = 0, Parent = g })
+	corner(pocket, UDim.new(1, 0))
+	return { body = body, handle = hs, pocket = pocket }
 end
 
-local function getHumanoid()
+local function chevron(parent)
+	local c = new("Frame", { Name = "Chevron", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(12, 8), BackgroundTransparency = 1, Parent = parent })
+	for _, side in { -1, 1 } do -- "\" kiri + "/" kanan = ˅ (diputar 180° = ˄)
+		local bar = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, side * 2.6, 0.5, 0),
+			Size = UDim2.fromOffset(7, 2), Rotation = -side * 40, BackgroundColor3 = T.TEXT_DIM, BorderSizePixel = 0, Parent = c })
+		corner(bar, UDim.new(1, 0))
+	end
+	return c
+end
+
+local function magnifier(parent)
+	local m = new("Frame", { Name = "Magnifier", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1, Parent = parent })
+	local ring = new("Frame", { Size = UDim2.fromOffset(9, 9), BackgroundTransparency = 1, Parent = m })
+	corner(ring, UDim.new(1, 0))
+	stroke(ring, T.TEXT_DIM, 0, 1.5)
+	local h = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(10.5, 10.5), Size = UDim2.fromOffset(5, 2),
+		Rotation = 45, BackgroundColor3 = T.TEXT_DIM, BorderSizePixel = 0, Parent = m })
+	corner(h, UDim.new(1, 0))
+end
+
+-- ── kerangka ──────────────────────────────────────────────────────────────────────────────────────────────────────
+local old = playerGui:FindFirstChild("CustomBackpack")
+if old then
+	old:Destroy()
+end
+local gui = new("ScreenGui", { Name = "CustomBackpack", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 10,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
+ThemeColor.mark(gui)
+
+-- Dock = [tas/˅][slot…], SELALU di tengah layar: AnchorPoint 0.5 + lebar = persis isi yang tampil (Rules.dock) → tengah
+-- presisi saat biasa, saat hotbar disembunyikan (tinggal tas), dan saat inventory dibuka (semua slot).
+local dock = new("Frame", { Name = "Dock", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -Config.bottom),
+	BackgroundTransparency = 1, Parent = gui })
+local bagCol = new("Frame", { Name = "BagColumn", BackgroundTransparency = 1, Parent = dock })
+local bagBtn = new("TextButton", { Name = "Bag", BackgroundColor3 = T.CARD, BackgroundTransparency = 0.12, AutoButtonColor = false,
+	Text = "", Parent = bagCol })
+corner(bagBtn, UDim.new(0, 12))
+local bagStroke = stroke(bagBtn, T.LINE, 0.9)
+local bag = bagIcon(bagBtn)
+local badge = new("TextLabel", { Name = "Count", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 4, 0, -4),
+	Size = UDim2.fromOffset(0, 16), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = T.ACCENT, TextColor3 = T.ON_ACCENT,
+	Font = FONT.BOLD, TextSize = 10, Text = "0", Visible = false, ZIndex = 3, Parent = bagBtn })
+corner(badge, UDim.new(1, 0))
+new("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), Parent = badge })
+new("UISizeConstraint", { MinSize = Vector2.new(16, 16), Parent = badge })
+local hideBtn = new("TextButton", { Name = "Hide", BackgroundColor3 = T.CARD, BackgroundTransparency = 0.25, AutoButtonColor = false,
+	Text = "", Parent = bagCol })
+corner(hideBtn, UDim.new(0, 7))
+local chev = chevron(hideBtn)
+local row = new("Frame", { Name = "Slots", BackgroundTransparency = 1, Parent = dock })
+
+-- Jendela inventory (di atas hotbar, tengah layar).
+local inv = new("Frame", { Name = "Inventory", AnchorPoint = Vector2.new(0.5, 1), BackgroundColor3 = T.BG, Active = true,
+	Visible = false, ZIndex = 5, Parent = gui })
+corner(inv, UDim.new(0, 14))
+ThemeColor.glow(stroke(inv, T.LINE, 0.88), "panel")
+local invScale = new("UIScale", { Parent = inv })
+local head = new("Frame", { Name = "Head", Position = UDim2.fromOffset(PAD + 2, PAD), Size = UDim2.new(1, -(PAD * 2 + 30), 0, HEAD_H),
+	BackgroundTransparency = 1, Parent = inv })
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center,
+	Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = head })
+new("TextLabel", { Name = "Title", Size = UDim2.fromOffset(0, HEAD_H), AutomaticSize = Enum.AutomaticSize.X,
+	BackgroundTransparency = 1, Text = "INVENTORY", Font = FONT.BOLD, TextSize = 14, TextColor3 = T.TEXT_STRONG, LayoutOrder = 1,
+	Parent = head })
+local countPill = new("TextLabel", { Name = "Count", Size = UDim2.fromOffset(0, 18), AutomaticSize = Enum.AutomaticSize.X,
+	BackgroundColor3 = T.CHIP, TextColor3 = T.ON_ACCENT, Font = FONT.BOLD, TextSize = 11, Text = "0", LayoutOrder = 2, Parent = head })
+corner(countPill, UDim.new(1, 0))
+new("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7), Parent = countPill })
+local closeBtn = new("TextButton", { Name = "Close", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(PAD - 4), 0, PAD - 1),
+	Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1, Text = "X", Font = FONT.BOLD, TextSize = 13,
+	TextColor3 = T.TEXT_DIM, AutoButtonColor = false, Parent = inv })
+local searchBg = new("Frame", { Name = "Search", Position = UDim2.fromOffset(PAD, PAD + HEAD_H + 8),
+	Size = UDim2.new(1, -PAD * 2, 0, SEARCH_H), BackgroundColor3 = T.CARD, BorderSizePixel = 0, Parent = inv })
+corner(searchBg, UDim.new(0, 10))
+magnifier(searchBg)
+local search = new("TextBox", { Name = "Query", Position = UDim2.fromOffset(30, 0), Size = UDim2.new(1, -40, 1, 0),
+	BackgroundTransparency = 1, Text = "", PlaceholderText = "Cari tool…", PlaceholderColor3 = T.TEXT_DIM, TextColor3 = T.TEXT,
+	Font = FONT.REGULAR, TextSize = 13, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left, Parent = searchBg })
+local GRID_Y = PAD + HEAD_H + 8 + SEARCH_H + 10
+local grid = new("ScrollingFrame", { Name = "Grid", Position = UDim2.fromOffset(PAD, GRID_Y), BackgroundTransparency = 1,
+	BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = T.SCROLL, CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y,
+	VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar, Parent = inv })
+new("UIGridLayout", { CellSize = UDim2.fromOffset(Config.cell, Config.cellH), CellPadding = UDim2.fromOffset(Config.cellGap,
+	Config.cellGap), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
+new("UIPadding", { PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 2), PaddingLeft = UDim.new(0, 2),
+	PaddingRight = UDim.new(0, 2), Parent = grid })
+local emptyLbl = new("TextLabel", { Name = "Empty", Position = UDim2.fromOffset(PAD, GRID_Y), Size = UDim2.new(1, -PAD * 2, 0, 40),
+	BackgroundTransparency = 1, Text = "", Font = FONT.MEDIUM, TextSize = 13, TextColor3 = T.TEXT_DIM, Visible = false, Parent = inv })
+local hint = new("TextLabel", { Name = "Hint", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, PAD + 2, 1, -PAD + 2),
+	Size = UDim2.new(1, -PAD * 2, 0, HINT_H), BackgroundTransparency = 1, Text = "", Font = FONT.REGULAR, TextSize = 11,
+	TextColor3 = T.TEXT_DIM, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = inv })
+
+-- Tooltip (mouse) di atas slot / tas.
+local tip = new("Frame", { Name = "Tip", AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(0, 0),
+	AutomaticSize = Enum.AutomaticSize.XY, BackgroundColor3 = T.BG, Visible = false, ZIndex = 20, Parent = gui })
+corner(tip, UDim.new(0, 8))
+stroke(tip, T.LINE, 0.85)
+new("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 9), PaddingTop = UDim.new(0, 5),
+	PaddingBottom = UDim.new(0, 5), Parent = tip })
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = tip })
+local tipName = new("TextLabel", { Name = "Name", Size = UDim2.fromOffset(0, 16), AutomaticSize = Enum.AutomaticSize.X,
+	BackgroundTransparency = 1, Font = FONT.BOLD, TextSize = 12, TextColor3 = T.TEXT_STRONG, LayoutOrder = 1, ZIndex = 21, Parent = tip })
+local tipSub = new("TextLabel", { Name = "Sub", Size = UDim2.fromOffset(0, 14), AutomaticSize = Enum.AutomaticSize.X,
+	BackgroundTransparency = 1, Font = FONT.REGULAR, TextSize = 11, TextColor3 = T.TEXT_DIM, LayoutOrder = 2, ZIndex = 21, Parent = tip })
+
+-- Bayangan tool yang sedang diseret.
+local ghost = new("Frame", { Name = "DragGhost", BackgroundColor3 = T.CARD_HOVER, Visible = false, ZIndex = 30, Parent = gui })
+corner(ghost, UDim.new(0, 12))
+local ghostStroke = stroke(ghost, T.ACCENT, 0, 2)
+local ghostIcon = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromScale(0.6, 0.6), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, ZIndex = 31, Parent = ghost })
+local ghostLabel = new("TextLabel", { Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), BackgroundTransparency = 1,
+	Font = FONT.BOLD, TextSize = 11, TextColor3 = T.TEXT, TextWrapped = true, ZIndex = 31, Parent = ghost })
+
+-- ── keadaan ───────────────────────────────────────────────────────────────────────────────────────────────────────
+local state = Rules.new(Config.slotsMax)
+local tools = {} -- nama → Tool (yang ada sekarang)
+local names = {} -- nama tool yang ada, urutan datang
+local invOpen, hidden = false, false
+local L = { phone = false, S = Config.slot, gap = Config.gap, bagW = 42, count = Config.slotsMax }
+local slots, cards = {}, {}
+local dropTarget = nil -- slot yang sedang disorot sebagai sasaran seret
+local press, drag = nil, nil
+local suppressClick = 0 -- os.clock() sampai klik diabaikan (ekor seret)
+
+local function humanoid()
 	local char = player.Character
 	return char and char:FindFirstChildOfClass("Humanoid")
 end
 
-local function getAllToolsSorted()
-	local result = {}
-	local seen   = {}
+local function equippedTool()
+	local char = player.Character
+	return char and char:FindFirstChildOfClass("Tool")
+end
 
-	for _, name in ipairs(SLOT_ORDER) do
-		local t = findTool(name)
-		if t and not seen[t.Name] then
-			table.insert(result, t)
-			seen[t.Name] = true
+local function scan()
+	table.clear(tools)
+	table.clear(names)
+	local function add(tool)
+		if tool:IsA("Tool") and not tools[tool.Name] then
+			tools[tool.Name] = tool
+			table.insert(names, tool.Name)
 		end
 	end
-
-	local bpChildren = backpack:GetChildren()
-	table.sort(bpChildren, function(a, b) return a.Name < b.Name end)
-	for _, child in ipairs(bpChildren) do
-		if child:IsA("Tool") and not seen[child.Name] then
-			table.insert(result, child)
-			seen[child.Name] = true
+	local bp = player:FindFirstChildOfClass("Backpack")
+	if bp then
+		for _, c in bp:GetChildren() do
+			add(c)
 		end
 	end
-
 	local char = player.Character
 	if char then
-		for _, child in ipairs(char:GetChildren()) do
-			if child:IsA("Tool") and not seen[child.Name] then
-				table.insert(result, child)
-				seen[child.Name] = true
-			end
+		for _, c in char:GetChildren() do
+			add(c)
 		end
-	end
-
-	return result
-end
-
--- ══════════════════════════════════════════════════════════
--- EQUIP TOGGLE
--- ══════════════════════════════════════════════════════════
-local function equipToggle(toolName)
-	local hum = getHumanoid()
-	if not hum then return end
-
-	if activeSlot == toolName then
-		activeSlot = nil
-		hum:UnequipTools()
-	else
-		activeSlot = toolName
-		hum:UnequipTools()
-		task.wait(0.05)
-		local t = backpack:FindFirstChild(toolName)
-		if t then hum:EquipTool(t) end
 	end
 end
 
--- ══════════════════════════════════════════════════════════
--- REBUILD INVENTORY PANEL
--- ══════════════════════════════════════════════════════════
-local function rebuildInventory()
-	for _, child in ipairs(invScroll:GetChildren()) do
-		if not child:IsA("UIGridLayout") and not child:IsA("UIPadding") then
-			child:Destroy()
-		end
-	end
-
-	local tools = getAllToolsSorted()
-	invCountLbl.Text = #tools > 0 and (#tools .. " item") or ""
-
-	if #tools == 0 then
-		local empty = Instance.new("TextLabel", invScroll)
-		empty.Size                   = UDim2.new(0, 320, 0, 80)
-		empty.BackgroundTransparency = 1
-		empty.Text                   = "Inventory kosong"
-		empty.TextColor3             = Color3.fromRGB(60, 58, 35)
-		empty.TextSize               = 12
-		empty.Font                   = Enum.Font.Gotham
-		empty.TextXAlignment         = Enum.TextXAlignment.Center
-		empty.TextYAlignment         = Enum.TextYAlignment.Center
-		empty.LayoutOrder            = 999
-		empty.ZIndex                 = 32
+local function toggleEquip(name)
+	local hum, tool = humanoid(), tools[name]
+	if not (hum and tool) or hum.Health <= 0 then
 		return
 	end
-
-	for order, tool in ipairs(tools) do
-		local tName = tool.Name
-		local isAct = (tName == activeSlot)
-
-		local cell = Instance.new("Frame", invScroll)
-		cell.Size                   = UDim2.new(0, 68, 0, 82)
-		cell.BackgroundColor3       = isAct and C.SLOT_ACT or C.INV_CELL
-		cell.BackgroundTransparency = isAct and 0.06 or 0.32
-		cell.BorderSizePixel        = 0
-		cell.LayoutOrder            = order
-		cell.ZIndex                 = 32
-		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, 8)
-
-		local cs = Instance.new("UIStroke", cell)
-		cs.Color        = isAct and C.BORDER_ACT or C.BORDER
-		cs.Thickness    = isAct and 1.5 or 0.6
-		cs.Transparency = isAct and 0 or 0.6
-
-		if isAct then
-			local topLine = Instance.new("Frame", cell)
-			topLine.Size                   = UDim2.new(0.6, 0, 0, 2)
-			topLine.Position               = UDim2.new(0.2, 0, 0, 2)
-			topLine.BackgroundColor3       = C.GOLD
-			topLine.BackgroundTransparency = 0
-			topLine.BorderSizePixel        = 0
-			topLine.ZIndex                 = 34
-			Instance.new("UICorner", topLine).CornerRadius = UDim.new(1, 0)
-		end
-
-		local tex = tool.TextureId
-		if tex ~= "" and tex ~= "rbxassetid://0" then
-			local ico = Instance.new("ImageLabel", cell)
-			ico.Size                   = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE)
-			ico.Position               = UDim2.new(0.5, -ICON_SIZE/2, 0, 10)
-			ico.BackgroundTransparency = 1
-			ico.ScaleType              = Enum.ScaleType.Fit
-			ico.Image                  = tex
-			ico.ImageTransparency      = isAct and 0 or 0.05
-			ico.ZIndex                 = 33
-		else
-			local tlbl = Instance.new("TextLabel", cell)
-			tlbl.Size                   = UDim2.new(1, -4, 0, ICON_SIZE)
-			tlbl.Position               = UDim2.new(0, 2, 0, 10)
-			tlbl.BackgroundTransparency = 1
-			tlbl.Text                   = tName
-			tlbl.TextColor3             = isAct and C.TEXT_TOOL or C.TEXT_DIM
-			tlbl.TextSize               = 7
-			tlbl.Font                   = Enum.Font.GothamBold
-			tlbl.TextWrapped            = true
-			tlbl.TextXAlignment         = Enum.TextXAlignment.Center
-			tlbl.TextYAlignment         = Enum.TextYAlignment.Center
-			tlbl.ZIndex                 = 33
-		end
-
-		local nameLbl = Instance.new("TextLabel", cell)
-		nameLbl.Size                   = UDim2.new(1, -4, 0, 24)
-		nameLbl.Position               = UDim2.new(0, 2, 1, -26)
-		nameLbl.BackgroundTransparency = 1
-		nameLbl.Text                   = tName
-		nameLbl.TextColor3             = isAct and C.GOLD or C.TEXT_DIM
-		nameLbl.TextSize               = 7
-		nameLbl.Font                   = Enum.Font.GothamBold
-		nameLbl.TextWrapped            = true
-		nameLbl.TextTruncate           = Enum.TextTruncate.AtEnd
-		nameLbl.TextXAlignment         = Enum.TextXAlignment.Center
-		nameLbl.ZIndex                 = 33
-
-		local cbtn = Instance.new("TextButton", cell)
-		cbtn.Size                   = UDim2.new(1, 0, 1, 0)
-		cbtn.BackgroundTransparency = 1
-		cbtn.Text                   = ""
-		cbtn.ZIndex                 = 35
-
-		local capturedName = tName
-		cbtn.MouseButton1Click:Connect(function()
-			equipToggle(capturedName)
-			task.wait(0.06)
-			rebuildInventory()
-		end)
-
-		cbtn.MouseEnter:Connect(function()
-			if capturedName ~= activeSlot then
-				TweenService:Create(cell, TweenInfo.new(0.08), {
-					BackgroundColor3       = C.SLOT_HOVER,
-					BackgroundTransparency = 0.18,
-				}):Play()
-			end
-		end)
-
-		cbtn.MouseLeave:Connect(function()
-			if capturedName ~= activeSlot then
-				TweenService:Create(cell, TweenInfo.new(0.08), {
-					BackgroundColor3       = C.INV_CELL,
-					BackgroundTransparency = 0.32,
-				}):Play()
-			end
-		end)
-	end
-end
-
--- ══════════════════════════════════════════════════════════
--- TOGGLE INVENTORY
--- ══════════════════════════════════════════════════════════
-local function toggleInventory()
-	invOpen = not invOpen
-	if invOpen then
-		rebuildInventory()
-		invPanel.Visible          = true
-		invBtnStroke.Transparency = 0.02
-		TweenService:Create(invBtn, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(40, 32, 8),
-		}):Play()
+	if tool.Parent == player.Character then
+		hum:UnequipTools()
 	else
-		invPanel.Visible          = false
-		invBtnStroke.Transparency = 0.4
-		TweenService:Create(invBtn, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(20, 18, 10),
-		}):Play()
+		hum:EquipTool(tool)
 	end
 end
 
--- ══════════════════════════════════════════════════════════
--- REBUILD HOTBAR
--- ══════════════════════════════════════════════════════════
-local function rebuildHotbar()
-	for _, s in ipairs(slotFrames) do
-		if s.frame and s.frame.Parent then s.frame:Destroy() end
+local function useSlot(i)
+	local name = state.slots[i]
+	if name and tools[name] then
+		toggleEquip(name)
 	end
-	slotFrames = {}
+end
 
-	local visible = {}
-	for _, name in ipairs(SLOT_ORDER) do
-		if findTool(name) then table.insert(visible, name) end
-	end
+-- Isi visual sebuah tombol tool (slot / kartu): ikon TextureId, atau nama kalau tool tanpa ikon.
+local function texOf(tool)
+	local tex = tool and tool.TextureId or ""
+	return if tex ~= "" and tex ~= "rbxassetid://0" then tex else nil
+end
 
-	local totalW = GAP + #visible * (SLOT_SIZE + GAP) + SLOT_SIZE + GAP
-	bar.Size     = UDim2.new(0, totalW, 0, BAR_H)
+-- ── slot hotbar ───────────────────────────────────────────────────────────────────────────────────────────────────
+local beginPress -- function (di bawah)
 
-	-- FIX: tombol 🎒 di kanan slots
-	invBtn.Position = UDim2.new(0, GAP + #visible * (SLOT_SIZE + GAP), 0.5, 0)
-
-	for i, toolName in ipairs(visible) do
-		local isAct = (toolName == activeSlot)
-		local tool  = findTool(toolName)
-
-		local f = Instance.new("Frame")
-		f.Size                   = UDim2.new(0, SLOT_SIZE, 0, SLOT_SIZE)
-		f.Position               = UDim2.new(0, GAP + (i-1)*(SLOT_SIZE+GAP), 0, GAP)
-		f.BackgroundColor3       = isAct and C.SLOT_ACT or C.SLOT_IDLE
-		f.BackgroundTransparency = isAct and 0.05 or 0.32
-		f.BorderSizePixel        = 0
-		f.ZIndex                 = 2
-		f.Parent                 = bar
-		Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
-
-		local stroke = Instance.new("UIStroke", f)
-		stroke.Color        = isAct and C.BORDER_ACT or C.BORDER
-		stroke.Thickness    = isAct and 1.5 or 0.7
-		stroke.Transparency = isAct and 0 or 0.6
-
-		local indicator = Instance.new("Frame", f)
-		indicator.Size                   = UDim2.new(0.55, 0, 0, 2)
-		indicator.Position               = UDim2.new(0.225, 0, 1, -3)
-		indicator.BackgroundColor3       = C.GOLD
-		indicator.BackgroundTransparency = isAct and 0 or 1
-		indicator.BorderSizePixel        = 0
-		indicator.ZIndex                 = 4
-		Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
-
-		local num = Instance.new("TextLabel", f)
-		num.Size                   = UDim2.new(0, 14, 0, 12)
-		num.Position               = UDim2.new(0, 3, 0, 3)
-		num.BackgroundTransparency = 1
-		num.Text                   = tostring(i)
-		num.TextColor3             = C.TEXT_NUM
-		num.TextSize               = 7
-		num.Font                   = Enum.Font.GothamBold
-		num.ZIndex                 = 5
-
-		local tex = tool and tool.TextureId or ""
-		if tex ~= "" and tex ~= "rbxassetid://0" then
-			local ico = Instance.new("ImageLabel", f)
-			ico.Size                   = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE)
-			ico.Position               = UDim2.new(0.5, -ICON_SIZE/2, 0.5, -ICON_SIZE/2)
-			ico.BackgroundTransparency = 1
-			ico.Image                  = tex
-			ico.ScaleType              = Enum.ScaleType.Fit
-			ico.ImageTransparency      = isAct and 0 or 0.08
-			ico.ZIndex                 = 3
-		else
-			local lbl = Instance.new("TextLabel", f)
-			lbl.Size                   = UDim2.new(1, -4, 0.6, 0)
-			lbl.Position               = UDim2.new(0, 2, 0.15, 0)
-			lbl.BackgroundTransparency = 1
-			lbl.Text                   = toolName
-			lbl.TextColor3             = isAct and C.TEXT_TOOL or C.TEXT_DIM
-			lbl.TextSize               = 8
-			lbl.Font                   = Enum.Font.GothamBold
-			lbl.TextWrapped            = true
-			lbl.TextXAlignment         = Enum.TextXAlignment.Center
-			lbl.TextYAlignment         = Enum.TextYAlignment.Center
-			lbl.ZIndex                 = 3
+local function makeSlot(i)
+	local b = new("TextButton", { Name = "Slot" .. Rules.keyLabel(i), BackgroundColor3 = T.CARD, BackgroundTransparency = 0.12,
+		AutoButtonColor = false, Text = "", Visible = false, Parent = row })
+	corner(b, UDim.new(0, 12))
+	local s = {
+		index = i, btn = b, stroke = stroke(b, T.LINE, 0.9), glowing = false, name = nil,
+		key = new("TextLabel", { Name = "Key", Position = UDim2.fromOffset(6, 3), Size = UDim2.fromOffset(14, 14),
+			BackgroundTransparency = 1, Text = Rules.keyLabel(i), Font = FONT.BOLD, TextSize = 11, TextColor3 = T.TEXT_DIM,
+			TextXAlignment = Enum.TextXAlignment.Left, Parent = b }),
+		icon = new("ImageLabel", { Name = "Icon", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 2),
+			Size = UDim2.fromScale(0.6, 0.6), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Parent = b }),
+		label = new("TextLabel", { Name = "Label", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 4),
+			Size = UDim2.new(1, -6, 0.6, 0), BackgroundTransparency = 1, Font = FONT.BOLD, TextSize = 11, TextColor3 = T.TEXT,
+			TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd, Parent = b }),
+	}
+	b.Activated:Connect(function()
+		if os.clock() < suppressClick then
+			return
 		end
+		useSlot(i)
+	end)
+	b.InputBegan:Connect(function(input)
+		beginPress(input, s.name, i, b)
+	end)
+	b.MouseEnter:Connect(function()
+		local tool = s.name and tools[s.name]
+		if tool and not drag and UIS:GetLastInputType() ~= Enum.UserInputType.Touch then
+			tipName.Text = tool.Name
+			tipSub.Text = if tool.ToolTip ~= "" then tool.ToolTip else "Klik / tekan " .. Rules.keyLabel(i)
+			tipSub.Visible = true
+			local p = b.AbsolutePosition - gui.AbsolutePosition
+			tip.Position = UDim2.fromOffset(p.X + b.AbsoluteSize.X / 2, p.Y - 8)
+			tip.Visible = true
+		end
+	end)
+	b.MouseLeave:Connect(function()
+		tip.Visible = false
+	end)
+	return s
+end
+for i = 1, Config.slotsMax do
+	slots[i] = makeSlot(i)
+end
 
-		local btn = Instance.new("TextButton", f)
-		btn.Size                   = UDim2.new(1, 0, 1, 0)
-		btn.BackgroundTransparency = 1
-		btn.Text                   = ""
-		btn.ZIndex                 = 10
+local function paintSlot(s, name, tool, equipped)
+	s.name = name
+	local tex = texOf(tool)
+	s.icon.Image = tex or ""
+	s.icon.Visible = tex ~= nil
+	s.label.Text = if name and not tex then name else ""
+	s.label.Visible = name ~= nil and tex == nil
+	s.key.TextColor3 = if equipped then T.ACCENT else T.TEXT_DIM
+	s.btn.BackgroundTransparency = if name then 0.12 else 0.55
+	local target = dropTarget == s.index
+	if equipped then
+		if not s.glowing then
+			s.stroke.Thickness = 2
+			ThemeColor.glow(s.stroke, Config.equipGlow)
+			s.glowing = true
+		end
+	elseif s.glowing then
+		ThemeColor.unglow(s.stroke, T.LINE, 0.9)
+		s.glowing = false
+	end
+	if not equipped then
+		s.stroke.Thickness = if target then 2 else 1
+		s.stroke.Color = if target then T.ACCENT else T.LINE
+		s.stroke.Transparency = if target then 0 else 0.9
+	end
+	s.btn.BackgroundColor3 = if equipped or target then T.CARD_HOVER else T.CARD
+end
 
-		local capturedName = toolName
-		local capturedIdx  = i
+-- ── kartu inventory ───────────────────────────────────────────────────────────────────────────────────────────────
+local function makeCard()
+	local b = new("TextButton", { BackgroundColor3 = T.CARD, AutoButtonColor = false, Text = "", Parent = grid })
+	corner(b, UDim.new(0, 12))
+	local c = {
+		btn = b, stroke = stroke(b, T.LINE, 0.9), name = nil,
+		key = new("TextLabel", { Name = "Key", Position = UDim2.fromOffset(7, 5), Size = UDim2.fromOffset(14, 14),
+			BackgroundTransparency = 1, Font = FONT.BOLD, TextSize = 10, TextColor3 = T.TEXT_DIM,
+			TextXAlignment = Enum.TextXAlignment.Left, Parent = b }),
+		icon = new("ImageLabel", { Name = "Icon", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12),
+			Size = UDim2.fromOffset(38, 38), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Parent = b }),
+		label = new("TextLabel", { Name = "Label", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -7),
+			Size = UDim2.new(1, -10, 0, 26), BackgroundTransparency = 1, Font = FONT.MEDIUM, TextSize = 11, TextColor3 = T.TEXT,
+			TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd, TextYAlignment = Enum.TextYAlignment.Center, Parent = b }),
+	}
+	b.Activated:Connect(function()
+		if os.clock() < suppressClick or not c.name then
+			return
+		end
+		toggleEquip(c.name)
+	end)
+	b.InputBegan:Connect(function(input)
+		beginPress(input, c.name, nil, b)
+	end)
+	return c
+end
 
-		btn.MouseButton1Click:Connect(function()
-			equipToggle(capturedName)
-			task.wait(0.06)
-			rebuildHotbar()
-			if invOpen then rebuildInventory() end
-		end)
+local function paintCard(c, name, order, equipped)
+	local tool = tools[name]
+	local tex = texOf(tool)
+	local slot = Rules.slotOf(state, name)
+	c.name = name
+	c.btn.LayoutOrder = order
+	c.btn.Visible = true
+	c.icon.Image = tex or ""
+	c.icon.Visible = tex ~= nil
+	c.label.Text = name
+	-- tanpa ikon: nama di tengah kartu (lebih besar)
+	c.label.Size = if tex then UDim2.new(1, -10, 0, 26) else UDim2.new(1, -12, 1, -24)
+	c.label.Position = if tex then UDim2.new(0.5, 0, 1, -7) else UDim2.new(0.5, 0, 1, -12)
+	c.label.TextSize = if tex then 11 else 13
+	c.label.Font = if tex then FONT.MEDIUM else FONT.BOLD
+	c.key.Text = if slot and slot <= L.count then Rules.keyLabel(slot) else ""
+	c.key.TextColor3 = if equipped then T.ACCENT else T.TEXT_DIM
+	c.stroke.Color = if equipped then T.ACCENT else T.LINE
+	c.stroke.Transparency = if equipped then 0 else 0.9
+	c.stroke.Thickness = if equipped then 1.5 else 1
+	c.btn.BackgroundColor3 = if equipped then T.CARD_HOVER else T.CARD
+end
 
-		btn.MouseEnter:Connect(function()
-			if capturedName ~= activeSlot then
-				TweenService:Create(f, TweenInfo.new(0.08), {
-					BackgroundColor3       = C.SLOT_HOVER,
-					BackgroundTransparency = 0.18,
-				}):Play()
-			end
-			local t2 = findTool(capturedName)
-			if t2 then
-				tipName.Text = t2.Name
-				tipSub.Text  = (t2.ToolTip ~= "") and t2.ToolTip
-					or "Klik atau tekan [" .. capturedIdx .. "]"
-				local abs    = f.AbsolutePosition
-				tip.Position = UDim2.new(0, abs.X - 4, 0, abs.Y - 54)
-				tip.Visible  = true
-			end
-		end)
+-- ── susun & lukis ─────────────────────────────────────────────────────────────────────────────────────────────────
+local function layoutDock()
+	local vp = Responsive.Viewport()
+	local phone = Responsive.Device() == "mobile"
+	local S = if phone then Config.slotPhone else Config.slot
+	local gap = Config.gap
+	local bagW = math.floor(S * 0.82)
+	local count
+	if phone then
+		count = Rules.phoneSlots(vp.X, S, gap, bagW, Config)
+	else
+		count = math.clamp(math.floor((vp.X - 24 - bagW) / (S + gap)), Config.slotsPhoneMin, Config.slotsMax)
+	end
+	L = { phone = phone, S = S, gap = gap, bagW = bagW, count = count }
+	bagCol.Size = UDim2.fromOffset(bagW, S)
+	bagBtn.Size = UDim2.new(1, 0, 1, -(Config.hideH + 4))
+	hideBtn.Size = UDim2.new(1, 0, 0, Config.hideH)
+	hideBtn.Position = UDim2.new(0, 0, 1, -Config.hideH)
+	hint.Text = if UIS.TouchEnabled and not UIS.KeyboardEnabled
+		then "Ketuk pakai · tahan & seret ke slot hotbar"
+		else "Klik pakai · seret ke slot hotbar · ` tutup"
+end
 
-		btn.MouseLeave:Connect(function()
-			if capturedName ~= activeSlot then
-				TweenService:Create(f, TweenInfo.new(0.08), {
-					BackgroundColor3       = C.SLOT_IDLE,
-					BackgroundTransparency = 0.32,
-				}):Play()
-			end
-			tip.Visible = false
-		end)
+local function renderDock()
+	local eq = equippedTool()
+	tip.Visible = false -- isi / posisi slot bisa berubah → tooltip lama tidak boleh tertinggal
+	local lay = Rules.dock(state, tools, L.count, invOpen, hidden, L.S, L.gap, L.bagW)
+	for i = 1, Config.slotsMax do
+		local s = slots[i]
+		local name = state.slots[i]
+		local tool = name and tools[name]
+		local x = lay.x[i]
+		s.btn.Visible = x ~= nil
+		if x then
+			s.btn.Size = UDim2.fromOffset(L.S, L.S)
+			s.btn.Position = UDim2.fromOffset(x, 0)
+			paintSlot(s, if tool then name else nil, tool, tool ~= nil and tool == eq)
+		elseif s.glowing then
+			ThemeColor.unglow(s.stroke, T.LINE, 0.9)
+			s.glowing = false
+		end
+	end
+	row.Visible = lay.showRow
+	row.Position = UDim2.fromOffset(lay.rowX, 0)
+	row.Size = UDim2.fromOffset(lay.rowW, L.S)
+	-- lebar dock = persis isi yang tampil; AnchorPoint 0.5 di tengah layar → tengah presisi di semua keadaan
+	dock.Size = UDim2.fromOffset(lay.width, L.S)
+	-- tas: aktif (inventory terbuka) = chip terang seperti tab aktif
+	bagBtn.BackgroundColor3 = if invOpen then T.CHIP else T.CARD
+	bagBtn.BackgroundTransparency = if invOpen then 0 else 0.12
+	bag.body.BackgroundColor3 = if invOpen then T.ON_ACCENT else T.TEXT_STRONG
+	bag.handle.Color = if invOpen then T.ON_ACCENT else T.TEXT_STRONG
+	bag.pocket.BackgroundColor3 = if invOpen then T.CHIP else T.CARD
+	bagStroke.Transparency = if invOpen then 1 else 0.9
+	badge.Text = tostring(#names)
+	badge.Visible = #names > 0 and not invOpen
+	chev.Rotation = if hidden then 180 else 0
+end
 
-		table.insert(slotFrames, { toolName = toolName, frame = f })
+local function renderInventory()
+	if not invOpen then
+		return
+	end
+	local eq = equippedTool()
+	local items = {}
+	for _, n in Rules.order(state, names) do
+		local tool = tools[n]
+		table.insert(items, { name = n, tip = if tool and tool.ToolTip ~= "" then tool.ToolTip else nil })
+	end
+	local shown = Rules.filter(items, search.Text)
+	for i, it in shown do
+		local c = cards[i] or makeCard()
+		cards[i] = c
+		paintCard(c, it.name, i, tools[it.name] ~= nil and tools[it.name] == eq)
+	end
+	for i = #shown + 1, #cards do
+		cards[i].btn.Visible = false
+		cards[i].name = nil
+	end
+	countPill.Text = tostring(#names)
+	emptyLbl.Visible = #shown == 0
+	emptyLbl.Text = if #names == 0 then "Belum ada tool" else "Tidak ada yang cocok"
+end
+
+local function topLimit()
+	local tl = _G.TopbarLayout
+	if tl and tl.contentTop then
+		local ok, v = pcall(tl.contentTop)
+		if ok and type(v) == "number" then
+			return v
+		end
+	end
+	return 64
+end
+
+local function layoutInventory()
+	local vp = Responsive.Viewport()
+	local dockTop = Config.bottom + L.S
+	local roomX = vp.X - 24 - PAD * 2 - 4
+	local roomY = vp.Y - dockTop - 12 - topLimit() - (GRID_Y + 8 + HINT_H + PAD) - 4
+	local cols, rows = Rules.grid(#names, roomX, roomY, Config, L.phone)
+	cols = math.min(cols, math.max(3, #names)) -- sedikit tool → jendela selebar isinya
+	local gridW = cols * Config.cell + (cols - 1) * Config.cellGap + 4 + 4 -- + padding + ruang scrollbar
+	local gridH = rows * Config.cellH + (rows - 1) * Config.cellGap + 4
+	inv.Size = UDim2.fromOffset(gridW + PAD * 2, GRID_Y + gridH + 8 + HINT_H + PAD)
+	inv.Position = UDim2.new(0.5, 0, 1, -(dockTop + 12))
+	grid.Size = UDim2.fromOffset(gridW, gridH)
+end
+
+local refreshQueued = false
+local function refresh()
+	scan()
+	Rules.sync(state, names, os.clock(), Config.respawnHold)
+	renderDock()
+	if invOpen then
+		renderInventory()
+		layoutInventory()
+	end
+end
+local function queueRefresh()
+	if refreshQueued then
+		return
+	end
+	refreshQueued = true
+	task.defer(function()
+		refreshQueued = false
+		refresh()
+	end)
+end
+
+-- ── buka / tutup / sembunyikan ────────────────────────────────────────────────────────────────────────────────────
+local setOpen -- function(open)
+
+local function coordinator()
+	return _G.PanelCoordinator
+end
+
+function setOpen(open)
+	if open == invOpen then
+		return
+	end
+	invOpen = open
+	tip.Visible = false
+	if open then
+		disableDefault()
+		local pc = coordinator()
+		if pc and pc.NotifyOpen then
+			pcall(pc.NotifyOpen, "Inventory")
+		end
+		search.Text = ""
+		refresh()
+		inv.Visible = true
+		invScale.Scale = 0.96
+		tw(invScale, 0.14, { Scale = 1 })
+		layoutInventory()
+	else
+		pcall(search.ReleaseFocus, search)
+		inv.Visible = false
+		dropTarget = nil
+		press = nil -- seret yang sedang berjalan dibatalkan
+		if drag then
+			drag = nil
+			ghost.Visible = false
+			grid.ScrollingEnabled = true
+			suppressClick = os.clock() + 0.2
+		end
+		local pc = coordinator()
+		if pc and pc.NotifyClose then
+			pcall(pc.NotifyClose, "Inventory")
+		end
+		renderDock()
 	end
 end
 
--- ══════════════════════════════════════════════════════════
--- INVENTORY BUTTON EVENTS
--- ══════════════════════════════════════════════════════════
-invBtnClick.MouseButton1Click:Connect(toggleInventory)
+local function setHidden(on)
+	hidden = on
+	tip.Visible = false
+	renderDock()
+end
 
-invBtnClick.MouseEnter:Connect(function()
-	TweenService:Create(invBtn, TweenInfo.new(0.08), { BackgroundTransparency = 0.1 }):Play()
-	tipName.Text = "Inventory"
-	tipSub.Text  = "[ ` ] buka / tutup"
-	local abs    = invBtn.AbsolutePosition
-	tip.Position = UDim2.new(0, abs.X - 4, 0, abs.Y - 54)
-	tip.Visible  = true
+bagBtn.Activated:Connect(function()
+	setOpen(not invOpen)
 end)
-
-invBtnClick.MouseLeave:Connect(function()
-	if not invOpen then
-		TweenService:Create(invBtn, TweenInfo.new(0.08), { BackgroundTransparency = 0.3 }):Play()
+closeBtn.Activated:Connect(function()
+	setOpen(false)
+end)
+hideBtn.Activated:Connect(function()
+	setHidden(not hidden)
+end)
+bagBtn.MouseEnter:Connect(function()
+	if UIS:GetLastInputType() == Enum.UserInputType.Touch or invOpen then
+		return
 	end
+	tipName.Text = "Inventory"
+	tipSub.Text = if UIS.KeyboardEnabled then "Tekan ` untuk buka / tutup" else "Ketuk untuk buka"
+	tipSub.Visible = true
+	local p = bagBtn.AbsolutePosition - gui.AbsolutePosition
+	tip.Position = UDim2.fromOffset(p.X + bagBtn.AbsoluteSize.X / 2, p.Y - 8)
+	tip.Visible = true
+end)
+bagBtn.MouseLeave:Connect(function()
 	tip.Visible = false
 end)
+closeBtn.MouseEnter:Connect(function()
+	tw(closeBtn, 0.1, { TextColor3 = T.TEXT })
+end)
+closeBtn.MouseLeave:Connect(function()
+	tw(closeBtn, 0.1, { TextColor3 = T.TEXT_DIM })
+end)
 
--- ══════════════════════════════════════════════════════════
--- KEYBOARD INPUT
--- Tilde (~) : toggle inventory — gp SENGAJA diabaikan.
---   Di Studio gp=true (dev console intercept), di production
---   gp=false. Keduanya harus bisa buka inventory.
--- 1–9       : equip hotbar slot
--- ══════════════════════════════════════════════════════════
-local numKeys = {
-	[Enum.KeyCode.One]=1,   [Enum.KeyCode.Two]=2,
-	[Enum.KeyCode.Three]=3, [Enum.KeyCode.Four]=4,
-	[Enum.KeyCode.Five]=5,  [Enum.KeyCode.Six]=6,
-	[Enum.KeyCode.Seven]=7, [Enum.KeyCode.Eight]=8,
-	[Enum.KeyCode.Nine]=9,
-}
+local searchGen = 0
+search:GetPropertyChangedSignal("Text"):Connect(function()
+	searchGen += 1
+	local g = searchGen
+	task.delay(0.08, function()
+		if g == searchGen and invOpen then
+			renderInventory()
+		end
+	end)
+end)
 
-UserInputService.InputBegan:Connect(function(input, gp)
-	-- Tilde: selalu toggle, abaikan gp agar works di Studio & production
-	if input.KeyCode == Enum.KeyCode.Tilde then
-		toggleInventory()
+-- ── seret (inventory terbuka): kartu → slot = atur / tukar · slot → luar hotbar = lepas ─────────────────────────────
+local function isPointer(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+end
+
+-- Pusat bayangan di ruang AbsolutePosition: posisi awal tombol + geser jari/mouse (tanpa asumsi inset layar).
+local function ghostCenter(input)
+	local d = input.Position - press.start
+	return press.originPos + press.originSize / 2 + Vector2.new(d.X, d.Y)
+end
+
+local function slotAt(p)
+	for i = 1, L.count do
+		local b = slots[i].btn
+		if b.Visible then
+			local a, s = b.AbsolutePosition, b.AbsoluteSize
+			local half = L.gap / 2
+			if p.X >= a.X - half and p.X <= a.X + s.X + half and p.Y >= a.Y - half and p.Y <= a.Y + s.Y + half then
+				return i
+			end
+		end
+	end
+	return nil
+end
+
+local function inside(obj, p)
+	local a, s = obj.AbsolutePosition, obj.AbsoluteSize
+	return p.X >= a.X and p.X <= a.X + s.X and p.Y >= a.Y and p.Y <= a.Y + s.Y
+end
+
+local function startDrag()
+	if not press or drag or not press.name then
 		return
 	end
-
-	if gp then return end
-
-	local idx = numKeys[input.KeyCode]
-	if not idx then return end
-
-	local visible = {}
-	for _, name in ipairs(SLOT_ORDER) do
-		if findTool(name) then table.insert(visible, name) end
-	end
-	local tName = visible[idx]
-	if not tName then return end
-
-	equipToggle(tName)
-	task.wait(0.06)
-	rebuildHotbar()
-	if invOpen then rebuildInventory() end
-end)
-
--- ══════════════════════════════════════════════════════════
--- SCROLL WHEEL CYCLING
--- ══════════════════════════════════════════════════════════
-UserInputService.InputChanged:Connect(function(input)
-	if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-
-	local visible = {}
-	for _, name in ipairs(SLOT_ORDER) do
-		if findTool(name) then table.insert(visible, name) end
-	end
-	if #visible == 0 then return end
-
-	local cur = 0
-	for i, n in ipairs(visible) do if n == activeSlot then cur = i end end
-
-	local nxt = cur + (input.Position.Z > 0 and -1 or 1)
-	if nxt < 1 then nxt = #visible elseif nxt > #visible then nxt = 1 end
-
-	local hum = getHumanoid()
-	if not hum then return end
-
-	activeSlot = visible[nxt]
-	hum:UnequipTools()
-	task.wait(0.05)
-	local t = backpack:FindFirstChild(activeSlot)
-	if t then hum:EquipTool(t) end
-	task.wait(0.05)
-	rebuildHotbar()
-	if invOpen then rebuildInventory() end
-end)
-
--- ══════════════════════════════════════════════════════════
--- AUTO REFRESH — watch backpack & karakter
--- ══════════════════════════════════════════════════════════
-local debounce = false
-local function scheduleRefresh()
-	if debounce then return end
-	debounce = true
-	task.delay(0.15, function()
-		debounce = false
-		rebuildHotbar()
-		if invOpen then rebuildInventory() end
-	end)
+	drag = { name = press.name, fromSlot = press.fromSlot }
+	local tool = tools[press.name]
+	local tex = texOf(tool)
+	ghost.Size = UDim2.fromOffset(L.S, L.S)
+	ghostIcon.Image = tex or ""
+	ghostIcon.Visible = tex ~= nil
+	ghostLabel.Text = if tex then "" else press.name
+	ghostStroke.Color = T.ACCENT
+	ghost.BackgroundColor3 = T.CARD_HOVER
+	grid.ScrollingEnabled = false
+	tip.Visible = false
+	suppressClick = math.huge -- klik pelepasan seret diabaikan, urutan Activated vs InputEnded tidak penting
 end
 
-backpack.ChildAdded:Connect(scheduleRefresh)
-backpack.ChildRemoved:Connect(function(child)
-	if child:IsA("Tool") then
-		task.wait(0.06)
-		if not findTool(child.Name) and activeSlot == child.Name then
-			activeSlot = nil
+local function moveDrag(input)
+	if not drag then
+		return
+	end
+	local c = ghostCenter(input)
+	local origin = gui.AbsolutePosition
+	ghost.Position = UDim2.fromOffset(c.X - origin.X - L.S / 2, c.Y - origin.Y - L.S / 2)
+	ghost.Visible = true
+	local t = slotAt(c)
+	if t ~= dropTarget then
+		dropTarget = t
+		renderDock()
+	end
+end
+
+local function endPress(input)
+	if not press then
+		return
+	end
+	local p = press
+	press = nil
+	if not drag then
+		return
+	end
+	local d = drag
+	drag = nil
+	ghost.Visible = false
+	grid.ScrollingEnabled = true
+	suppressClick = os.clock() + 0.2
+	local c = p.originPos + p.originSize / 2 + Vector2.new(input.Position.X - p.start.X, input.Position.Y - p.start.Y)
+	local target = slotAt(c)
+	dropTarget = nil
+	if target then
+		Rules.move(state, d.name, target)
+	elseif d.fromSlot and not inside(dock, c) then
+		Rules.unassign(state, d.name)
+	end
+	refresh()
+end
+
+function beginPress(input, name, fromSlot, origin)
+	if not isPointer(input) or not invOpen or not name or press then
+		return
+	end
+	press = {
+		input = input, name = name, fromSlot = fromSlot, start = input.Position, t0 = os.clock(),
+		touch = input.UserInputType == Enum.UserInputType.Touch,
+		originPos = origin.AbsolutePosition, originSize = origin.AbsoluteSize,
+	}
+	if press.touch then
+		local mine = press
+		task.delay(Config.touchHoldDrag, function()
+			if press == mine and not drag then
+				startDrag() -- tahan tanpa digulir → mulai seret
+				moveDrag(mine.input)
+			end
+		end)
+	end
+end
+
+UIS.InputChanged:Connect(function(input)
+	if not press then
+		return
+	end
+	if press.touch then
+		if input ~= press.input then
+			return
 		end
-		scheduleRefresh()
+		local moved = (input.Position - press.start).Magnitude
+		if not drag and moved > 10 then
+			press = nil -- bergerak sebelum tahan selesai = menggulir daftar, bukan seret
+			return
+		end
+		moveDrag(input)
+	elseif input.UserInputType == Enum.UserInputType.MouseMovement then
+		local moved = (input.Position - press.start).Magnitude
+		if not drag and moved >= Config.dragThreshold then
+			startDrag()
+		end
+		moveDrag(input)
 	end
 end)
 
-local function watchChar(char)
-	char.ChildAdded:Connect(function(c)
-		if c:IsA("Tool") then scheduleRefresh() end
-	end)
-	char.ChildRemoved:Connect(function(c)
-		if c:IsA("Tool") then
-			task.wait(0.06)
-			if not findTool(c.Name) and activeSlot == c.Name then activeSlot = nil end
-			scheduleRefresh()
-		end
-	end)
-end
-
-player.CharacterAdded:Connect(function(char)
-	activeSlot       = nil
-	invOpen          = false
-	invPanel.Visible = false
-	task.wait(0.3)
-	disableDefault()
-	task.wait(0.3)
-	watchChar(char)
-	rebuildHotbar()
-	-- Safety: rebuild lagi 2 detik kemudian setelah ToolGiver selesai
-	task.delay(2, function()
-		rebuildHotbar()
-		if invOpen then rebuildInventory() end
-	end)
+UIS.InputEnded:Connect(function(input)
+	if not press then
+		return
+	end
+	if (press.touch and input == press.input) or (not press.touch and input.UserInputType == Enum.UserInputType.MouseButton1) then
+		endPress(input)
+	end
 end)
 
+-- ── tombol keyboard & gamepad ─────────────────────────────────────────────────────────────────────────────────────
+local toggleKeys = {}
+for _, k in Config.toggleKeys do
+	local ok, code = pcall(function()
+		return Enum.KeyCode[k]
+	end)
+	if ok and code then
+		toggleKeys[code] = true
+	end
+end
+
+local function currentSlot()
+	local eq = equippedTool()
+	return eq and Rules.slotOf(state, eq.Name) or nil
+end
+
+-- Sedang mengetik? (TextBox kita / skrip lain, atau bar chat TextChatService yang ada di CoreGui)
+local function typing()
+	if UIS:GetFocusedTextBox() then
+		return true
+	end
+	local ok, focused = pcall(function()
+		local bar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+		return bar and bar.IsFocused
+	end)
+	return ok and focused == true
+end
+
+UIS.InputBegan:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		-- Seperti backpack Roblox: diabaikan saat mengetik (chat / kotak cari) atau menu Roblox terbuka. ` sengaja tidak
+		-- memakai `processed` (di Studio tombol ini bisa ditandai processed walau tidak sedang mengetik).
+		if typing() or GuiService.MenuIsOpen then
+			return
+		end
+		local key = input.KeyCode
+		if toggleKeys[key] then
+			setOpen(not invOpen)
+			return
+		end
+		if key == Enum.KeyCode.Escape then
+			if invOpen and not processed then
+				setOpen(false)
+			end
+			return
+		end
+		local i = Rules.keyToSlot(key.Name)
+		if i and i <= L.count and not processed then -- hanya slot yang tampil (layar sempit = slot lebih sedikit)
+			useSlot(i)
+		end
+	elseif input.KeyCode == Enum.KeyCode.ButtonL1 or input.KeyCode == Enum.KeyCode.ButtonR1 then
+		if processed then
+			return
+		end
+		local present = {}
+		for _, n in names do
+			present[n] = true
+		end
+		local i = Rules.cycle(state, present, currentSlot(), if input.KeyCode == Enum.KeyCode.ButtonR1 then 1 else -1, L.count)
+		if i then
+			useSlot(i)
+		end
+	end
+end)
+
+-- ── pantau tool, karakter, layar, tema ────────────────────────────────────────────────────────────────────────────
+local bpConns, charConns = {}, {}
+local function watch(list, parent)
+	for _, c in list do
+		c:Disconnect()
+	end
+	table.clear(list)
+	if parent then
+		table.insert(list, parent.ChildAdded:Connect(queueRefresh))
+		table.insert(list, parent.ChildRemoved:Connect(queueRefresh))
+	end
+end
+local function bindBackpack()
+	watch(bpConns, player:FindFirstChildOfClass("Backpack"))
+	queueRefresh()
+end
+local function bindCharacter(char)
+	watch(charConns, char)
+	queueRefresh()
+	task.delay(1, disableDefault)
+end
+player.ChildAdded:Connect(function(c)
+	if c:IsA("Backpack") then
+		bindBackpack() -- Backpack dibuat ulang setiap respawn
+	end
+end)
+player.CharacterAdded:Connect(bindCharacter)
+bindBackpack()
 if player.Character then
-	watchChar(player.Character)
+	bindCharacter(player.Character)
 end
 
--- ══════════════════════════════════════════════════════════
--- INIT
--- ══════════════════════════════════════════════════════════
--- wait 2s: kasih waktu ToolGiver & ShopServer selesai ngasih tools
-task.wait(2)
-disableDefault()
-rebuildHotbar()
-
--- Safety rebuild 2 detik kemudian untuk tool giver yang lambat
-task.delay(2, function()
-	rebuildHotbar()
-	if invOpen then rebuildInventory() end
+Responsive.OnChange(function()
+	layoutDock()
+	renderDock()
+	if invOpen then
+		layoutInventory()
+	end
 end)
+ThemeColor.onChanged(function()
+	renderDock()
+	renderInventory()
+end)
+
+task.spawn(function()
+	local t0 = os.clock()
+	while not (_G.PanelCoordinator and _G.PanelCoordinator.Register) and os.clock() - t0 < 30 do
+		task.wait(0.2)
+	end
+	local pc = _G.PanelCoordinator
+	if pc and pc.Register then
+		pc.Register("Inventory", function()
+			setOpen(false)
+		end)
+	end
+end)
+
+_G.Inventory = {
+	Open = function()
+		setOpen(true)
+	end,
+	Close = function()
+		setOpen(false)
+	end,
+	Toggle = function()
+		setOpen(not invOpen)
+	end,
+	IsOpen = function()
+		return invOpen
+	end,
+	SetHidden = setHidden,
+}
+
+layoutDock()
+refresh()
+print(("[Inventory] siap | %d slot | ` = inventory"):format(L.count))

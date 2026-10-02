@@ -6,6 +6,9 @@ local ContextActionService = game:GetService("ContextActionService")
 local UserInputService     = game:GetService("UserInputService")
 local ReplicatedStorage    = game:GetService("ReplicatedStorage")
 
+-- Warna cincin tombol sprint mobile: ReplicatedStorage.Modules.ThemeColor (themeColor) → ikut tema pilihan pemain.
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 -- Kecepatan dance (menari/sync) diikuti juga di sini; tanpa ini Shift saat
 -- menari membuat 24, lepas → 16, dan kecepatan dance 6 hilang. DanceShared
 -- membaca DanceAssets langsung, jadi tunggu dulu; gagal → sprint tetap jalan.
@@ -46,7 +49,7 @@ local CONFIG = {
 	OffsetX         = 150, -- fallback kalau JumpButton nggak ketemu
 	OffsetY         = 55,
 	SprintIconImage = "rbxassetid://72034014768460",
-	ActiveRingColor = Color3.fromRGB(255, 196, 60),
+	-- Warna cincin aktif = token ThemeColor ACCENT (dulu ActiveRingColor 255,196,60), lihat createMobileSprintButton.
 
 	ForceShowMobileButton = false, -- true = paksa tombol muncul di Studio PC
 }
@@ -149,6 +152,7 @@ local function createMobileSprintButton()
 	gui.DisplayOrder = 3
 	gui.Enabled = CONFIG.ForceShowMobileButton or UserInputService.TouchEnabled
 	gui.Parent = player:WaitForChild("PlayerGui")
+	ThemeColor.mark(gui)
 	sprintGui = gui
 
 	-- Visibilitas reaktif: nggak cuma dicek sekali di awal, tapi ngikutin
@@ -205,7 +209,7 @@ local function createMobileSprintButton()
 	local activeRing = Instance.new("UIStroke")
 	activeRing.Name = "ActiveRing"
 	activeRing.Thickness = 3
-	activeRing.Color = CONFIG.ActiveRingColor
+	activeRing.Color = ThemeColor.tokens.ACCENT -- cincin UI tombol sprint = sorotan (bukan warna dunia)
 	activeRing.Transparency = 1
 	activeRing.Parent = btn
 

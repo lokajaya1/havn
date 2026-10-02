@@ -1,5 +1,5 @@
 -- ShopClient — StarterPlayerScripts
--- Tema mengikuti UltimateMenu / DanceClient (dibaca dari _G.MenuConfig).
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): T.X dibaca saat melukis → ikut tema yang dipilih.
 
 repeat task.wait() until _G.MenuUI and _G.InjectPanelUI and _G.MenuConfig
 
@@ -9,28 +9,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 local TextChatService   = game:GetService("TextChatService")
 
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 local UI     = _G.MenuUI
-local C      = _G.MenuConfig.colors
 local player = Players.LocalPlayer
 
-local T = _G.MenuConfig.theme or {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-	DANGER     = Color3.fromRGB(226, 96, 96),
-}
+local T = ThemeColor.tokens
 
 local FONT = _G.MenuConfig.font or {
 	BOLD    = Enum.Font.BuilderSansBold,
 	MEDIUM  = Enum.Font.BuilderSansMedium,
 	REGULAR = Enum.Font.BuilderSans,
 }
-
-local TEXT_ON_ACCENT = C.textOnAccent or Color3.fromRGB(18, 18, 20)
 
 local TW = TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local function tw(obj, props)
@@ -113,7 +103,7 @@ local function makeButton(parent, text, primary, size)
 	local btn = UI.button({
 		Size = size or UDim2.new(0, 62, 0, 24),
 		BackgroundColor3 = primary and T.ACCENT or T.CARD,
-		Text = text, TextColor3 = primary and TEXT_ON_ACCENT or T.TEXT,
+		Text = text, TextColor3 = primary and T.ON_ACCENT or T.TEXT,
 		Font = FONT.MEDIUM, TextSize = 10, Parent = parent,
 	})
 	UI.corner(8).Parent = btn
@@ -152,6 +142,7 @@ local function showGiftPopup(senderName, passName)
 		Name = "GiftNotification", DisplayOrder = 1000,
 		ResetOnSpawn = false, Parent = player.PlayerGui,
 	})
+	ThemeColor.mark(gui)
 
 	local W, H = 280, 66
 	local frame = UI.frame({
@@ -267,6 +258,7 @@ local function openGiftModal(passData)
 	local gui = UI.new("ScreenGui", {
 		Name = "GiftModal", DisplayOrder = 999, ResetOnSpawn = false,
 	})
+	ThemeColor.mark(gui)
 
 	local backdrop = UI.button({
 		Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(0, 0, 0),
@@ -299,7 +291,7 @@ local function openGiftModal(passData)
 	local closeBtn = UI.button({
 		Size = UDim2.new(0, 22, 0, 22), AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 12), BackgroundTransparency = 1,
-		Text = "✕", TextColor3 = T.TEXT_DIM, Font = FONT.REGULAR, TextSize = 14,
+		Text = "X", TextColor3 = T.TEXT_DIM, Font = FONT.BOLD, TextSize = 13,
 		Parent = modal,
 	})
 	bindHover(closeBtn, function(on)
@@ -336,6 +328,7 @@ local function openGiftModal(passData)
 		end
 	end
 
+	ThemeColor.repaint(gui) -- tema bisa berganti selama menunggu daftar pemain dari server
 	gui.Parent   = player.PlayerGui
 	currentModal = gui
 end
