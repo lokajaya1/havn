@@ -36,6 +36,7 @@ if not modules then
 end
 
 local Responsive = require(modules:WaitForChild("Responsive"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local function waitForTitleStyle(timeout)
 	local deadline = os.clock() + timeout
@@ -71,18 +72,21 @@ if not checkAccess:InvokeServer() then return end
 -- THEME
 -- ════════════════════════════════════════════════════════════
 
-local THEME = {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	TRACK      = Color3.fromRGB(48, 48, 52),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-	DANGER     = Color3.fromRGB(235, 86, 96),
-	OK         = Color3.fromRGB(120, 200, 130),
-}
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): THEME.X membaca token tema SEKARANG saat dipakai
+-- (hover/pilih/refresh ikut tema pemain). Warna title pilihan admin (swatch & pratinjau, TitleStyle) = KONTEN → skip.
+local THEME = ThemeColor.view({
+	BG          = "BG",
+	CARD        = "CARD",
+	CARD_HOVER  = "CARD_HOVER",
+	TRACK       = "TRACK",
+	LINE        = "LINE",
+	TEXT_STRONG = "TEXT_STRONG",
+	TEXT        = "TEXT",
+	TEXT_DIM    = "TEXT_DIM",
+	ACCENT      = "ACCENT",
+	DANGER      = "DANGER",
+	OK          = "SUCCESS",
+})
 
 local TWEEN = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local MAX_CHARS = 30
@@ -165,6 +169,7 @@ local gui = new("ScreenGui", {
 	Enabled = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	DisplayOrder = 12, Parent = playerGui,
 })
+ThemeColor.mark(gui)
 
 local frame = new("Frame", {
 	Name = "TitleFrame", AnchorPoint = Vector2.new(0.5, 1),
@@ -183,7 +188,7 @@ local header = new("Frame", {
 
 new("TextLabel", {
 	Position = UDim2.new(0, cfg.pad, 0, 0), Size = UDim2.new(1, -cfg.pad - 44, 1, 0),
-	BackgroundTransparency = 1, Text = "Role title", TextColor3 = THEME.TEXT,
+	BackgroundTransparency = 1, Text = "Role title", TextColor3 = THEME.TEXT_STRONG,
 	Font = Enum.Font.BuilderSansBold, TextSize = cfg.titleSize,
 	TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 5, Parent = header,
 })
@@ -191,8 +196,8 @@ new("TextLabel", {
 local closeBtn = new("TextButton", {
 	Name = "CloseButton", AnchorPoint = Vector2.new(1, 0.5),
 	Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, 26, 0, 26),
-	BackgroundTransparency = 1, Text = "×", TextColor3 = THEME.TEXT_DIM,
-	Font = Enum.Font.BuilderSans, TextSize = cfg.titleSize + 8,
+	BackgroundTransparency = 1, Text = "X", TextColor3 = THEME.TEXT_DIM,
+	Font = Enum.Font.BuilderSansBold, TextSize = cfg.titleSize,
 	BorderSizePixel = 0, AutoButtonColor = false, ZIndex = 6, Parent = header,
 })
 closeBtn.MouseEnter:Connect(function()
@@ -261,8 +266,10 @@ local previewCard = new("Frame", {
 	BackgroundColor3 = Color3.fromRGB(120, 128, 140), BorderSizePixel = 0,
 	ClipsDescendants = true, LayoutOrder = nextOrder(), Parent = content,
 })
+-- Pratinjau = warna KONTEN (latar dunia tiruan + title pilihan admin) → tidak ikut dilukis ulang tema.
+ThemeColor.skip(previewCard)
 corner(previewCard, 12)
-stroke(previewCard, THEME.LINE, 1, 0.9)
+local previewStroke = stroke(previewCard, THEME.LINE, 1, 0.9)
 
 new("UIGradient", {
 	Rotation = 90,
@@ -284,7 +291,7 @@ local preview = TitleStyle.Build(plateHolder, 14)
 local previewName = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, 3),
 	Size = UDim2.new(1, -16, 0, 16), BackgroundTransparency = 1,
-	Text = player.DisplayName, TextColor3 = THEME.LINE,
+	Text = player.DisplayName, TextColor3 = Color3.fromRGB(255, 255, 255),
 	Font = Enum.Font.BuilderSansBold, TextSize = 14, Parent = previewCard,
 })
 new("UIStroke", { Color = Color3.fromRGB(0,0,0), Thickness = 1, Transparency = 0.5, Parent = previewName })
@@ -355,12 +362,14 @@ local counter = new("TextLabel", {
 
 caption("WARNA TEKS")
 local colorBox = gridBox(cfg.swatch, cfg.swatch)
+ThemeColor.skip(colorBox) -- swatch = warna KONTEN TitleStyle.COLORS ("Gold" = token ACCENT Classic Gold)
 
 caption("PLATE")
 local plateBox = gridBox(cfg.chipWidth, cfg.chip)
 
 caption("WARNA PLATE")
 local plateColorBox = gridBox(cfg.swatch, cfg.swatch)
+ThemeColor.skip(plateColorBox)
 
 caption("FONT")
 local fontBox = gridBox(cfg.chipWidth, cfg.chip)
@@ -387,6 +396,7 @@ local outlineLabel = new("TextLabel", {
 	TextXAlignment = Enum.TextXAlignment.Left, Parent = outlineRow,
 })
 
+-- Gaya themeColor: hidup = jalur ACCENT + kenop TEXT_STRONG, mati = jalur TRACK + kenop TEXT.
 local outlineTrack = new("TextButton", {
 	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
 	Size = UDim2.new(0, 42, 0, 22), BackgroundColor3 = THEME.ACCENT,
@@ -396,10 +406,11 @@ new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = outlineTrack })
 
 local outlineKnob = new("Frame", {
 	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, -20, 0.5, 0),
-	Size = UDim2.new(0, 18, 0, 18), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	Size = UDim2.new(0, 18, 0, 18), BackgroundColor3 = THEME.TEXT_STRONG,
 	BorderSizePixel = 0, Parent = outlineTrack,
 })
 new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = outlineKnob })
+stroke(outlineKnob, THEME.BG, 1, 0.7)
 
 local function paintOutlineToggle()
 	TweenService:Create(outlineTrack, TWEEN, {
@@ -407,6 +418,7 @@ local function paintOutlineToggle()
 	}):Play()
 	TweenService:Create(outlineKnob, TWEEN, {
 		Position = state.outline and UDim2.new(1, -20, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
+		BackgroundColor3 = state.outline and THEME.TEXT_STRONG or THEME.TEXT,
 	}):Play()
 end
 
@@ -792,6 +804,17 @@ markChip("effect", state.effect)
 paintOutlineToggle()
 repaint()
 
+-- Swatch & pratinjau ada di wadah ThemeColor.skip → garis UI di dalamnya (cincin pilihan swatch, tepi pratinjau) tidak
+-- ikut lukis ulang otomatis; diwarnai ulang di sini saat tema diganti. Skrip StarterGui ini jalan ulang tiap respawn
+-- (gui lama dihancurkan di atas) → pendengar milik gui lama melepas diri.
+local stopTheme
+stopTheme = ThemeColor.onChanged(function()
+	if not gui.Parent then stopTheme() return end
+	previewStroke.Color = THEME.LINE
+	markSwatch("color", state.color)
+	markSwatch("plateColor", state.plateColor)
+end)
+
 -- ════════════════════════════════════════════════════════════
 -- RESPONSIVE
 -- ════════════════════════════════════════════════════════════
@@ -821,7 +844,7 @@ local function applyConfig(c)
 	outlineLabel.TextSize = c.textSize
 	applyText.TextSize = c.textSize
 	clearText.TextSize = c.textSize
-	closeBtn.TextSize = c.titleSize + 8
+	closeBtn.TextSize = c.titleSize
 
 	for _, label in ipairs(captions) do
 		label.TextSize = c.smallSize

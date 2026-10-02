@@ -5,6 +5,11 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage= game:GetService("ReplicatedStorage")
 local player           = Players.LocalPlayer
 
+-- Warna UI panel: ReplicatedStorage.Modules.ThemeColor (themeColor) — T.X dibaca saat buildUI (tiap tool di-equip).
+-- Warna glowstick (COLORS, slider R/G/B, currentColor) = KONTEN → literal + ThemeColor.skip.
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+local T = ThemeColor.tokens
+
 local TOOL_NAME   = "GlowStick"
 local ICON_IMAGE  = "rbxassetid://7345154971"
 local MAX_RETRIES = 100
@@ -69,6 +74,8 @@ local function makeColorButton(data, order, parent)
 	btn.Text             = ""
 	btn.LayoutOrder      = order
 	btn.Parent           = parent
+	-- Swatch = warna konten; di-skip per tombol (bukan gridContainer) supaya latar CARD wadahnya tetap ikut tema.
+	ThemeColor.skip(btn)
 
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = btn
 
@@ -94,7 +101,7 @@ local function makeColorButton(data, order, parent)
 			d.btn.Size         = UDim2.new(1, 0, 1, 0)
 		end
 		stroke.Thickness = 3
-		stroke.Color     = Color3.fromRGB(255, 255, 0)
+		stroke.Color     = T.ACCENT
 		btn.Size         = UDim2.new(1, 4, 1, 4)
 		applyColor(data.color)
 		syncSliders(data.color)
@@ -115,7 +122,7 @@ local function makeSlider(ch, defaultVal, order, parent)
 	label.Size               = UDim2.new(0, 30, 1, 0)
 	label.BackgroundTransparency = 1
 	label.Text               = ch
-	label.TextColor3         = Color3.fromRGB(255, 255, 255)
+	label.TextColor3         = T.TEXT_STRONG
 	label.TextSize           = 16
 	label.Font               = Enum.Font.GothamBold
 	label.Parent             = frame
@@ -125,7 +132,7 @@ local function makeSlider(ch, defaultVal, order, parent)
 	valueLabel.Position           = UDim2.new(1, -40, 0, 0)
 	valueLabel.BackgroundTransparency = 1
 	valueLabel.Text               = tostring(defaultVal)
-	valueLabel.TextColor3         = Color3.fromRGB(200, 200, 200)
+	valueLabel.TextColor3         = T.TEXT
 	valueLabel.TextSize           = 14
 	valueLabel.Font               = Enum.Font.Gotham
 	valueLabel.Parent             = frame
@@ -133,7 +140,7 @@ local function makeSlider(ch, defaultVal, order, parent)
 	local bg = Instance.new("Frame")
 	bg.Size             = UDim2.new(1, -80, 0, 6)
 	bg.Position         = UDim2.new(0, 35, 0.5, -3)
-	bg.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+	bg.BackgroundColor3 = T.TRACK
 	bg.BorderSizePixel  = 0
 	bg.Parent           = frame
 
@@ -144,6 +151,7 @@ local function makeSlider(ch, defaultVal, order, parent)
 	fill.BackgroundColor3 = FILL_COLOR[ch]
 	fill.BorderSizePixel  = 0
 	fill.Parent           = bg
+	ThemeColor.skip(fill) -- warna kanal R/G/B = konten
 
 	local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(1, 0); fc.Parent = fill
 
@@ -214,7 +222,7 @@ local function buildUI()
 	title.Size               = UDim2.new(1, 0, 0, 28)
 	title.BackgroundTransparency = 1
 	title.Text               = "🌟 GlowStick Color"
-	title.TextColor3         = Color3.fromRGB(255, 255, 255)
+	title.TextColor3         = T.TEXT_STRONG
 	title.TextSize           = 18
 	title.Font               = Enum.Font.GothamBold
 	title.TextXAlignment     = Enum.TextXAlignment.Left
@@ -225,7 +233,7 @@ local function buildUI()
 	local gridContainer = Instance.new("Frame")
 	gridContainer.Size            = UDim2.new(1, 0, 0, 0)
 	gridContainer.AutomaticSize  = Enum.AutomaticSize.Y
-	gridContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+	gridContainer.BackgroundColor3 = T.CARD
 	gridContainer.BorderSizePixel = 0
 	gridContainer.LayoutOrder     = 2
 	gridContainer.Parent          = main
@@ -252,7 +260,7 @@ local function buildUI()
 	local rgbSection = Instance.new("Frame")
 	rgbSection.Size            = UDim2.new(1, 0, 0, 0)
 	rgbSection.AutomaticSize  = Enum.AutomaticSize.Y
-	rgbSection.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+	rgbSection.BackgroundColor3 = T.CARD
 	rgbSection.BorderSizePixel = 0
 	rgbSection.LayoutOrder     = 3
 	rgbSection.Parent          = main

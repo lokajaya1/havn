@@ -26,6 +26,9 @@
 local Players = game:GetService("Players")
 local RS      = game:GetService("ReplicatedStorage")
 
+-- Di-require SEBELUM cek duplikat: cek + bikin ScreenGui di bawah tetap tanpa yield di antaranya.
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -35,15 +38,18 @@ if playerGui:FindFirstChild("CarrySelectGui") then
 end
 
 -- ── Tema (samakan dengan CarryUI.lua biar konsisten) ─────────
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): THEME.X =
+-- token tema SEKARANG, dibaca saat dipakai (termasuk hover tombol tutup).
 
-local THEME = {
-	BG     = Color3.fromRGB(16, 16, 17),
-	CARD   = Color3.fromRGB(26, 26, 28),
-	LINE   = Color3.fromRGB(255, 255, 255),
-	ACCENT = Color3.fromRGB(212, 175, 55),
-	TEXT   = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM = Color3.fromRGB(148, 148, 154),
-}
+local THEME = ThemeColor.view({
+	BG     = "BG",
+	CARD   = "CARD",
+	LINE   = "LINE",
+	ACCENT = "ACCENT",
+	TEXT   = "TEXT",
+	TEXT_DIM = "TEXT_DIM",
+	DANGER = "DANGER",
+})
 
 local function new(class, props)
 	local obj = Instance.new(class)
@@ -62,6 +68,7 @@ local gui = new("ScreenGui", {
 	Enabled        = false, -- UIManager yang nyalain lewat Show("CarrySelect")
 	Parent         = playerGui,
 })
+ThemeColor.mark(gui)
 
 -- ── Frame utama ───────────────────────────────────────────────
 -- Ukuran & posisi di bawah cuma nilai default sementara; begitu UIManager.Init()
@@ -125,13 +132,13 @@ local closeButton = new("TextButton", {
 	BackgroundTransparency = 1,
 	AutoButtonColor  = false,
 	Font             = Enum.Font.GothamBold,
-	Text             = "✕",
-	TextColor3       = Color3.fromRGB(200, 200, 200),
-	TextSize         = 16,
+	Text             = "X",
+	TextColor3       = THEME.TEXT_DIM,
+	TextSize         = 14,
 	Parent           = frame,
 })
-closeButton.MouseEnter:Connect(function() closeButton.TextColor3 = Color3.fromRGB(255, 100, 100) end)
-closeButton.MouseLeave:Connect(function() closeButton.TextColor3 = Color3.fromRGB(200, 200, 200) end)
+closeButton.MouseEnter:Connect(function() closeButton.TextColor3 = THEME.DANGER end)
+closeButton.MouseLeave:Connect(function() closeButton.TextColor3 = THEME.TEXT_DIM end)
 
 -- ── ScrollingFrame + ButtonsFrame ────────────────────────────
 -- Nama & hierarki ini WAJIB persis sama karena dipakai langsung oleh

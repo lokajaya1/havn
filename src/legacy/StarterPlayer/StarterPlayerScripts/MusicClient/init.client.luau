@@ -26,20 +26,20 @@ local Shared = require(RS:WaitForChild("MusicShared"))
 local UI     = require(script:WaitForChild("UI"))
 local Lists  = require(script:WaitForChild("Lists"))
 local Audio  = require(script:WaitForChild("Audio"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local C      = UI.C
 local remote = Shared.remote
 
--- Palet: tema global menang, palet modul UI jadi cadangan. Hanya tiga warna
+-- Palet: token ThemeColor (themeColor) lewat view → dibaca saat dipakai, ikut tema yang dipilih. Hanya tiga warna
 -- yang dipakai untuk notifikasi supaya panel tidak terlihat belang.
-local G = _G.MenuConfig and _G.MenuConfig.theme
-local P = {
-	accent  = (G and G.ACCENT)     or C.accent,
-	surface = (G and G.CARD)       or C.section,
-	panel   = (G and G.CARD)       or C.bgLight,
-	hover   = (G and G.CARD_HOVER) or C.hover,
-	danger  = (G and G.DANGER)     or C.danger,
-}
+local P = ThemeColor.view({
+	accent  = "ACCENT",
+	surface = "CARD_HOVER", -- kotak input saat tidak fokus (= UI.C.section)
+	panel   = "CARD",
+	hover   = "CARD_HOVER",
+	danger  = "DANGER",
+})
 
 local S = {
 	sharedLib  = {},
@@ -568,7 +568,7 @@ end)
 
 -- Siaran live (admin). Status resmi datang dari server lewat LiveState.
 local liveOn = false
-local function paintLive() paintToggle(ui.liveBtn, liveOn, liveOn and "LIVE - On" or "Off", P.danger, C.white) end
+local function paintLive() paintToggle(ui.liveBtn, liveOn, liveOn and "LIVE - On" or "Off", P.danger, UI.textOn(P.danger)) end
 paintLive()
 ui.liveBtn.MouseButton1Click:Connect(function()
 	remote:FireServer("SetLive", not liveOn)

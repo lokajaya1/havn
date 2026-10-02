@@ -13,6 +13,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local Config = require(RS:WaitForChild("DonationConfig"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 local folder = RS:WaitForChild("DonationMessageSystem", 30)
 local showMessage = folder and folder:WaitForChild("ShowMessage", 30)
 if not showMessage then
@@ -27,10 +28,7 @@ do
 		waited += 0.1
 	end
 end
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG = Color3.fromRGB(16, 16, 17), CARD = Color3.fromRGB(26, 26, 28), LINE = Color3.fromRGB(255, 255, 255),
-	TEXT = Color3.fromRGB(238, 238, 240), TEXT_DIM = Color3.fromRGB(148, 148, 154), ACCENT = Color3.fromRGB(212, 175, 55),
-}
+local T = ThemeColor.tokens -- tabel bersama themeColor: T.X dibaca saat melukis → ikut tema pilihan pemain
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD = Enum.Font.BuilderSansBold, MEDIUM = Enum.Font.BuilderSansMedium, REGULAR = Enum.Font.BuilderSans,
 }
@@ -72,6 +70,7 @@ end
 
 local gui = new("ScreenGui", { Name = "DonationNotifGui", ResetOnSpawn = false, IgnoreGuiInset = true,
 	DisplayOrder = 55, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
+ThemeColor.mark(gui)
 local holder = new("Frame", { Name = "Holder", AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1,
 	AutomaticSize = Enum.AutomaticSize.Y, Parent = gui })
 new("UIListLayout", { Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center,

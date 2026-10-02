@@ -47,10 +47,11 @@ local CONFIG = {
 }
 
 local HEART      = "♥"
-local LIKE_COLOR = Color3.fromRGB(235, 86, 96)
-local TEXT       = Color3.fromRGB(238, 238, 240)
-local TEXT_DIM   = Color3.fromRGB(148, 148, 154)
-local CARD       = Color3.fromRGB(26, 26, 28)
+local LIKE_COLOR = Color3.fromRGB(235, 86, 96) -- warna hati (konten, tidak ikut tema)
+
+-- Kartu toast: token ReplicatedStorage.Modules.ThemeColor (themeColor), dibaca saat toast dibuat → ikut tema pemain.
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+local T = ThemeColor.tokens
 
 -- ── GUI host ────────────────────────────────────────────────
 -- IgnoreGuiInset = true supaya sistem koordinatnya SAMA dengan
@@ -296,7 +297,7 @@ local function showToast(likerUserId, likerName)
 	local card = Instance.new("Frame")
 	card.Name             = "LikeToast"
 	card.Size             = UDim2.new(1, 0, 0, 44)
-	card.BackgroundColor3  = CARD
+	card.BackgroundColor3  = T.CARD
 	card.BackgroundTransparency = 0.05
 	card.BorderSizePixel  = 0
 	card.LayoutOrder      = toastOrder
@@ -317,7 +318,7 @@ local function showToast(likerUserId, likerName)
 	avatar.AnchorPoint            = Vector2.new(0, 0.5)
 	avatar.Position               = UDim2.new(0, 7, 0.5, 0)
 	avatar.Size                   = UDim2.fromOffset(30, 30)
-	avatar.BackgroundColor3       = Color3.fromRGB(36, 36, 39)
+	avatar.BackgroundColor3       = T.CARD_HOVER
 	avatar.BorderSizePixel        = 0
 	avatar.ScaleType              = Enum.ScaleType.Fit
 	avatar.Image = (likerUserId and likerUserId > 0)
@@ -345,7 +346,7 @@ local function showToast(likerUserId, likerName)
 	nameLabel.Size                   = UDim2.new(1, -78, 0, 15)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text                   = likerName or "Seseorang"
-	nameLabel.TextColor3             = TEXT
+	nameLabel.TextColor3             = T.TEXT
 	nameLabel.Font                   = Enum.Font.BuilderSansBold
 	nameLabel.TextSize               = 13
 	nameLabel.TextXAlignment         = Enum.TextXAlignment.Left
@@ -357,7 +358,7 @@ local function showToast(likerUserId, likerName)
 	subLabel.Size                   = UDim2.new(1, -78, 0, 14)
 	subLabel.BackgroundTransparency = 1
 	subLabel.Text                   = "menyukai avatarmu"
-	subLabel.TextColor3             = TEXT_DIM
+	subLabel.TextColor3             = T.TEXT_DIM
 	subLabel.Font                   = Enum.Font.BuilderSans
 	subLabel.TextSize               = 11
 	subLabel.TextXAlignment         = Enum.TextXAlignment.Left

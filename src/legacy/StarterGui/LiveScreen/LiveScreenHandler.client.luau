@@ -1,9 +1,14 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor) — T.X dibaca saat melukis → ikut tema pilihan pemain.
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+local T = ThemeColor.tokens
+
 local player = Players.LocalPlayer
 local gui = script.Parent
 gui.Name = "LiveScreenGui"
+ThemeColor.mark(gui)
 
 -- ═══════════════════════════════════════════════════════════
 -- ADMIN CHECK (reads Attribute from UnifiedRankManager)
@@ -65,6 +70,31 @@ local prevBtn = container:WaitForChild("PrevBtn")
 local nextBtn = container:WaitForChild("NextBtn")
 
 -- ==========================================
+-- WARNA AWAL (themeColor)
+-- Panel buatan Studio (hitam/putih) → token tema. Ukuran/posisi/transparansi tidak diubah.
+-- ==========================================
+mainFrame.BackgroundColor3 = T.BG
+closeBtn.TextColor3 = T.TEXT
+for _, holder in ipairs({ mainFrame, header, container }) do
+	for _, child in ipairs(holder:GetChildren()) do
+		if child:IsA("TextLabel") then
+			-- judul "Live Screen" (header/panel) → TEXT_STRONG; label di container → TEXT_DIM
+			child.TextColor3 = (holder == container) and T.TEXT_DIM or T.TEXT_STRONG
+		end
+	end
+end
+scrollingFrame.BackgroundColor3 = T.CARD
+scrollingFrame.ScrollBarImageColor3 = T.SCROLL
+inputName.BackgroundColor3 = T.CARD
+inputName.TextColor3 = T.TEXT
+inputName.PlaceholderColor3 = T.TEXT_DIM
+enterBtn.TextColor3 = T.TEXT
+for _, actionBtn in ipairs({ showBtn, stopBtn, statisBtn, dynamisBtn, prevBtn, nextBtn }) do
+	actionBtn.BackgroundColor3 = T.CARD
+	actionBtn.TextColor3 = T.TEXT
+end
+
+-- ==========================================
 -- VJ / LIVE BUTTONS (auto-create if needed)
 -- ==========================================
 local vjBtn = container:FindFirstChild("VJBtn")
@@ -80,9 +110,9 @@ if not vjBtn or not liveBtn then
 		liveBtn.Name = "LiveBtn"
 		liveBtn.Size = UDim2.new(0, 80, 0, 30)
 		liveBtn.Position = UDim2.new(0, 10, 0, btnY)
-		liveBtn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
+		liveBtn.BackgroundColor3 = T.CARD_HOVER
 		liveBtn.BackgroundTransparency = 0.1
-		liveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		liveBtn.TextColor3 = T.TEXT
 		liveBtn.Text = "📺 LIVE"
 		liveBtn.Font = Enum.Font.GothamBold
 		liveBtn.TextSize = 12
@@ -95,9 +125,9 @@ if not vjBtn or not liveBtn then
 		vjBtn.Name = "VJBtn"
 		vjBtn.Size = UDim2.new(0, 80, 0, 30)
 		vjBtn.Position = UDim2.new(0, 100, 0, btnY)
-		vjBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 255)
+		vjBtn.BackgroundColor3 = T.ACCENT
 		vjBtn.BackgroundTransparency = 0.1
-		vjBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+		vjBtn.TextColor3 = T.ON_ACCENT
 		vjBtn.Text = "🎬 VJ"
 		vjBtn.Font = Enum.Font.GothamBold
 		vjBtn.TextSize = 12
@@ -134,16 +164,16 @@ local updateScreenModeUI
 -- ==========================================
 updateButtonHighlight = function(targetName)
 	for _, btn in pairs(playerButtons) do
-		btn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
+		btn.BackgroundColor3 = T.CARD
 		btn.BackgroundTransparency = 0.3
-		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.TextColor3 = T.TEXT
 	end
 
 	if targetName ~= "" and playerButtons[targetName] then
 		local btn = playerButtons[targetName]
-		btn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+		btn.BackgroundColor3 = T.ACCENT
 		btn.BackgroundTransparency = 0.3
-		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.TextColor3 = T.ON_ACCENT
 	end
 
 	selectedPlayerName = targetName
@@ -154,9 +184,9 @@ local function createPlayerButton(targetPlayer)
 	btn.Name = targetPlayer.Name
 	btn.Text = targetPlayer.DisplayName
 	btn.Visible = true
-	btn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
+	btn.BackgroundColor3 = T.CARD
 	btn.BackgroundTransparency = 0.3
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.TextColor3 = T.TEXT
 	btn.Parent = scrollingFrame
 
 	btn.MouseButton1Click:Connect(function()
@@ -248,20 +278,22 @@ end
 -- ==========================================
 -- CAMERA MODE
 -- ==========================================
+-- Latar Statis/Dinamis transparan (BackgroundTransparency = 1) → status hanya terlihat dari warna teks:
+-- aktif = ACCENT (teks sorot; ON_ACCENT tidak terbaca di atas panel gelap), tidak aktif = TEXT.
 updateCameraModeUI = function(mode)
 	if mode == "Static" then
-		statisBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-		statisBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+		statisBtn.BackgroundColor3 = T.ACCENT
+		statisBtn.TextColor3 = T.ACCENT
 		statisBtn.BackgroundTransparency = 1
-		dynamisBtn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
-		dynamisBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		dynamisBtn.BackgroundColor3 = T.CARD_HOVER
+		dynamisBtn.TextColor3 = T.TEXT
 		dynamisBtn.BackgroundTransparency = 1
 	elseif mode == "Dynamic" then
-		statisBtn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
-		statisBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		statisBtn.BackgroundColor3 = T.CARD_HOVER
+		statisBtn.TextColor3 = T.TEXT
 		statisBtn.BackgroundTransparency = 1
-		dynamisBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-		dynamisBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+		dynamisBtn.BackgroundColor3 = T.ACCENT
+		dynamisBtn.TextColor3 = T.ACCENT
 		dynamisBtn.BackgroundTransparency = 1
 	end
 end
@@ -281,18 +313,18 @@ updateScreenModeUI = function(mode)
 	currentScreenModeLocal = mode
 
 	if mode == "Live" then
-		liveBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-		liveBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+		liveBtn.BackgroundColor3 = T.ACCENT
+		liveBtn.TextColor3 = T.ON_ACCENT
 		liveBtn.BackgroundTransparency = 0.1
-		vjBtn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
-		vjBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		vjBtn.BackgroundColor3 = T.CARD_HOVER
+		vjBtn.TextColor3 = T.TEXT
 		vjBtn.BackgroundTransparency = 0.1
 	elseif mode == "VJ" then
-		liveBtn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
-		liveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		liveBtn.BackgroundColor3 = T.CARD_HOVER
+		liveBtn.TextColor3 = T.TEXT
 		liveBtn.BackgroundTransparency = 0.1
-		vjBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 255)
-		vjBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+		vjBtn.BackgroundColor3 = T.ACCENT
+		vjBtn.TextColor3 = T.ON_ACCENT
 		vjBtn.BackgroundTransparency = 0.1
 	end
 end

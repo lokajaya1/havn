@@ -7,6 +7,9 @@
 
 local Players  = game:GetService("Players")
 local TweenSvc = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -23,7 +26,7 @@ if _G[ID] then
 end
 _G[ID] = true
 
--- ── Tema (dari UltimateMenu, fallback identik) ─────────────
+-- ── Tema: ThemeColor.tokens (themeColor) — T.X dibaca saat melukis ─────────────
 do
 	local waited = 0
 	while not _G.MenuConfig and waited < 10 do
@@ -34,15 +37,7 @@ end
 
 local MenuUI = _G.MenuUI
 
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-}
+local T = ThemeColor.tokens
 
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD    = Enum.Font.BuilderSansBold,
@@ -54,7 +49,6 @@ local TF = TweenInfo.new(0.12, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local TS = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 
 local P_TOP_MIN = 54     -- cadangan kalau TopbarLayout belum ada
-local P_RIGHT   = 10
 local BTN_SZ  = 40
 local PAD     = 9
 local HEADER_H = 30
@@ -127,9 +121,36 @@ local isDraggingPanel    = nil
 local _panelGen       = 0
 local _btnGen         = 0
 
+-- Posisi bawaan = TEPAT DI BAWAH tombol Tool di topbar (permintaan user 2 Okt 17:21, screenshot): tengah panel = tengah
+-- tombol (diklem EDGE px dari tepi layar); grip pegangan (18 px di atas panel) mulai tepat di bawah baris topbar → tidak
+-- menutup tombol mana pun (portrait 2 baris ikut). Tombol belum ada → tengah atas. Digeser → dibuka lagi = kembali ke
+-- bawah tombol (customPos dilepas saat tutup). dy = geser animasi buka/tutup.
+local EDGE = 8
+local function btnRect()
+	local btn, gui = S.btn, S.panelGui
+	if not (btn and gui and btn.Visible and btn.AbsoluteSize.X > 0) then return nil end
+	return btn.AbsolutePosition - gui.AbsolutePosition, btn.AbsoluteSize -- ruang ScreenGui panel (inset apa pun)
+end
+
+local function anchorTop()
+	local rowsBottom = panelTop() - 10 -- TopbarLayout.contentTop = bawah semua baris topbar + 10
+	local pos, size = btnRect()
+	if pos then rowsBottom = math.max(rowsBottom, pos.Y + size.Y) end
+	return math.floor(rowsBottom + 20)
+end
+
+local function defaultPos(dy)
+	local vp = getViewport()
+	local x = (vp.X - panelW) / 2
+	local pos, size = btnRect()
+	if pos then x = pos.X + size.X / 2 - panelW / 2 end
+	x = math.clamp(x, EDGE, math.max(EDGE, vp.X - panelW - EDGE))
+	return UDim2.fromOffset(math.floor(x), anchorTop() + (dy or 0))
+end
+
 local function computeSize()
 	local vp  = getViewport()
-	local top = panelTop()
+	local top = anchorTop()
 
 	panelW = math.floor(math.clamp(vp.X * 0.26, 250, 330))
 	panelW = math.min(panelW, math.floor(vp.X) - 20)
@@ -141,7 +162,7 @@ local function computeSize()
 	if customPos then
 		if reclampPanel then reclampPanel() end
 	else
-		S.panel.Position = UDim2.new(1, -(panelW + P_RIGHT), 0, top)
+		S.panel.Position = defaultPos()
 	end
 end
 
@@ -157,9 +178,8 @@ local function pmOpen()
 
 	S.panel.Visible = true
 	if not customPos then
-		local top = panelTop()
-		S.panel.Position = UDim2.new(1, 50, 0, top)
-		tw(S.panel, TS, { Position = UDim2.new(1, -(panelW + P_RIGHT), 0, top) })
+		S.panel.Position = defaultPos(-8)
+		tw(S.panel, TS, { Position = defaultPos() })
 	end
 end
 
@@ -173,7 +193,7 @@ local function pmClose()
 
 	tw(S.overlay, TF, { BackgroundTransparency = 1 })
 	if not wasDragged then
-		tw(S.panel, TS, { Position = UDim2.new(1, 50, 0, panelTop()) })
+		tw(S.panel, TS, { Position = defaultPos(-8) })
 	end
 
 	local gen = _panelGen
@@ -305,6 +325,7 @@ local function buildPanel()
 		Name = "DynamicToolsGui", ResetOnSpawn = false, IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui,
 	})
+	ThemeColor.mark(S.panelGui)
 
 	S.overlay = new("TextButton", {
 		Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(),
@@ -324,7 +345,7 @@ local function buildPanel()
 		ZIndex = 50, Parent = S.panelGui,
 	})
 	corner(14, S.panel)
-	stroke(S.panel, 0.88)
+	ThemeColor.glow(stroke(S.panel, 0.88), "panel") -- garis tepi bergerak (themeColor)
 
 	-- Grip drag di luar atas panel (sama seperti panel Dance)
 	local gripHit = new("Frame", {
@@ -354,8 +375,8 @@ local function buildPanel()
 
 	local closeBtn = new("TextButton", {
 		Name = "Close", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 7),
-		Size = UDim2.new(0, 20, 0, 20), BackgroundTransparency = 1, Text = "✕",
-		TextColor3 = T.TEXT_DIM, Font = FONT.REGULAR, TextSize = 13,
+		Size = UDim2.new(0, 20, 0, 20), BackgroundTransparency = 1, Text = "X",
+		TextColor3 = T.TEXT_DIM, Font = FONT.BOLD, TextSize = 12,
 		AutoButtonColor = false, ZIndex = 55, Parent = S.panel,
 	})
 	bindHover(closeBtn, function(on)
@@ -418,6 +439,10 @@ local function buildBtn(parent)
 		tw(S.btn, TF, { Size = UDim2.new(0, BTN_SZ, 0, BTN_SZ) })
 	end)
 	S.btn.Activated:Connect(pmToggle)
+	-- Barisan topbar disusun ulang (tombol lain muncul/hilang) → panel yang terbuka tetap di bawah tombolnya.
+	S.btn:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+		if S.panel and S.panel.Visible and not customPos then S.panel.Position = defaultPos() end
+	end)
 
 	-- order 10: tombol tool mengambil slot terdekat (persis seperti flow lama
 	-- di X=-153), sehingga tombol "/" yang tergeser ke kiri.

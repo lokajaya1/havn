@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════
 -- PlayersPanel — daftar player + setting Primary Community
 -- Klik player → MenuBinder.SetMenuPlayer(player)
--- Tema mengikuti host menu (dibaca dari _G.MenuConfig).
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): T.X dibaca saat melukis → ikut tema yang dipilih.
 --
 -- Dua section: CONNECTIONS (sudah berteman) lalu ALL PLAYERS.
 -- Badge jumlah like per baris DISPLAY-ONLY: angkanya dibaca dari Attribute
@@ -18,28 +18,19 @@ local TweenService = game:GetService("TweenService")
 
 local modules    = RS:WaitForChild("CustomUIModules")
 local Responsive = require(modules:WaitForChild("Responsive"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local UI          = _G.MenuUI
 local CONFIG      = _G.MenuConfig
 local localPlayer = Players.LocalPlayer
 
-local T = CONFIG.theme or {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-}
+local T = ThemeColor.tokens
 
 local FONT = CONFIG.font or {
 	BOLD    = Enum.Font.BuilderSansBold,
 	MEDIUM  = Enum.Font.BuilderSansMedium,
 	REGULAR = Enum.Font.BuilderSans,
 }
-
-local TEXT_ON_ACCENT = CONFIG.colors.textOnAccent or Color3.fromRGB(18, 18, 20)
 
 -- Warna hati dibikin hex karena dipakai lewat RichText, bukan TextColor3.
 local LIKE_HEX = "#EB5660"
@@ -212,9 +203,10 @@ local settingLabel = UI.text({
 local TOGGLE_W, TOGGLE_H, TOGGLE_PAD = 38, 20, 3
 local knobSize = TOGGLE_H - TOGGLE_PAD * 2
 
+-- Gaya themeColor: hidup = jalur ACCENT + kenop TEXT_STRONG, mati = jalur TRACK + kenop TEXT.
 local toggle = UI.button({
 	Name = "Toggle", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
-	Size = UDim2.new(0, TOGGLE_W, 0, TOGGLE_H), BackgroundColor3 = T.CARD_HOVER,
+	Size = UDim2.new(0, TOGGLE_W, 0, TOGGLE_H), BackgroundColor3 = T.TRACK,
 	Text = "", Active = CommunityInfo ~= nil, Parent = settingRow,
 })
 UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = toggle })
@@ -225,6 +217,7 @@ local knob = UI.frame({
 	BackgroundColor3 = T.TEXT, Parent = toggle,
 })
 UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = knob })
+stroke(knob, 0.7, T.BG)
 
 local KNOB_OFF = UDim2.new(0, TOGGLE_PAD, 0.5, 0)
 local KNOB_ON  = UDim2.new(0, TOGGLE_W - knobSize - TOGGLE_PAD, 0.5, 0)
@@ -233,10 +226,10 @@ local isOn = (CommunityInfo ~= nil) and CommunityInfo.IsEnabled() or false
 
 local function paintToggle(on, animate)
 	local info = animate and TWEEN or INSTANT
-	tween(toggle, { BackgroundColor3 = on and T.ACCENT or T.CARD_HOVER }, info)
+	tween(toggle, { BackgroundColor3 = on and T.ACCENT or T.TRACK }, info)
 	tween(knob, {
 		Position         = on and KNOB_ON or KNOB_OFF,
-		BackgroundColor3 = on and TEXT_ON_ACCENT or T.TEXT,
+		BackgroundColor3 = on and T.TEXT_STRONG or T.TEXT,
 	}, info)
 end
 
@@ -396,6 +389,8 @@ local function createRow()
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = item,
 	})
+	-- Warna nama diatur paintName (tema pemain itu), bukan lukis ulang tema kita.
+	ThemeColor.skip(row.name)
 
 	row.user = UI.text({
 		Name = "Username", Text = "", TextColor3 = T.TEXT_DIM, Font = FONT.REGULAR,
@@ -414,7 +409,7 @@ local function createRow()
 	row.badge = UI.text({
 		Name = "YouBadge", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
 		BackgroundColor3 = T.ACCENT, BackgroundTransparency = 0, BorderSizePixel = 0,
-		Text = "You", TextColor3 = TEXT_ON_ACCENT, Font = FONT.BOLD,
+		Text = "You", TextColor3 = T.ON_ACCENT, Font = FONT.BOLD,
 		Visible = false, Parent = item,
 	})
 	UI.corner(6).Parent = row.badge
@@ -457,7 +452,28 @@ local function releaseRow(row)
 		row.likeConn:Disconnect()
 		row.likeConn = nil
 	end
+	if row.themeConn then
+		row.themeConn:Disconnect()
+		row.themeConn = nil
+	end
 	row.player = nil
+end
+
+-- Warna nama = aksen tema warna pilihan pemain ITU (sama dengan nametag di atas kepala; ThemeColor.nameColor).
+-- Tema polos (Default) → seperti dulu: diri sendiri ACCENT tema kita, pemain lain TEXT.
+local function paintName(row, plr)
+	row.name.TextColor3 = ThemeColor.nameColor(plr) or ((plr == localPlayer) and T.ACCENT or T.TEXT)
+end
+
+local function watchTheme(row, plr)
+	if row.themeConn then
+		row.themeConn:Disconnect()
+		row.themeConn = nil
+	end
+	paintName(row, plr)
+	row.themeConn = plr:GetAttributeChangedSignal(ThemeColor.ATTR):Connect(function()
+		if row.player == plr then paintName(row, plr) end
+	end)
 end
 
 local function watchLikes(row, plr)
@@ -501,7 +517,7 @@ local function assignRow(row, plr, order, isFriend)
 	row.user.Text = "@" .. plr.Name
 
 	local isSelf = (plr == localPlayer)
-	row.name.TextColor3 = isSelf and T.ACCENT or T.TEXT
+	watchTheme(row, plr)
 	row.badge.Visible   = isSelf
 
 	-- Connection ditandai stroke agak terang, bukan warna nama: warna nama
@@ -592,6 +608,14 @@ searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 	query = searchBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
 	queueRefresh()
 end)
+
+-- Tema kita diganti → nama ber-warna-bawaan (T.ACCENT / T.TEXT) ikut; dilepas saat panel ini diganti (respawn).
+local stopTheme = ThemeColor.onChanged(function()
+	for _, row in ipairs(rows) do
+		if row.player then paintName(row, row.player) end
+	end
+end)
+container.Destroying:Connect(stopTheme)
 
 Players.PlayerAdded:Connect(queueRefresh)
 Players.PlayerRemoving:Connect(function(plr)

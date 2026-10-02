@@ -3,10 +3,15 @@
 -- Panel geser kanan dengan tema yang sama seperti DanceClient / MenuSystemInit.
 -- Header dihapus: tab langsung di atas, konten dapat sisa ruang penuh.
 -- API publik (_G.MenuPanel, _G.InjectUI, _G.ToggleMenu, _G.TopbarGui, dst) tidak berubah.
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor). _G.MenuConfig.theme = ThemeColor.tokens dan
+-- _G.MenuConfig.colors = ThemeColor.legacy (tabel BERSAMA yang diisi ulang saat pemain ganti tema).
 
 local Players      = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UIS          = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -62,18 +67,9 @@ end
 -- TEMA & KONFIG
 -- ═══════════════════════════════════════════════════════════
 
-local T = {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-	DANGER     = Color3.fromRGB(226, 96, 96),
-	SUCCESS    = Color3.fromRGB(96, 196, 132),
-	INFO       = Color3.fromRGB(96, 152, 236),
-}
+-- Token tema (BG, CARD, CARD_HOVER, CHIP, TRACK, SCROLL, BORDER, LINE, TEXT_STRONG, TEXT, TEXT_DIM, ACCENT,
+-- ON_ACCENT, DANGER, SUCCESS, INFO, TOPBAR). Baca T.X saat melukis supaya ikut tema yang dipilih.
+local T = ThemeColor.tokens
 
 local FONT = {
 	BOLD    = Enum.Font.BuilderSansBold,
@@ -84,23 +80,8 @@ local FONT = {
 local CFG = {
 	ID = "UltimateMenu",
 
-	-- Nama lama dipertahankan supaya UI yang di-inject script lain tidak rusak.
-	colors = {
-		bg           = T.BG,
-		bgLight      = T.CARD,
-		section      = T.CARD,
-		hover        = T.CARD_HOVER,
-		accent       = T.ACCENT,
-		accentDark   = Color3.fromRGB(168, 138, 44),
-		white        = T.TEXT,
-		gray         = T.TEXT_DIM,
-		darkGray     = Color3.fromRGB(104, 104, 110),
-		textOnAccent = Color3.fromRGB(18, 18, 20),
-		danger       = T.DANGER,
-		success      = T.SUCCESS,
-		blue         = T.INFO,
-		border       = T.LINE,
-	},
+	-- Nama lama dipertahankan supaya UI yang di-inject script lain tidak rusak (peta: ThemeColor.Rules.LEGACY).
+	colors = ThemeColor.legacy,
 
 	tween = {
 		instant = TweenInfo.new(0.08, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out),
@@ -175,10 +156,11 @@ function UI.new(class, props)
 	return obj
 end
 
+-- Warna bawaan dibaca dari tema SEKARANG (ThemeColor.live), bukan tema saat skrip ini mulai.
 local function make(class, defaults)
 	return function(props)
 		local obj = Instance.new(class)
-		for k, v in pairs(defaults) do obj[k] = v end
+		for k, v in pairs(defaults) do obj[k] = (typeof(v) == "Color3") and ThemeColor.live(v) or v end
 		if props then for k, v in pairs(props) do obj[k] = v end end
 		return obj
 	end
@@ -247,9 +229,12 @@ end
 
 function UI.tween(obj, props, info)
 	if not obj or not obj.Parent then return end
+	-- Warna tujuan yang tersimpan dari tema lama (mis. addHover) → warna yang sama di tema sekarang.
+	local goal = {}
+	for k, v in pairs(props) do goal[k] = (typeof(v) == "Color3") and ThemeColor.live(v) or v end
 	local running = activeTweens[obj]
 	if running then running:Cancel() end
-	local t = TweenService:Create(obj, info or CFG.tween.smooth, props)
+	local t = TweenService:Create(obj, info or CFG.tween.smooth, goal)
 	activeTweens[obj] = t
 	t.Completed:Once(function()
 		if activeTweens[obj] == t then activeTweens[obj] = nil end
@@ -431,14 +416,15 @@ local function createPanel(config)
 		BackgroundColor3 = T.BG, ClipsDescendants = true, Visible = false, ZIndex = 50,
 	})
 	UI.corner(L.cornerRadius).Parent = panel
-	UI.stroke(T.LINE, 1, 0.88).Parent = panel
+	-- Garis tepi bergerak warna aksen (themeColor): cahaya berputar + denyut.
+	ThemeColor.glow(UI.stroke(T.LINE, 1, 0.88), "panel").Parent = panel
 
 	local tabBar = UI.frame({ Name = "TabBar", BackgroundTransparency = 1, Parent = panel })
 
 	local closeBtn = UI.button({
 		Name = "CloseButton", AnchorPoint = Vector2.new(1, 0.5),
 		Size = UDim2.new(0, CLOSE_SIZE, 0, CLOSE_SIZE), BackgroundTransparency = 1,
-		Text = "✕", TextColor3 = T.TEXT_DIM, Font = FONT.REGULAR, TextSize = 14,
+		Text = "X", TextColor3 = T.TEXT_DIM, Font = FONT.BOLD, TextSize = 13,
 		ZIndex = 55, Parent = panel,
 	})
 	UI.bindHover(closeBtn, function(on)
@@ -451,13 +437,14 @@ local function createPanel(config)
 	})
 
 	-- Satu fungsi pewarnaan tab untuk state aktif maupun hover.
+	-- Tab aktif = chip terang (CHIP) dengan teks gelap (ON_ACCENT) — gaya themeColor.
 	local function paintTab(name, hovered)
 		local btn    = data.tabBtns[name]
 		if not btn then return end
 		local active = (data.activeTab == name)
 		UI.tween(btn, {
-			BackgroundColor3 = (active or hovered) and T.CARD_HOVER or T.CARD,
-			TextColor3       = active and T.ACCENT or (hovered and T.TEXT or T.TEXT_DIM),
+			BackgroundColor3 = active and T.CHIP or (hovered and T.CARD_HOVER or T.CARD),
+			TextColor3       = active and T.ON_ACCENT or (hovered and T.TEXT or T.TEXT_DIM),
 		}, active and CFG.tween.fast or CFG.tween.instant)
 	end
 
@@ -566,6 +553,7 @@ function PM.init()
 		Name = "UltimatePanelSystem", ResetOnSpawn = false, IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui,
 	})
+	ThemeColor.mark(PM.container)
 	return PM.container
 end
 
@@ -653,10 +641,11 @@ local function createTopbarButton()
 		Name = "MenuButtonGui", ResetOnSpawn = false, IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui,
 	})
+	ThemeColor.mark(topGui)
 
 	local btn = UI.button({
 		Name = "MenuTopbarButton", Size = UDim2.new(0, 82, 0, 42),
-		Position = UDim2.new(1, -92, 0, 13), BackgroundColor3 = T.CARD,
+		Position = UDim2.new(1, -92, 0, 13), BackgroundColor3 = T.TOPBAR,
 		Text = "", Parent = topGui,
 	})
 	UI.new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = btn })
@@ -665,15 +654,17 @@ local function createTopbarButton()
 	btnStroke.Parent = btn
 
 	local label = UI.text({
-		Size = UDim2.new(1, 0, 1, 0), Text = "Menu", TextColor3 = T.TEXT,
+		Size = UDim2.new(1, 0, 1, 0), Text = "Menu", TextColor3 = T.TEXT_STRONG,
 		Font = FONT.MEDIUM, TextSize = 14, Parent = btn,
 	})
 
 	-- Satu fungsi tampilan tombol, dipakai hover maupun perubahan state panel.
+	-- Menu terbuka = pil terang (TEXT_STRONG) dengan teks gelap (ON_ACCENT) — gaya themeColor.
 	local function paintTopbar(hovered)
 		local open = (PM.active ~= nil)
-		UI.tween(btn, { BackgroundColor3 = (hovered or open) and T.CARD_HOVER or T.CARD }, CFG.tween.fast)
-		UI.tween(label, { TextColor3 = open and T.ACCENT or T.TEXT }, CFG.tween.fast)
+		UI.tween(btn, { BackgroundColor3 = open and T.TEXT_STRONG or (hovered and T.CARD_HOVER or T.TOPBAR) }, CFG.tween.fast)
+		UI.tween(label, { TextColor3 = open and T.ON_ACCENT or T.TEXT_STRONG }, CFG.tween.fast)
+		label.Text = open and "X  Menu" or "Menu"
 		UI.tween(btnStroke, { Transparency = (hovered or open) and 0.1 or 0.35 }, CFG.tween.fast)
 	end
 

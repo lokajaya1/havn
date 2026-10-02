@@ -2,6 +2,12 @@
 -- RemoteEvent, BGColor, TextColor harus jadi children dari LocalScript ini
 -- Depends on: DynamicTools System
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Warna UI panel: ReplicatedStorage.Modules.ThemeColor (themeColor) — T.X dibaca saat buildUI (tiap tool di-equip).
+-- Warna sign (BG_COLORS/TEXT_COLORS) = KONTEN → literal + grid swatch di-skip.
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+local T = ThemeColor.tokens
 
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
@@ -72,7 +78,7 @@ local function makeColorGrid(labelText, colors, remote, order, parent)
 	local section = Instance.new("Frame")
 	section.Size            = UDim2.new(1, 0, 0, 0)
 	section.AutomaticSize  = Enum.AutomaticSize.Y
-	section.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+	section.BackgroundColor3 = T.CARD
 	section.BorderSizePixel = 0
 	section.LayoutOrder     = order
 	section.Parent          = parent
@@ -93,7 +99,7 @@ local function makeColorGrid(labelText, colors, remote, order, parent)
 	lbl.Size               = UDim2.new(1, 0, 0, 18)
 	lbl.BackgroundTransparency = 1
 	lbl.Text               = labelText
-	lbl.TextColor3         = Color3.fromRGB(180, 180, 185)
+	lbl.TextColor3         = T.TEXT_DIM
 	lbl.TextSize           = 13
 	lbl.Font               = Enum.Font.GothamBold
 	lbl.TextXAlignment     = Enum.TextXAlignment.Left
@@ -106,6 +112,7 @@ local function makeColorGrid(labelText, colors, remote, order, parent)
 	grid.BackgroundTransparency = 1
 	grid.LayoutOrder        = 1
 	grid.Parent             = section
+	ThemeColor.skip(grid) -- swatch warna sign = konten
 
 	local gl = Instance.new("UIGridLayout")
 	gl.CellSize            = UDim2.new(0, 32, 0, 32)
@@ -162,7 +169,7 @@ local function buildUI()
 	title.Size               = UDim2.new(1, 0, 0, 28)
 	title.BackgroundTransparency = 1
 	title.Text               = "📋 Sign Settings"
-	title.TextColor3         = Color3.fromRGB(255, 255, 255)
+	title.TextColor3         = T.TEXT_STRONG
 	title.TextSize           = 18
 	title.Font               = Enum.Font.GothamBold
 	title.TextXAlignment     = Enum.TextXAlignment.Left
@@ -172,7 +179,7 @@ local function buildUI()
 	-- Text Input section
 	local inputSection = Instance.new("Frame")
 	inputSection.Size            = UDim2.new(1, 0, 0, 72)
-	inputSection.BackgroundColor3= Color3.fromRGB(30, 30, 35)
+	inputSection.BackgroundColor3= T.CARD
 	inputSection.BorderSizePixel = 0
 	inputSection.LayoutOrder     = 2
 	inputSection.Parent          = main
@@ -188,7 +195,7 @@ local function buildUI()
 	inputLbl.Size               = UDim2.new(1, 0, 0, 18)
 	inputLbl.BackgroundTransparency = 1
 	inputLbl.Text               = "Text"
-	inputLbl.TextColor3         = Color3.fromRGB(180, 180, 185)
+	inputLbl.TextColor3         = T.TEXT_DIM
 	inputLbl.TextSize           = 13
 	inputLbl.Font               = Enum.Font.GothamBold
 	inputLbl.TextXAlignment     = Enum.TextXAlignment.Left
@@ -198,12 +205,12 @@ local function buildUI()
 	local textBox = Instance.new("TextBox")
 	textBox.Size               = UDim2.new(1, 0, 0, 34)
 	textBox.Position           = UDim2.new(0, 0, 0, 26)
-	textBox.BackgroundColor3   = Color3.fromRGB(20, 20, 25)
+	textBox.BackgroundColor3   = T.BG
 	textBox.BorderSizePixel    = 0
 	textBox.Text               = ""
 	textBox.PlaceholderText    = "Ketik teks sign..."
-	textBox.TextColor3         = Color3.fromRGB(255, 255, 255)
-	textBox.PlaceholderColor3  = Color3.fromRGB(100, 100, 105)
+	textBox.TextColor3         = T.TEXT
+	textBox.PlaceholderColor3  = T.TEXT_DIM
 	textBox.TextSize           = 14
 	textBox.Font               = Enum.Font.Gotham
 	textBox.ClearTextOnFocus   = false

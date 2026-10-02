@@ -5,6 +5,7 @@
 -- saran dua baris (perintah + argumen di baris atas, deskripsi di bawah).
 -- Tema, grip drag, dan slot topbar memakai helper bersama dari UltimateMenu
 -- (_G.MenuUI, _G.MenuConfig, _G.TopbarLayout).
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor) — T.X dibaca saat melukis → ikut tema pilihan pemain.
 --
 -- /re, /normal, /rejoin gratis; command lain terkunci sampai punya gamepass.
 -- Singleton: instance baru mem-cleanup instance lama.
@@ -19,6 +20,8 @@ local Lighting    = game:GetService("Lighting")
 local RepStorage  = game:GetService("ReplicatedStorage")
 local Marketplace = game:GetService("MarketplaceService")
 local Stats       = game:GetService("Stats")
+
+local ThemeColor = require(RepStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -42,7 +45,7 @@ local function isAlive()
 	return _G[ID] == SELF
 end
 
--- ── Tema (dari UltimateMenu, fallback identik) ─────────────
+-- ── Tema: ThemeColor.tokens (themeColor) — T.X dibaca saat melukis ─────────────
 do
 	local waited = 0
 	while not _G.MenuConfig and waited < 10 do
@@ -53,17 +56,7 @@ end
 
 local MenuUI = _G.MenuUI
 
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-	DANGER     = Color3.fromRGB(226, 96, 96),
-	SUCCESS    = Color3.fromRGB(96, 196, 132),
-}
+local T = ThemeColor.tokens
 
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD    = Enum.Font.BuilderSansBold,
@@ -72,7 +65,6 @@ local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 }
 
 local MONO           = Enum.Font.RobotoMono
-local TEXT_ON_ACCENT = Color3.fromRGB(18, 18, 20)
 
 local TF = TweenInfo.new(0.12, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
 local TS = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
@@ -82,6 +74,8 @@ local PANEL_TOP_MIN = 54     -- cadangan kalau TopbarLayout belum ada
 local SEARCH_H      = 38
 local ROW_H         = 42
 local PAD           = 9
+local VISIBLE_ROWS  = 4      -- tinggi panel = kotak cari + maks 4 baris command utuh (permintaan user 17:21: lebih pendek)
+local HEIGHT_MAX    = 0.40   -- … dan tidak lebih dari 40% tinggi layar (layar pendek → baris yang muat, min 2)
 local BTN_SZ        = 40
 local COMMANDS_PASS = require(RepStorage:WaitForChild("ShopConfig")).getGamepassByName("Commands").id
 local CommandShared = require(RepStorage:WaitForChild("CommandShared"))
@@ -114,8 +108,12 @@ local function stroke(p, transparency, color)
 	})
 end
 
+-- Warna tujuan yang tersimpan dari tema lama → warna yang sama di tema sekarang (ThemeColor.live).
 local function tw(o, i, p)
-	if o and o.Parent then TweenSvc:Create(o, i, p):Play() end
+	if not (o and o.Parent) then return end
+	local goal = {}
+	for k, v in pairs(p) do goal[k] = (typeof(v) == "Color3") and ThemeColor.live(v) or v end
+	TweenSvc:Create(o, i, goal):Play()
 end
 
 local bindHover = (MenuUI and MenuUI.bindHover) or function(obj, apply)
@@ -168,6 +166,7 @@ local function toggleFps()
 		Name = "DT_FPSOverlay", ResetOnSpawn = false, DisplayOrder = 200,
 		IgnoreGuiInset = true, Parent = playerGui,
 	})
+	ThemeColor.mark(fpsGui)
 
 	local lbl = new("TextLabel", {
 		Size = UDim2.new(0, 150, 0, 22), Position = UDim2.new(0, 8, 0, 8),
@@ -211,6 +210,7 @@ local function toast(msg, isError)
 		Name = "DT_Toast", ResetOnSpawn = false, DisplayOrder = 300,
 		IgnoreGuiInset = true, Parent = playerGui,
 	})
+	ThemeColor.mark(toastGui)
 
 	local lbl = new("TextLabel", {
 		Size = UDim2.new(0, 260, 0, 32), AnchorPoint = Vector2.new(0.5, 0),
@@ -271,6 +271,12 @@ local customPos     = false
 local refreshLocks  = function() end
 local panelW, panelH = 0, 0
 
+-- Posisi bawaan = ATAS-TENGAH, tepat di bawah baris topbar (permintaan user 17:21; v3 tengah layar dibatalkan).
+-- Setelah digeser, ditutup → dibuka lagi kembali ke atas (customPos dilepas saat tutup).
+local function defaultTop()
+	return panelTop()
+end
+
 -- ── Ukuran responsif ──────────────────────────────────────
 local function computeSize()
 	local vp  = getViewport()
@@ -278,15 +284,18 @@ local function computeSize()
 
 	panelW = math.floor(math.clamp(vp.X * 0.30, 260, 360))
 	panelW = math.min(panelW, math.floor(vp.X) - 20)
-	panelH = math.floor(math.clamp(vp.Y * 0.46, 200, 380))
-	panelH = math.min(panelH, math.floor(vp.Y) - top - 20)
+	-- kotak cari + baris command UTUH (tidak ada baris terpotong): sebanyak yang muat di HEIGHT_MAX, 2…VISIBLE_ROWS
+	local head = PAD + SEARCH_H + 6 + PAD
+	local room = math.min(math.floor(vp.Y * HEIGHT_MAX), math.floor(vp.Y) - top - 20) - head + 5
+	local rows = math.clamp(math.floor(room / (ROW_H + 5)), 2, VISIBLE_ROWS)
+	panelH = head + rows * ROW_H + (rows - 1) * 5
 
 	if not panel then return end
 	panel.Size = UDim2.new(0, panelW, 0, panelH)
 	if customPos then
 		if reclampPanel then reclampPanel() end
 	else
-		panel.Position = UDim2.new(0.5, 0, 0, top)
+		panel.Position = UDim2.new(0.5, 0, 0, defaultTop())
 	end
 end
 
@@ -309,7 +318,7 @@ local function pmOpen()
 
 	panel.Visible = true
 	if not customPos then
-		local top = panelTop()
+		local top = defaultTop()
 		panel.Position = UDim2.new(0.5, 0, 0, top - 14)
 		tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, top) })
 	end
@@ -338,7 +347,7 @@ local function pmClose()
 
 	tw(overlay, TF, { BackgroundTransparency = 1 })
 	if not wasDragged then
-		tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, panelTop() - 14) })
+		tw(panel, TS, { Position = UDim2.new(0.5, 0, 0, defaultTop() - 14) })
 	end
 
 	local gen = _showGen
@@ -379,6 +388,7 @@ local function build()
 		Name = "CmdPanelGui", ResetOnSpawn = false, IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui,
 	})
+	ThemeColor.mark(mainGui)
 
 	overlay = new("TextButton", {
 		Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(),
@@ -399,7 +409,7 @@ local function build()
 		ZIndex = 50, Parent = mainGui,
 	})
 	corner(14, panel)
-	stroke(panel, 0.88)
+	ThemeColor.glow(stroke(panel, 0.88), "panel") -- garis tepi bergerak (themeColor)
 
 	-- Grip drag di luar atas panel (gaya sama dengan panel Dance)
 	-- Area pegangan dibuat selebar panel (bukan cuma 52px) supaya gampang
@@ -502,7 +512,7 @@ local function build()
 	local buyBtn = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
 		Size = UDim2.new(0, 64, 0, 26), BackgroundColor3 = T.ACCENT,
-		Text = "Beli", TextColor3 = TEXT_ON_ACCENT, Font = FONT.MEDIUM,
+		Text = "Beli", TextColor3 = T.ON_ACCENT, Font = FONT.MEDIUM,
 		TextSize = 11, BorderSizePixel = 0, AutoButtonColor = false, Parent = banner,
 	})
 	corner(8, buyBtn)
@@ -804,11 +814,13 @@ local function init()
 		local old = _G.TopbarGui:FindFirstChild("CmdPanelBtn")
 		if old then old:Destroy() end
 
+		-- Gaya themeColor tombol topbar: latar TOPBAR, teks TEXT_STRONG; aktif (hover / panel terbuka) =
+		-- latar CARD_HOVER + teks sorot ACCENT seperti sebelumnya.
 		local btn = new("TextButton", {
 			Name = "CmdPanelBtn", Size = UDim2.new(0, BTN_SZ, 0, BTN_SZ),
 			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -100, 0, 13),
-			BackgroundColor3 = T.CARD, BorderSizePixel = 0, Text = "/",
-			TextColor3 = T.TEXT, Font = MONO, TextSize = 16,
+			BackgroundColor3 = T.TOPBAR, BorderSizePixel = 0, Text = "/",
+			TextColor3 = T.TEXT_STRONG, Font = MONO, TextSize = 16,
 			AutoButtonColor = false, Parent = _G.TopbarGui,
 		})
 		new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = btn })
@@ -818,8 +830,8 @@ local function init()
 
 		bindHover(btn, function(on)
 			local active = on or (panel and panel.Visible)
-			tw(btn, TF, { BackgroundColor3 = active and T.CARD_HOVER or T.CARD })
-			tw(btn, TF, { TextColor3 = active and T.ACCENT or T.TEXT })
+			tw(btn, TF, { BackgroundColor3 = active and T.CARD_HOVER or T.TOPBAR })
+			tw(btn, TF, { TextColor3 = active and T.ACCENT or T.TEXT_STRONG })
 			tw(btnStroke, TF, { Transparency = active and 0.1 or 0.35 })
 		end)
 

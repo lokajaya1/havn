@@ -26,30 +26,19 @@ if not setFn then
 	return
 end
 local Responsive = require(RS:WaitForChild("CustomUIModules"):WaitForChild("Responsive"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local waited = 0
 while not _G.MenuConfig and waited < 10 do
 	task.wait(0.1)
 	waited += 0.1
 end
-local T = (_G.MenuConfig and _G.MenuConfig.theme) or {
-	BG = Color3.fromRGB(16, 16, 17),
-	CARD = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE = Color3.fromRGB(255, 255, 255),
-	TEXT = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM = Color3.fromRGB(148, 148, 154),
-	ACCENT = Color3.fromRGB(212, 175, 55),
-	DANGER = Color3.fromRGB(226, 96, 96),
-	SUCCESS = Color3.fromRGB(96, 196, 132),
-}
+local T = ThemeColor.tokens -- tabel bersama themeColor: T.X dibaca saat melukis → ikut tema pilihan pemain
 local FONT = (_G.MenuConfig and _G.MenuConfig.font) or {
 	BOLD = Enum.Font.BuilderSansBold,
 	MEDIUM = Enum.Font.BuilderSansMedium,
 	REGULAR = Enum.Font.BuilderSans,
 }
-local ON_ACCENT = Color3.fromRGB(18, 18, 20)
-local SUCCESS = T.SUCCESS or Color3.fromRGB(96, 196, 132)
 
 -- ── helper ────────────────────────────────────────────────────────────────────────────────────────────────────────
 local function new(class, props)
@@ -93,6 +82,7 @@ end
 local old = playerGui:FindFirstChild("ThemeMapGui")
 if old then old:Destroy() end
 local gui = new("ScreenGui", { Name = "ThemeMapGui", ResetOnSpawn = false, Enabled = false, DisplayOrder = 12, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
+ThemeColor.mark(gui)
 local frame = new("Frame", {
 	Name = "Panel", AnchorPoint = Vector2.new(0.5, 1), BackgroundColor3 = T.BG, BorderSizePixel = 0,
 	Active = true, ClipsDescendants = true, Parent = gui, -- Active: klik tidak tembus ke tombol di belakang (DN16c)
@@ -103,7 +93,7 @@ local header = new("Frame", { Size = UDim2.new(1, 0, 0, 42), BackgroundTranspare
 label(header, "Tema map", 15, T.TEXT, FONT.BOLD, 0, { Position = UDim2.new(0, 14, 0, 12), Size = UDim2.new(1, -60, 0, 20), AutomaticSize = Enum.AutomaticSize.None })
 local closeBtn = new("TextButton", {
 	AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 6), Size = UDim2.new(0, 30, 0, 30), BackgroundTransparency = 1,
-	Text = "✕", TextColor3 = T.TEXT_DIM, TextSize = 18, Font = FONT.MEDIUM, AutoButtonColor = false, Parent = header,
+	Text = "X", TextColor3 = T.TEXT_DIM, TextSize = 15, Font = FONT.BOLD, AutoButtonColor = false, Parent = header,
 })
 local body = new("ScrollingFrame", {
 	Position = UDim2.new(0, 0, 0, 42), Size = UDim2.new(1, 0, 1, -42), BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -150,7 +140,7 @@ local endChips = chipRow(6, "SELESAI", Config.ends)
 
 local applyBtn = new("TextButton", {
 	Text = "Terapkan ke semua server", TextSize = 13, Font = FONT.BOLD, AutoButtonColor = false, BackgroundColor3 = T.ACCENT,
-	TextColor3 = ON_ACCENT, Size = UDim2.new(1, 0, 0, 34), LayoutOrder = 8, Parent = body,
+	TextColor3 = T.ON_ACCENT, Size = UDim2.new(1, 0, 0, 34), LayoutOrder = 8, Parent = body,
 })
 corner(applyBtn, 9)
 local msgLbl = label(body, "", 11, T.TEXT_DIM, FONT.REGULAR, 9)
@@ -196,18 +186,18 @@ local function paint()
 		local on = sel.start == key
 		local off = isDefault and key ~= "now"
 		b.BackgroundColor3 = if on then T.ACCENT else T.CARD
-		b.TextColor3 = if on then ON_ACCENT elseif off then T.TEXT_DIM else T.TEXT
+		b.TextColor3 = if on then T.ON_ACCENT elseif off then T.TEXT_DIM else T.TEXT
 		b.AutoButtonColor = false
 	end
 	for key, b in endChips do
 		local on = sel.stop == key
 		local off = isDefault and key ~= "none"
 		b.BackgroundColor3 = if on then T.ACCENT else T.CARD
-		b.TextColor3 = if on then ON_ACCENT elseif off then T.TEXT_DIM else T.TEXT
+		b.TextColor3 = if on then T.ON_ACCENT elseif off then T.TEXT_DIM else T.TEXT
 	end
 	local canApply = ready and sel.id ~= nil and not missing[sel.id] and not busy
 	applyBtn.BackgroundColor3 = if canApply then T.ACCENT else T.CARD_HOVER
-	applyBtn.TextColor3 = if canApply then ON_ACCENT else T.TEXT_DIM
+	applyBtn.TextColor3 = if canApply then T.ON_ACCENT else T.TEXT_DIM
 	if busy then
 		applyBtn.Text = "Menyimpan…"
 	elseif os.clock() < confirmUntil then
@@ -245,8 +235,8 @@ for i, theme in Config.list do
 	local name = label(btn, theme.label, 13, T.TEXT, FONT.MEDIUM, 0, { Position = UDim2.new(0, 10, 0, 5), Size = UDim2.new(1, -80, 0, 16), AutomaticSize = Enum.AutomaticSize.None })
 	local desc = label(btn, theme.desc, 11, T.TEXT_DIM, FONT.REGULAR, 0, { Position = UDim2.new(0, 10, 0, 23), Size = UDim2.new(1, -20, 0, 14), AutomaticSize = Enum.AutomaticSize.None, TextTruncate = Enum.TextTruncate.AtEnd })
 	local tag = new("TextLabel", {
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 6), Size = UDim2.new(0, 52, 0, 16), BackgroundColor3 = SUCCESS,
-		Text = "AKTIF", TextSize = 10, Font = FONT.BOLD, TextColor3 = ON_ACCENT, Visible = false, Parent = btn,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 6), Size = UDim2.new(0, 52, 0, 16), BackgroundColor3 = T.SUCCESS,
+		Text = "AKTIF", TextSize = 10, Font = FONT.BOLD, TextColor3 = T.ON_ACCENT, Visible = false, Parent = btn,
 	})
 	corner(tag, 6)
 	rows[theme.id] = { btn = btn, stroke = st, name = name, desc = desc, tag = tag, theme = theme }
@@ -301,7 +291,7 @@ applyBtn.Activated:Connect(function()
 	busy = false
 	if ok and type(r) == "table" and r.ok then
 		msgLbl.Text = "✓ tersimpan · semua server ikut dalam beberapa detik"
-		msgLbl.TextColor3 = SUCCESS
+		msgLbl.TextColor3 = T.SUCCESS
 	else
 		local why = ok and type(r) == "table" and r.reason or "tidak ada jawaban server"
 		msgLbl.Text = "✕ " .. (if why == "cooldown" then ("tunggu %s dtk"):format(tostring(r.wait or "")) else (REASON[why] or tostring(why)))

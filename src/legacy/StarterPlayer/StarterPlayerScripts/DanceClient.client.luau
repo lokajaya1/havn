@@ -13,6 +13,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService  = game:GetService("UserInputService")
 local TweenService      = game:GetService("TweenService")
 
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -23,15 +25,9 @@ _G.DanceClient = true
 -- KONFIG & TEMA
 -- ═══════════════════════════════════════════════════════════
 
-local T = {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-}
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor). T = tabel token BERSAMA yang diisi ulang saat pemain
+-- ganti tema → baca T.X saat melukis/hover (jangan disalin ke variabel lokal) supaya ikut tema yang dipilih.
+local T = ThemeColor.tokens
 
 local FONT = {
 	BOLD    = Enum.Font.BuilderSansBold,
@@ -334,6 +330,7 @@ local gui = new("ScreenGui", {
 	Name = "DanceHubGui", ResetOnSpawn = false, IgnoreGuiInset = false,
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 8, Parent = playerGui,
 })
+ThemeColor.mark(gui)
 
 local panel = new("Frame", {
 	Name = "Panel", AnchorPoint = Vector2.new(0, 0.5),
@@ -343,7 +340,7 @@ local panel = new("Frame", {
 	ClipsDescendants = false, Parent = gui,
 })
 corner(panel, 16)
-stroke(panel, T.LINE, 1, 0.88)
+ThemeColor.glow(stroke(panel, T.LINE, 1, 0.88), "panel") -- garis tepi bergerak (themeColor)
 
 -- ── GRIP (mengambang di atas panel, tidak memakan tinggi panel) ──
 local gripHit = new("Frame", {
@@ -435,9 +432,10 @@ local sliderHit = new("TextButton", {
 	AutoButtonColor = false, Parent = speedRow,
 })
 
+-- Gaya themeColor: isi ACCENT, jalur kosong TRACK, kenop TEXT_STRONG (saat SYNC: isi & kenop TEXT_DIM).
 local sliderTrack = new("Frame", {
 	Name = "Track", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-	Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = T.CARD_HOVER,
+	Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = T.TRACK,
 	BorderSizePixel = 0, Parent = sliderHit,
 })
 corner(sliderTrack, 2)
@@ -450,7 +448,7 @@ corner(sliderFill, 2)
 
 local sliderKnob = new("Frame", {
 	Name = "Knob", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
-	Size = UDim2.new(0, 11, 0, 11), BackgroundColor3 = T.ACCENT,
+	Size = UDim2.new(0, 11, 0, 11), BackgroundColor3 = T.TEXT_STRONG,
 	BorderSizePixel = 0, ZIndex = 3, Parent = sliderTrack,
 })
 corner(sliderKnob, 6)
@@ -487,8 +485,8 @@ local syncDetail = new("TextLabel", {
 
 local syncStopLabel = new("TextLabel", {
 	Name = "SyncStop", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0),
-	Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Text = "✕",
-	TextColor3 = T.TEXT_DIM, Font = FONT.REGULAR, TextSize = C.smallSize + 3,
+	Size = UDim2.new(0, 18, 0, 18), BackgroundTransparency = 1, Text = "X",
+	TextColor3 = T.TEXT_DIM, Font = FONT.BOLD, TextSize = C.smallSize + 1,
 	ZIndex = 7, Parent = syncCard,
 })
 
@@ -498,6 +496,7 @@ local syncStopLabel = new("TextLabel", {
 local buttonGui = new("ScreenGui", {
 	Name = "DanceToggleButton", ResetOnSpawn = false, DisplayOrder = -1, Parent = playerGui,
 })
+ThemeColor.mark(buttonGui)
 
 local buttonFrame = new("Frame", {
 	Name = "DanceBtn", AnchorPoint = Vector2.new(0, 0.5),
@@ -506,7 +505,7 @@ local buttonFrame = new("Frame", {
 })
 
 local toggleBtn = new("TextButton", {
-	Name = "Toggle", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = T.CARD,
+	Name = "Toggle", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = T.TOPBAR,
 	BorderSizePixel = 0, Text = "", AutoButtonColor = false, Parent = buttonFrame,
 })
 new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = toggleBtn })
@@ -515,16 +514,17 @@ local toggleStroke = stroke(toggleBtn, T.ACCENT, 0.5, 0.35)
 local toggleIcon = new("ImageLabel", {
 	Name = "Icon", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
 	Size = UDim2.new(0, CFG.BTN_ICON, 0, CFG.BTN_ICON), BackgroundTransparency = 1,
-	Image = CFG.ICON_IMAGE, ImageColor3 = T.TEXT,
+	Image = CFG.ICON_IMAGE, ImageColor3 = T.TEXT_STRONG,
 	ScaleType = Enum.ScaleType.Fit, Parent = toggleBtn,
 })
 
 -- Dipakai hover maupun buka/tutup, jadi tampilan tombol diatur di satu tempat.
+-- Gaya tombol topbar themeColor: latar TOPBAR, hover/terbuka CARD_HOVER, ikon TEXT_STRONG (terbuka = ACCENT).
 local function paintToggle(hovered)
 	local active = State.open or hovered
-	tween(toggleBtn,    { BackgroundColor3 = active and T.CARD_HOVER or T.CARD })
+	tween(toggleBtn,    { BackgroundColor3 = active and T.CARD_HOVER or T.TOPBAR })
 	tween(toggleStroke, { Transparency = active and 0.1 or 0.35 })
-	tween(toggleIcon,   { ImageColor3 = State.open and T.ACCENT or T.TEXT })
+	tween(toggleIcon,   { ImageColor3 = State.open and T.ACCENT or T.TEXT_STRONG })
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -606,7 +606,7 @@ local function applyLayout()
 	syncCard.Size          = UDim2.new(1, -2 * pad, 0, CFG.SYNC_CARD_H)
 	syncTitle.TextSize     = C.smallSize
 	syncDetail.TextSize    = math.max(C.smallSize - 1, 8)
-	syncStopLabel.TextSize = C.smallSize + 3
+	syncStopLabel.TextSize = C.smallSize + 1
 	emptyLabel.TextSize    = C.smallSize + 1
 
 	hiddenPos = UDim2.new(0, -(C.width + 40), 0.5, 0)
@@ -957,7 +957,7 @@ local function updateSyncUI(isSyncing, target, currentDance)
 	local enabled = not State.isSyncing
 	sliderHit.Active            = enabled
 	sliderFill.BackgroundColor3 = enabled and T.ACCENT or T.TEXT_DIM
-	sliderKnob.BackgroundColor3 = enabled and T.ACCENT or T.TEXT_DIM
+	sliderKnob.BackgroundColor3 = enabled and T.TEXT_STRONG or T.TEXT_DIM
 	speedValue.TextColor3       = enabled and T.ACCENT or T.TEXT_DIM
 	speedValue.Text             = enabled and fmtSpeed(State.speed) or "SYNC"
 

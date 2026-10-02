@@ -18,30 +18,38 @@
 local UIS          = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local TextService  = game:GetService("TextService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local UI = {}
 
-UI.C = {
-	bg         = Color3.fromRGB(18,  18,  22),
-	bgCard     = Color3.fromRGB(26,  26,  30),
-	bgLight    = Color3.fromRGB(32,  32,  38),
-	section    = Color3.fromRGB(38,  38,  44),
-	hover      = Color3.fromRGB(46,  46,  54),
-	accent     = Color3.fromRGB(255, 195, 40),
-	accentDk   = Color3.fromRGB(210, 160, 30),
-	white      = Color3.fromRGB(240, 240, 245),
-	gray       = Color3.fromRGB(160, 160, 168),
-	muted      = Color3.fromRGB(100, 100, 108),
-	onAccent   = Color3.fromRGB(18,  18,  22),
-	danger     = Color3.fromRGB(230, 80,  80),
-	success    = Color3.fromRGB(72,  196, 120),
-	border     = Color3.fromRGB(44,  44,  52),
-	gold       = Color3.fromRGB(255, 215, 0),
-	validating = Color3.fromRGB(255, 165, 0),
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): UI.C = view → C.x dibaca dari token tema SEKARANG
+-- saat dipakai, jadi ikut tema yang dipilih. View tidak bisa di-pairs()/ipairs() dan field-nya tidak boleh diisi.
+UI.C = ThemeColor.view({
+	bg         = "BG",
+	bgCard     = "CARD",
+	bgLight    = "CARD",        -- tombol sekunder / tab tidak aktif
+	section    = "CARD_HOVER",  -- kotak input / tempat gambar (lebih terang dari kartu, seperti palet lama)
+	hover      = "CARD_HOVER",
+	accent     = "ACCENT",
+	accentDk   = "CHIP",
+	white      = "TEXT",
+	gray       = "TEXT_DIM",
+	muted      = "TEXT_DIM",
+	onAccent   = "ON_ACCENT",
+	danger     = "DANGER",
+	success    = "SUCCESS",
+	border     = "BORDER",
+	gold       = "ACCENT",
+	validating = "ACCENT",
+	inQueue    = "INFO",
+	playing    = "SUCCESS",
+	track      = "TRACK",       -- jalur slider / progress kosong, tombol nonaktif
+}, {
+	-- Warna KONTEN (tidak ikut tema): hati favorit merah muda.
 	love       = Color3.fromRGB(255, 92,  108),
-	inQueue    = Color3.fromRGB(80,  150, 255),
-	playing    = Color3.fromRGB(72,  196, 120),
-}
+})
 
 UI.SEC_TW    = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 UI.STD_TW    = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -54,8 +62,11 @@ local active = {}
 
 function UI.tw(obj, info, props)
 	if not obj or not obj.Parent then return end
+	-- Warna tujuan yang tersimpan dari tema lama (mis. UI.hover) → warna yang sama di tema sekarang.
+	local goal = {}
+	for k, v in pairs(props) do goal[k] = (typeof(v) == "Color3") and ThemeColor.live(v) or v end
 	if active[obj] then active[obj]:Cancel() end
-	local t = TweenService:Create(obj, info, props)
+	local t = TweenService:Create(obj, info, goal)
 	active[obj] = t
 	t:Play()
 	t.Completed:Once(function() active[obj] = nil end)
@@ -201,9 +212,10 @@ UI.w = w
 
 -- Warna teks yang kontras di atas warna latar apa pun. Dipakai bar notifikasi:
 -- latar kuning WAJIB berteks gelap, kalau putih teksnya hilang ditelan latar.
+-- Teks yang paling terbaca di atas warna bg: ON_ACCENT (gelap) atau TEXT (terang), dipilih dari kontras WCAG.
 function UI.textOn(bg)
-	local lum = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B
-	return (lum > 0.55) and C.onAccent or C.white
+	local Rules = ThemeColor.Rules
+	return (Rules.contrast(C.onAccent, bg) >= Rules.contrast(C.white, bg)) and C.onAccent or C.white
 end
 
 -- ══ TEKS BERJALAN (MARQUEE) ═══════════════════════════════════════════════
@@ -359,9 +371,10 @@ local function makeSlider(parent, pos, size, startPct)
 		Size = size, Position = pos, BackgroundTransparency = 1,
 		Text = "", AutoButtonColor = false, ZIndex = 4, Parent = parent,
 	})
+	-- Gaya themeColor: jalur kosong TRACK, isi ACCENT.
 	local track = w.frame({
 		Size = UDim2.new(1, 0, 0, 8), Position = UDim2.new(0, 0, 0.5, -4),
-		BackgroundColor3 = C.section, ZIndex = 4, Parent = hit,
+		BackgroundColor3 = C.track, ZIndex = 4, Parent = hit,
 	})
 	w.corner(4).Parent = track
 	local fill = w.frame({
@@ -391,9 +404,10 @@ local function nStep()
 	if #nQueue == 0 or not (nBar and nBar.Parent) then nShowing = false; return end
 	nShowing = true
 	local d = table.remove(nQueue, 1)
-	nBar.BackgroundColor3 = d.col
+	-- d.col tersimpan di antrean (bisa dari tema lama) → warna yang sama di tema sekarang.
+	nBar.BackgroundColor3 = ThemeColor.live(d.col)
 	nText.Text            = d.msg
-	nText.TextColor3      = UI.textOn(d.col)
+	nText.TextColor3      = UI.textOn(ThemeColor.live(d.col))
 	nBar.Visible          = true
 	UI.tws(nBar, { Size = UDim2.new(1, -20, 0, 28) })
 	task.delay(d.dur, function()
@@ -491,7 +505,7 @@ function UI.build()
 	local volLabel = w.text({ Size = UDim2.new(0, 62, 1, 0), Text = "Volume 70%", TextColor3 = C.gray, Font = Enum.Font.GothamBold, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Left, Parent = volRow })
 	local volBg, volSlider = makeSlider(volRow, UDim2.new(0, 64, 0, 0), UDim2.new(1, -68, 1, 0), 0.7)
 
-	local progBg = w.frame({ Size = UDim2.new(1, 0, 0, 5), Position = UDim2.new(0, 0, 0, 123), BackgroundColor3 = C.section, Parent = npc })
+	local progBg = w.frame({ Size = UDim2.new(1, 0, 0, 5), Position = UDim2.new(0, 0, 0, 123), BackgroundColor3 = C.track, Parent = npc })
 	w.corner(3).Parent = progBg
 	local progressBar = w.frame({ Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = C.accent, Parent = progBg })
 	w.corner(3).Parent = progressBar

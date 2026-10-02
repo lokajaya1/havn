@@ -4,20 +4,31 @@
 --   2. Trail toggle juga langsung apply saat terbang
 --   3. Tetap compatible dengan DynamicTools system
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
 local TOOL_NAME   = "Flying Broom"
 
-local C = {
-	accent = Color3.fromRGB(255, 200, 50),
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor). ThemeColor.view: C.X = token tema SEKARANG
+-- (dibaca saat dipakai, juga saat toggle Trail diklik) → ikut tema pilihan pemain.
+-- Warna trail (COLORS, BroomConfig.trailColor) = KONTEN → literal + grid di-skip.
+local C = ThemeColor.view({
+	accent = "ACCENT",
+	text   = "TEXT",
+	gray   = "TEXT_DIM",
+	dark   = "ON_ACCENT",
+	dim    = "CARD_HOVER",
+	card   = "CARD",
+	green  = "SUCCESS",
+	red    = "DANGER",
+	title  = "TEXT_STRONG",
+}, {
+	-- putih murni (bukan token): teks ON/OFF di atas tombol SUCCESS/DANGER, garis swatch terpilih
 	white  = Color3.fromRGB(255, 255, 255),
-	gray   = Color3.fromRGB(160, 160, 165),
-	dark   = Color3.fromRGB(18,  18,  22),
-	dim    = Color3.fromRGB(50,  50,  55),
-	card   = Color3.fromRGB(28,  28,  33),
-	green  = Color3.fromRGB(80,  200, 100),
-	red    = Color3.fromRGB(220, 70,  70),
-}
+})
 
 _G.BroomConfig = _G.BroomConfig or {
 	speed      = 80,
@@ -96,12 +107,12 @@ local function mkStepper(parent, label, key, vmin, vmax, step, unit, order)
 	rl.Padding = UDim.new(0, 6); rl.Parent = right
 
 	local btnMinus = mkButton({ Size=UDim2.new(0,30,0,28), BackgroundColor3=C.dim,
-		Text="−", TextColor3=C.white, TextSize=18, LayoutOrder=1 }, right)
+		Text="−", TextColor3=C.text, TextSize=18, LayoutOrder=1 }, right)
 	local valLbl = mkLabel({ Size=UDim2.new(0,58,0,28), Text=_G.BroomConfig[key]..unit,
 		TextColor3=C.accent, TextSize=13, Font=Enum.Font.GothamBold,
 		TextXAlignment=Enum.TextXAlignment.Center, LayoutOrder=2 }, right)
 	local btnPlus = mkButton({ Size=UDim2.new(0,30,0,28), BackgroundColor3=C.dim,
-		Text="+", TextColor3=C.white, TextSize=18, LayoutOrder=3 }, right)
+		Text="+", TextColor3=C.text, TextSize=18, LayoutOrder=3 }, right)
 
 	conn(btnMinus.Activated, function()
 		_G.BroomConfig[key] = math.max(vmin, _G.BroomConfig[key] - step)
@@ -150,6 +161,7 @@ local function mkColorPicker(parent, order)
 
 	-- Grid: 4 kolom × 2 baris untuk 8 warna
 	local grid = mkFrame({ Size=UDim2.new(1,0,0,60), BackgroundTransparency=1, LayoutOrder=2 }, wrap)
+	ThemeColor.skip(grid) -- swatch warna trail = konten
 	local gl = Instance.new("UIGridLayout")
 	gl.CellSize      = UDim2.new(0, 40, 0, 24)
 	gl.CellPadding   = UDim2.new(0, 4, 0, 4)
@@ -214,7 +226,7 @@ local function buildUI()
 
 	-- Judul
 	mkLabel({ Size=UDim2.new(1,0,0,24), LayoutOrder=1, Text="🧹  Flying Broom",
-		TextColor3=C.white, TextSize=16, Font=Enum.Font.GothamBold,
+		TextColor3=C.title, TextSize=16, Font=Enum.Font.GothamBold,
 		TextXAlignment=Enum.TextXAlignment.Left }, main)
 
 	mkLabel({ Size=UDim2.new(1,0,0,13), LayoutOrder=2, Text="FLIGHT CONFIG",

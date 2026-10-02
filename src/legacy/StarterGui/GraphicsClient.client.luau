@@ -5,7 +5,10 @@ local Players      = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UIS          = game:GetService("UserInputService")
 local Lighting     = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer  = Players.LocalPlayer
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local function waitDeps()
 	local start = os.clock()
@@ -18,7 +21,9 @@ end
 if not waitDeps() then return end
 
 local UI = _G.MenuUI
-local C  = _G.MenuConfig.colors
+-- Warna: ThemeColor (themeColor). C = nama lama (ThemeColor.legacy), T = token; tabel bersama → baca saat melukis.
+local C  = ThemeColor.legacy
+local T  = ThemeColor.tokens
 local TW = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local function tw(o, p)
 	if o and o.Parent then TweenService:Create(o, TW, p):Play() end
@@ -153,10 +158,11 @@ local function ToggleRow(parent, lo, label, initState, onToggle)
 	})
 
 	local W, H = 40, 22
+	-- Gaya themeColor: hidup = jalur ACCENT + kenop TEXT_STRONG, mati = jalur TRACK + kenop TEXT.
 	local pill = UI.button({
 		Size             = UDim2.new(0, W, 0, H),
 		Position         = UDim2.new(1, -(W + 6), 0.5, -H / 2),
-		BackgroundColor3 = initState and C.accent or Color3.fromRGB(55, 55, 55),
+		BackgroundColor3 = initState and T.ACCENT or T.TRACK,
 		Text             = "",
 		AutoButtonColor  = false,
 		Parent           = row,
@@ -166,16 +172,20 @@ local function ToggleRow(parent, lo, label, initState, onToggle)
 	local thumb = UI.frame({
 		Size             = UDim2.new(0, H - 6, 0, H - 6),
 		Position         = UDim2.new(0, initState and (W - H + 4) or 4, 0.5, -(H - 6) / 2),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = initState and T.TEXT_STRONG or T.TEXT,
 		Parent           = pill,
 	})
 	UI.corner((H - 6) / 2).Parent = thumb
+	UI.stroke(T.BG, 1, 0.7).Parent = thumb
 
 	local on = initState
 	local function set(v)
 		on = v
-		tw(pill,  { BackgroundColor3 = v and C.accent or Color3.fromRGB(55, 55, 55) })
-		tw(thumb, { Position = UDim2.new(0, v and (W - H + 4) or 4, 0.5, -(H - 6) / 2) })
+		tw(pill,  { BackgroundColor3 = v and T.ACCENT or T.TRACK })
+		tw(thumb, {
+			Position         = UDim2.new(0, v and (W - H + 4) or 4, 0.5, -(H - 6) / 2),
+			BackgroundColor3 = v and T.TEXT_STRONG or T.TEXT,
+		})
 	end
 
 	pill.MouseButton1Click:Connect(function()
@@ -223,10 +233,11 @@ local function SliderRow(parent, lo, label, minV, maxV, defV, fmt, onChange)
 		Parent         = row,
 	})
 
+	-- Gaya themeColor: isi ACCENT, jalur kosong TRACK, kenop TEXT_STRONG.
 	local trackBg = UI.button({
 		Size             = UDim2.new(1, -150, 0, 6),
 		Position         = UDim2.new(0, 116, 0.5, -3),
-		BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+		BackgroundColor3 = T.TRACK,
 		Text             = "",
 		AutoButtonColor  = false,
 		Parent           = row,
@@ -243,7 +254,7 @@ local function SliderRow(parent, lo, label, minV, maxV, defV, fmt, onChange)
 	local sthumb = UI.frame({
 		Size             = UDim2.new(0, 14, 0, 14),
 		Position         = UDim2.new(1, -7, 0.5, -7),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = T.TEXT_STRONG,
 		Parent           = fill,
 	})
 	UI.corner(7).Parent  = sthumb
@@ -401,7 +412,7 @@ do
 		Size           = UDim2.new(1, -8, 1, 0),
 		Position       = UDim2.new(0, 6, 0, 0),
 		Text           = "Preset",
-		TextColor3     = Color3.fromRGB(130, 130, 130),
+		TextColor3     = T.TEXT_DIM,
 		Font           = Enum.Font.Gotham,
 		TextSize       = 10,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -442,8 +453,8 @@ do
 		for _, d in ipairs(presetBtns) do
 			local isActive = (d.name == activePreset)
 			tw(d.btn, {
-				BackgroundColor3 = isActive and C.accent or Color3.fromRGB(40, 40, 40),
-				TextColor3       = isActive and (C.textOnAccent or Color3.fromRGB(15, 15, 15)) or Color3.fromRGB(200, 200, 200),
+				BackgroundColor3 = isActive and T.ACCENT or T.CARD,
+				TextColor3       = isActive and T.ON_ACCENT or T.TEXT,
 			})
 		end
 	end
@@ -465,9 +476,9 @@ do
 	for _, p in ipairs(PRESETS) do
 		local btn = UI.button({
 			Size             = UDim2.new(0, 1, 0, 1),
-			BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+			BackgroundColor3 = T.CARD,
 			Text             = p.name,
-			TextColor3       = Color3.fromRGB(200, 200, 200),
+			TextColor3       = T.TEXT,
 			Font             = Enum.Font.GothamBold,
 			TextSize         = 9,
 			AutoButtonColor  = false,
@@ -478,7 +489,7 @@ do
 		local pCopy = p
 		btn.MouseEnter:Connect(function()
 			if pCopy.name ~= activePreset then
-				tw(btn, { BackgroundColor3 = Color3.fromRGB(60, 60, 60) })
+				tw(btn, { BackgroundColor3 = T.CARD_HOVER })
 			end
 		end)
 		btn.MouseLeave:Connect(refreshPresetBtns)

@@ -1,16 +1,24 @@
 -- Money Gun UI | LocalScript → StarterGui
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
 local TOOL_NAME   = "Money Gun"
 
-local C = {
-	accent = Color3.fromRGB(255, 195, 40),
-	white  = Color3.fromRGB(255, 255, 255),
-	gray   = Color3.fromRGB(160, 160, 165),
-	dark   = Color3.fromRGB(20,  20,  25),
-	dim    = Color3.fromRGB(50,  50,  55),
-	card   = Color3.fromRGB(28,  28,  33),
-}
+-- Warna: ReplicatedStorage.Modules.ThemeColor (themeColor). ThemeColor.view: C.X = token tema SEKARANG
+-- (dibaca saat dipakai, juga di setMode/hover/leave) → ikut tema pilihan pemain.
+local C = ThemeColor.view({
+	accent = "ACCENT",
+	white  = "TEXT",
+	gray   = "TEXT_DIM",
+	dark   = "ON_ACCENT",
+	dim    = "CARD_HOVER",
+	card   = "CARD",
+	title  = "TEXT_STRONG", -- judul panel
+	hover  = "TEXT_STRONG", -- hover tombol BURST (latar terang, teks ON_ACCENT)
+})
 
 _G.MoneyGunMode   = _G.MoneyGunMode   or "auto"
 _G.MoneyGunConfig = _G.MoneyGunConfig or { rate = 50, burst = 12 }
@@ -135,7 +143,7 @@ local function buildUI()
 	mkLayout(10, main); mkPad(8, main)
 
 	mkLabel({ Size=UDim2.new(1,0,0,24), LayoutOrder=1, Text="💵  Money Gun",
-		TextColor3=C.white, TextSize=16, Font=Enum.Font.GothamBold,
+		TextColor3=C.title, TextSize=16, Font=Enum.Font.GothamBold,
 		TextXAlignment=Enum.TextXAlignment.Left }, main)
 	mkLabel({ Size=UDim2.new(1,0,0,13), LayoutOrder=2, Text="MODE",
 		TextColor3=C.gray, TextSize=10, Font=Enum.Font.GothamBold,
@@ -152,7 +160,7 @@ local function buildUI()
 
 	local burstBtn = mkButton({ Size=UDim2.new(1,0,0,50), BackgroundColor3=C.accent,
 		Text="💥  BURST!", TextColor3=C.dark, TextSize=16, LayoutOrder=7 }, main)
-	conn(burstBtn.MouseEnter, function() burstBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 80) end)
+	conn(burstBtn.MouseEnter, function() burstBtn.BackgroundColor3 = C.hover end)
 	conn(burstBtn.MouseLeave, function() burstBtn.BackgroundColor3 = C.accent end)
 	conn(burstBtn.Activated, function()
 		local t = _G.GetCurrentTool and _G.GetCurrentTool()

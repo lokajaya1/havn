@@ -70,6 +70,9 @@
       "ThemeMap": {
         "$path": "src/server/ThemeMap"
       },
+      "ThemeColor": {
+        "$path": "src/server/ThemeColor"
+      },
       "AnnouncementHandler": {
         "$path": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau"
       },
@@ -240,6 +243,9 @@
         },
         "ThemeMapAdmin": {
           "$path": "src/client/ThemeMapAdmin.client.luau"
+        },
+        "ThemeColorClient": {
+          "$path": "src/client/ThemeColorClient.client.luau"
         },
         "MapFX": {
           "$path": "src/client/MapFX"

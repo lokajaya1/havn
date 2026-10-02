@@ -46,26 +46,34 @@ if RunService:IsServer() then
 end
 
 local Responsive = require(RS:WaitForChild("CustomUIModules"):WaitForChild("Responsive"))
+local ThemeColor = require(RS:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- ════════════════════════════════════════════════════════════
 -- THEME (sama dengan MenuSystemInit)
+-- Warna dari ReplicatedStorage.Modules.ThemeColor (themeColor): THEME.X
+-- membaca token tema SEKARANG saat dipakai → hover/leave ikut tema.
 -- ════════════════════════════════════════════════════════════
 
-local THEME = {
-	BG         = Color3.fromRGB(16, 16, 17),
-	CARD       = Color3.fromRGB(26, 26, 28),
-	CARD_HOVER = Color3.fromRGB(36, 36, 39),
-	LINE       = Color3.fromRGB(255, 255, 255),
-	TEXT       = Color3.fromRGB(238, 238, 240),
-	TEXT_DIM   = Color3.fromRGB(148, 148, 154),
-	ACCENT     = Color3.fromRGB(212, 175, 55),
-}
+local THEME = ThemeColor.view({
+	BG         = "BG",
+	CARD       = "CARD",
+	CARD_HOVER = "CARD_HOVER",
+	LINE       = "LINE",
+	TEXT       = "TEXT",
+	TEXT_DIM   = "TEXT_DIM",
+	ACCENT     = "ACCENT",
+	ON_ACCENT  = "ON_ACCENT",
+})
 
-local TEXT_ON_ACCENT = Color3.fromRGB(18, 18, 20)
-local ACCENT_HOVER   = THEME.ACCENT:Lerp(Color3.new(1, 1, 1), 0.14)
+-- Hover tombol utama = ACCENT dicampur putih 14 %. Dihitung saat dipakai
+-- supaya ikut tema. Warna turunan ini BUKAN token (tidak dilukis ulang),
+-- jadi setHover() yang selalu memasangnya ulang saat hover / leave.
+local function accentHover()
+	return THEME.ACCENT:Lerp(Color3.new(1, 1, 1), 0.14)
+end
 
 local FONT = {
 	BOLD    = Enum.Font.BuilderSansBold,
@@ -176,6 +184,7 @@ if not gui then
 		Enabled = true, Parent = playerGui,
 	})
 end
+ThemeColor.mark(gui)
 gui.Enabled = true
 
 local oldStack = gui:FindFirstChild("Stack")
@@ -263,7 +272,7 @@ local function makeButton(parent, name, label, order, primary)
 	local lbl = new("TextLabel", {
 		Name = "Label", Size = UDim2.new(1, -12, 1, 0), Position = UDim2.new(0, 6, 0, 0),
 		BackgroundTransparency = 1, Text = label,
-		TextColor3 = primary and TEXT_ON_ACCENT or THEME.TEXT,
+		TextColor3 = primary and THEME.ON_ACCENT or THEME.TEXT,
 		Font = primary and FONT.BOLD or FONT.MEDIUM, TextSize = notifyCfg.text,
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = btn,
 	})
@@ -271,7 +280,7 @@ local function makeButton(parent, name, label, order, primary)
 	local function setHover(on)
 		TweenService:Create(btn, TWEEN_FAST, {
 			BackgroundColor3 = primary
-				and (on and ACCENT_HOVER or THEME.ACCENT)
+				and (on and accentHover() or THEME.ACCENT)
 				or  (on and THEME.CARD_HOVER or THEME.CARD),
 		}):Play()
 		TweenService:Create(st, TWEEN_FAST, {
@@ -597,6 +606,7 @@ if not selectGui then
 		Enabled = false, Parent = playerGui,
 	})
 end
+ThemeColor.mark(selectGui)
 selectGui.Enabled = false
 
 local oldSelectFrame = selectGui:FindFirstChild("CarrySelectFrame")
@@ -629,8 +639,8 @@ local selectSub = new("TextLabel", {
 local selectClose = new("TextButton", {
 	Name = "CloseButton", AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10, 0, 8), Size = UDim2.new(0, 26, 0, 26),
-	BackgroundTransparency = 1, Text = "×", TextColor3 = THEME.TEXT_DIM,
-	Font = FONT.REGULAR, TextSize = cfg.title + 8, BorderSizePixel = 0,
+	BackgroundTransparency = 1, Text = "X", TextColor3 = THEME.TEXT_DIM,
+	Font = FONT.BOLD, TextSize = cfg.title, BorderSizePixel = 0,
 	AutoButtonColor = false, ZIndex = 5, Parent = selectFrame,
 })
 selectClose.MouseEnter:Connect(function()
@@ -723,7 +733,7 @@ local function applySelectLayout()
 	selectSub.Position   = UDim2.new(0, cfg.pad + 2, 0, cfg.pad + cfg.title + 4)
 	selectSub.Size       = UDim2.new(1, -sideGap, 0, cfg.small + 4)
 	selectSub.TextSize   = cfg.small
-	selectClose.TextSize = cfg.title + 8
+	selectClose.TextSize = cfg.title
 
 	selectScroll.Position = UDim2.new(0, cfg.pad, 0, cfg.pad + headerH)
 	selectScroll.Size     = UDim2.new(1, -cfg.pad * 2, 1, -(cfg.pad * 2 + headerH))
