@@ -207,6 +207,9 @@
         "DonationCinematic": {
           "$path": "src/client/DonationCinematic.client.luau"
         },
+        "ThemeMapAdmin": {
+          "$path": "src/client/ThemeMapAdmin.client.luau"
+        },
         "MapFX": {
           "$path": "src/client/MapFX"
         },

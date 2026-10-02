@@ -380,6 +380,32 @@ local function build()
 		end)
 	end)
 
+	-- Tema map (themeMap): panel ThemeMapAdmin (StarterPlayerScripts) — _G.ToggleThemeMap / _G.ThemeMapMenu.
+	local themeRow = Row(content, L(), "Tema map")
+	themeRow.Visible = false
+	table.insert(adminElements, themeRow)
+
+	local themeBtn, setThemeState = ActionButton(themeRow, "Buka", "Tutup")
+	themeBtn.Activated:Connect(function()
+		if type(_G.ToggleThemeMap) ~= "function" then
+			warn("[Settings] _G.ToggleThemeMap belum tersedia")
+			return
+		end
+		_G.ToggleThemeMap()
+	end)
+
+	task.spawn(function()
+		local start = os.clock()
+		while not (_G.ThemeMapMenu and _G.ThemeMapMenu.IsOpen) do
+			if os.clock() - start > 30 then return end
+			task.wait(0.2)
+		end
+		setThemeState(_G.ThemeMapMenu.IsOpen())
+		_G.ThemeMapMenu.OnChanged = function(open)
+			if themeBtn.Parent then setThemeState(open) end
+		end
+	end)
+
 	-- ── GENERAL ────────────────────────────────────────────
 
 	Cat(content, L(), "GENERAL")
@@ -583,6 +609,9 @@ local function build()
 		if _G.RoleManagerPanel and _G.RoleManagerPanel.Visible
 			and type(_G.ToggleRoleManager) == "function" then
 			_G.ToggleRoleManager()
+		end
+		if _G.ThemeMapMenu and type(_G.ThemeMapMenu.Close) == "function" then
+			pcall(_G.ThemeMapMenu.Close)
 		end
 
 		resetBtn.Text = "Tersetel ulang"
