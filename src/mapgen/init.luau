@@ -5,6 +5,12 @@
 --   G.build("Ground", "CEK")     → laporan saja, tidak mengubah apa pun
 --   G.build("Ground", "JALAN")   → ganti Workspace.Map.<zona> (bisa Ctrl+Z)
 --   G.draft("SIMPAN") / G.draft("TAMPIL")  → pindah Workspace.Map ↔ ServerStorage.MapDraft (sebelum Publish)
+-- Tema map (themeMap, claude/Rencana_Tema.md) — dekor yang di-switch admin saat game jalan:
+--   G.themeMap("Birthday", "CEK")     → bangun di memori + semua cek, tidak mengubah apa pun
+--   G.themeMap("Birthday", "JALAN")   → bangun ulang ke ServerStorage.ThemeMap.Birthday (bisa Ctrl+Z)
+--   G.themeMap("Birthday", "TAMPIL")  → pindah ke Workspace.ThemeMap untuk dilihat/diubah tangan di mode Edit
+--   G.themeMap("Birthday", "SIMPAN")  → kembalikan ke ServerStorage (WAJIB sebelum Save/Publish)
+--   G.themeMap(nil, "DAFTAR")         → laporan semua tema: part, skrip, versi, cocok dengan kode atau tidak
 
 local Builder = require(script.Builder)
 local Naming = require(script.Naming)
@@ -30,7 +36,21 @@ local zones: { [string]: (any, any) -> () } = {
 
 local Mood = require(script.Mood)
 
-local MapGen = { version = "V19", layout = Layout, mood = Mood, kitFront = KitFront }
+local MapGen = { version = "V20", layout = Layout, mood = Mood, kitFront = KitFront }
+
+-- Tema map: nama tema → zona MapGen. Harus cocok dengan ReplicatedStorage.Config.ThemeMap.list (dicek tes).
+-- Zona tema TIDAK dipasang ke Workspace.Map (G.build JALAN menolak) — hanya lewat G.themeMap → ServerStorage.ThemeMap.
+MapGen.themeMaps = { Birthday = "Party" } :: { [string]: string }
+local THEME_DIR = "ThemeMap"
+
+local function themeOfZone(zoneName: string): string?
+	for theme, zone in MapGen.themeMaps do
+		if zone == zoneName then
+			return theme
+		end
+	end
+	return nil
+end
 
 type Env = { workspace: Instance, serverStorage: Instance, history: any?, terrain: any?, out: ((string) -> ())? }
 
@@ -338,6 +358,12 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	for i = 1, math.min(#issues, 15) do
 		out("  - " .. issues[i])
 	end
+	local theme = themeOfZone(zoneName)
+	if mode == "JALAN" and theme then
+		b.root:Destroy()
+		out(('MapGen GAGAL: zona %s = tema map "%s" (tidak dipasang ke Workspace.Map) — pakai G.themeMap("%s", "JALAN"). Tidak ada yang diubah.'):format(zoneName, theme, theme))
+		return report
+	end
 	if mode ~= "JALAN" or #issues > 0 then
 		b.root:Destroy()
 		out(if mode == "JALAN" then "MapGen GAGAL: ada masalah, tidak ada yang diubah." else "MapGen CEK selesai: belum ada yang diubah.")
@@ -369,6 +395,264 @@ function MapGen.build(zoneName: string, mode: string?, envIn: Env?)
 	end
 	report.applied = true
 	out(("MapGen SELESAI: %s dibangun (%d part, %d operasi terrain)."):format(zoneName, b.parts, #b.terrainOps))
+	return report
+end
+
+-- ── Tema map ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+local function countClass(root: Instance, className: string): number
+	local n = 0
+	for _, d in root:GetDescendants() do
+		if d:IsA(className) then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- Bangun dekor tema di memori + semua cek MapGen (akar masih bernama zona: MapGen.check memakai nama itu untuk area).
+local function buildTheme(name: string, env: Env): (any, { string })
+	local zone = MapGen.themeMaps[name]
+	local b = Builder.new(zone, env.serverStorage:FindFirstChild("MapKit"))
+	zones[zone](b, Layout)
+	local issues = MapGen.check(b.root) -- termasuk "skrip dilarang"
+	for _, k in b.missingKit do
+		table.insert(issues, "kit tidak ada di ServerStorage.MapKit: " .. k)
+	end
+	for _, x in MapGen.checkKits(b.kitUses) do
+		table.insert(issues, x)
+	end
+	if #b.terrainOps > 0 then
+		table.insert(issues, ("tema tidak boleh mengubah terrain (%d operasi)"):format(#b.terrainOps))
+	end
+	return b, issues
+end
+
+-- Bandingkan dua pohon dekor (aset di place vs hasil kode) per instance: jalur relatif + kelas, lalu sifat part / teks.
+-- Saudara bernama sama dibedakan sifatnya, BUKAN urutan anak (urutan GetChildren di Studio bisa beda dengan urutan dibuat;
+-- terbukti 2 Okt 13:23: kartu bunting punya 2 SurfaceGui "TextGui" muka Front/Back → "BEDA 6" palsu).
+local function treeDiff(a: Instance, b: Instance): { string }
+	local function segment(d: Instance): string
+		local ok, face = pcall(function()
+			return (d :: any).Face
+		end)
+		if ok and typeof(face) == "EnumItem" then
+			return d.Name .. "@" .. face.Name
+		end
+		return d.Name
+	end
+	local function keyed(root: Instance): { [string]: Instance }
+		local m, seen = {}, {}
+		for _, d in root:GetDescendants() do
+			local parts, cur = {}, d
+			while cur and cur ~= root do
+				table.insert(parts, 1, segment(cur))
+				cur = cur.Parent
+			end
+			local k = "." .. table.concat(parts, ".") .. "|" .. d.ClassName
+			seen[k] = (seen[k] or 0) + 1
+			m[k .. "#" .. seen[k]] = d
+		end
+		return m
+	end
+	local function near(x: number, y: number): boolean
+		return math.abs(x - y) < 0.02
+	end
+	local function vEq(x: Vector3, y: Vector3): boolean
+		return near(x.X, y.X) and near(x.Y, y.Y) and near(x.Z, y.Z)
+	end
+	local A, B = keyed(a), keyed(b)
+	local diffs = {}
+	for k, x in A do
+		local y: any = B[k]
+		if not y then
+			table.insert(diffs, "hanya di aset: " .. k)
+		elseif x:IsA("BasePart") then
+			local p, q = x :: BasePart, y :: BasePart
+			if not (vEq(p.CFrame.Position, q.CFrame.Position) and vEq(p.CFrame.LookVector, q.CFrame.LookVector) and vEq(p.CFrame.UpVector, q.CFrame.UpVector))
+				or not vEq(p.Size, q.Size) or not vEq(Vector3.new(p.Color.R, p.Color.G, p.Color.B), Vector3.new(q.Color.R, q.Color.G, q.Color.B))
+				or p.Material ~= q.Material or not near(p.Transparency, q.Transparency) or p.CanCollide ~= q.CanCollide then
+				table.insert(diffs, "beda: " .. k)
+			end
+		elseif x:IsA("TextLabel") and (x :: TextLabel).Text ~= (y :: TextLabel).Text then
+			table.insert(diffs, "teks beda: " .. k)
+		end
+	end
+	for k in B do
+		if not A[k] then
+			table.insert(diffs, "hanya di kode: " .. k)
+		end
+	end
+	table.sort(diffs)
+	return diffs
+end
+
+local function themeList(): string
+	local names = {}
+	for n in MapGen.themeMaps do
+		table.insert(names, n)
+	end
+	table.sort(names)
+	return table.concat(names, ", ")
+end
+
+-- Laporan semua tema: aset di ServerStorage.ThemeMap vs kode, sisa TAMPIL di Workspace.
+local function themeReport(env: Env, out: (string) -> ())
+	local dir = env.serverStorage:FindFirstChild(THEME_DIR)
+	local shown = env.workspace:FindFirstChild(THEME_DIR)
+	local rows = {}
+	local names = {}
+	for n in MapGen.themeMaps do
+		table.insert(names, n)
+	end
+	if dir then
+		for _, c in dir:GetChildren() do
+			if not MapGen.themeMaps[c.Name] then
+				table.insert(names, c.Name)
+			end
+		end
+	end
+	table.sort(names)
+	for _, n in names do
+		local asset = dir and dir:FindFirstChild(n)
+		local row: any = { theme = n, known = MapGen.themeMaps[n] ~= nil, exists = asset ~= nil }
+		if not row.known then
+			out(("  %s: aset di ServerStorage.%s TIDAK dikenal kode (MapGen.themeMaps) — tidak bisa dibangun ulang"):format(n, THEME_DIR))
+		elseif not asset then
+			out(('  %s: BELUM dibangun → G.themeMap("%s", "JALAN")'):format(n, n))
+		else
+			row.parts = countClass(asset, "BasePart")
+			row.scripts = countClass(asset, "LuaSourceContainer")
+			local b = buildTheme(n, env)
+			row.diffs = treeDiff(asset, b.root)
+			b.root:Destroy()
+			out(("  %s: aset %d part · skrip %d · dibangun %s · %s"):format(n, row.parts, row.scripts, tostring(asset:GetAttribute("MapGenVersion") or "?"),
+				if #row.diffs == 0 then "cocok dengan kode " .. MapGen.version else ('BEDA %d (mis. %s) → G.themeMap("%s", "JALAN")'):format(#row.diffs, row.diffs[1], n)))
+			if row.scripts > 0 then
+				out("    ⚠ aset berisi skrip — server ThemeMap TIDAK akan memasangnya")
+			end
+		end
+		table.insert(rows, row)
+	end
+	local left = {}
+	if shown then
+		for _, c in shown:GetChildren() do
+			table.insert(left, c.Name)
+		end
+	end
+	if #left > 0 then
+		out(('  ⚠ masih TAMPIL di Workspace.%s: %s → G.themeMap("<tema>", "SIMPAN") sebelum Save/Publish'):format(THEME_DIR, table.concat(left, ", ")))
+	end
+	return rows, left
+end
+
+-- Tema map → ServerStorage.ThemeMap.<tema>. Mode: CEK | JALAN | TAMPIL | SIMPAN | DAFTAR (lihat kepala file).
+function MapGen.themeMap(name: string?, mode: string?, envIn: Env?)
+	local env = envIn or defaultEnv()
+	local out = env.out or print
+	if mode == "DAFTAR" then
+		out(("MapGen %s themeMap DAFTAR | kode: %s"):format(MapGen.version, themeList()))
+		local rows, left = themeReport(env, out)
+		return { mode = "DAFTAR", rows = rows, shown = left }
+	end
+	if type(name) ~= "string" or not MapGen.themeMaps[name] then
+		error(("MapGen.themeMap: tema tidak dikenal '%s' (ada: %s)"):format(tostring(name), themeList()))
+	end
+	local theme = name :: string
+	local zone = MapGen.themeMaps[theme]
+	local ss, ws = env.serverStorage, env.workspace
+	local dir = ss:FindFirstChild(THEME_DIR)
+	local shownDir = ws:FindFirstChild(THEME_DIR)
+	local report: any = { theme = theme, zone = zone, mode = mode, applied = false, detached = {} }
+
+	local function record(label: string, fn: () -> ())
+		local history = env.history
+		local rec = history and history:TryBeginRecording("MapGen_ThemeMap_" .. label)
+		fn()
+		if rec then
+			history:FinishRecording(rec, Enum.FinishRecordingOperation.Commit)
+		end
+	end
+	local function folder(parent: Instance, existing: Instance?): Instance
+		if existing then
+			return existing
+		end
+		local f = Instance.new("Folder")
+		f.Name = THEME_DIR
+		f.Parent = parent
+		return f
+	end
+
+	if mode == "TAMPIL" or mode == "SIMPAN" then
+		local fromDir, toParent = if mode == "TAMPIL" then dir else shownDir, if mode == "TAMPIL" then ws else ss
+		local src = fromDir and fromDir:FindFirstChild(theme)
+		local already = if mode == "TAMPIL" then shownDir and shownDir:FindFirstChild(theme) else dir and dir:FindFirstChild(theme)
+		if already and not src then
+			out(("MapGen themeMap %s: %s sudah di %s — tidak ada yang diubah."):format(mode, theme, if mode == "TAMPIL" then "Workspace" else "ServerStorage"))
+			return report
+		elseif not src then
+			out(('MapGen themeMap %s GAGAL: %s tidak ada%s — tidak ada yang diubah.'):format(mode, theme,
+				if mode == "TAMPIL" then (' di ServerStorage.%s (jalankan G.themeMap("%s", "JALAN"))'):format(THEME_DIR, theme) else " di Workspace." .. THEME_DIR))
+			return report
+		elseif already then
+			out(("MapGen themeMap %s GAGAL: %s ada di Workspace DAN ServerStorage — hapus salah satu dulu. Tidak ada yang diubah."):format(mode, theme))
+			return report
+		end
+		record(mode .. "_" .. theme, function()
+			src.Parent = folder(toParent, if mode == "TAMPIL" then shownDir else dir)
+			if mode == "SIMPAN" and shownDir and #shownDir:GetChildren() == 0 then
+				shownDir.Parent = nil
+			end
+		end)
+		report.applied = true
+		out(if mode == "TAMPIL"
+			then ('MapGen themeMap TAMPIL: %s di Workspace.%s (mode Edit). Selesai → G.themeMap("%s", "SIMPAN") sebelum Save/Publish.'):format(theme, THEME_DIR, theme)
+			else ("MapGen themeMap SIMPAN: %s kembali ke ServerStorage.%s."):format(theme, THEME_DIR))
+		return report
+	end
+
+	if mode ~= "CEK" and mode ~= "JALAN" then
+		error("MapGen.themeMap: mode CEK | JALAN | TAMPIL | SIMPAN | DAFTAR")
+	end
+	local b, issues = buildTheme(theme, env)
+	report.parts = b.parts
+	report.issues = issues
+	out(("MapGen %s themeMap %s (zona %s) | part %d | skrip %d | masalah %d"):format(MapGen.version, theme, zone, b.parts, countClass(b.root, "LuaSourceContainer"), #issues))
+	for i = 1, math.min(#issues, 15) do
+		out("  - " .. issues[i])
+	end
+	if mode ~= "JALAN" or #issues > 0 then
+		b.root:Destroy()
+		out(if mode == "JALAN" then "MapGen themeMap GAGAL: ada masalah, tidak ada yang diubah." else "MapGen themeMap CEK selesai: belum ada yang diubah.")
+		return report
+	end
+	record("JALAN_" .. theme, function()
+		local target = folder(ss, dir)
+		local function detach(inst: Instance?, label: string)
+			if inst then
+				-- Parent = nil (BUKAN Destroy): Ctrl+Z bisa mengembalikan (pelajaran 30 Sep 20:36)
+				inst.Parent = nil
+				table.insert(report.detached, label)
+			end
+		end
+		detach(target:FindFirstChild(theme), ("ServerStorage.%s.%s (versi lama)"):format(THEME_DIR, theme))
+		detach(shownDir and shownDir:FindFirstChild(theme), ("Workspace.%s.%s (sisa TAMPIL)"):format(THEME_DIR, theme))
+		local map = ws:FindFirstChild("Map")
+		detach(map and map:FindFirstChild(zone), "Workspace.Map." .. zone)
+		if shownDir and shownDir.Parent and #shownDir:GetChildren() == 0 then
+			shownDir.Parent = nil
+		end
+		b.root.Name = theme
+		b.root:SetAttribute("Zone", zone)
+		b.root:SetAttribute("MapGenVersion", MapGen.version)
+		b.root:SetAttribute("Parts", b.parts)
+		b.root.Parent = target
+	end)
+	report.applied = true
+	for _, d in report.detached do
+		out("  dilepas (Ctrl+Z bisa): " .. d)
+	end
+	out(("MapGen themeMap SELESAI: ServerStorage.%s.%s dibangun (%d part)."):format(THEME_DIR, theme, b.parts))
 	return report
 end
 

@@ -1,7 +1,8 @@
 --!strict
 -- MapGen/Zones/Party — "HAVN BIRTHDAY" (B1, Rencana_Workspace_Birthday.md): dekor pesta ulang tahun SEMENTARA di sumbu inti
 -- spawn → gerbang HAVN → bibir selatan → lantai dansa. Monokrom + sentuhan pink (pilihan user dari preview B0).
--- Pasang: G.build("Party", "JALAN") · lepas sesudah acara: workspace.Map.Party.Parent = nil (Ctrl+Z bisa).
+-- Sejak V20 = tema map "Birthday" (themeMap, claude/Rencana_Tema.md): dibangun ke ServerStorage.ThemeMap.Birthday dengan
+-- G.themeMap("Birthday", "JALAN") dan dipasang/dilepas admin dari panel (Settings › ADMIN › Tema map). G.build JALAN menolak zona ini.
 --   Gate    garland balon di sisi luar kolom & atas balok gerbang — logo "HAVN" (|x| ≤ 4 di kedua muka balok) TIDAK disentuh
 --   Arch    lengkung balon di bibir selatan (bukaan bersih 24 × 11 = A1/A3, puncak ±20 di atas bibir)
 --   Bunting kartu huruf "HAPPY BIRTHDAY" digantung di kabel lampu kanopi (B3; dulu tulisan melayang lalu gantry → menutupi
