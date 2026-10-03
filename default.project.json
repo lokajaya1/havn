@@ -322,6 +322,27 @@
         }
       }
     },
+    "Workspace": {
+      "$className": "Workspace",
+      "$ignoreUnknownInstances": true,
+      "TimePlayedLeaderboard": {
+        "$className": "Model",
+        "$ignoreUnknownInstances": true,
+        "TimePlayedClass": {
+          "$path": "src/legacy/Workspace/TimePlayedLeaderboard/TimePlayedClass.server.luau"
+        },
+        "Settings": {
+          "$path": "src/legacy/Workspace/TimePlayedLeaderboard/Settings.luau"
+        },
+        "First Place Avatar": {
+          "$className": "Model",
+          "$ignoreUnknownInstances": true,
+          "PlayAnimationInRig": {
+            "$path": "src/legacy/Workspace/TimePlayedLeaderboard/FirstPlaceAvatar/PlayAnimationInRig.luau"
+          }
+        }
+      }
+    },
     "ServerStorage": {
       "$className": "ServerStorage",
       "MapGen": {
