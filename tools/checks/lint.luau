@@ -51,6 +51,9 @@ local STRICT = {
 	"src/legacy/ServerScriptService/RoleManagerServer.server.luau",
 	"src/legacy/StarterGui/RoleManagerClient.client.luau",
 	"src/legacy/ServerScriptService/RagDollTag.server.luau",
+	-- ruangan WORLD (panggung DJ)
+	"src/legacy/ReplicatedStorage/Config/DjStage.luau",
+	"src/legacy/ReplicatedStorage/Modules/DjStageRules.luau",
 }
 local REPORT = { "src/legacy" }
 

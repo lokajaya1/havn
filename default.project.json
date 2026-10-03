@@ -316,6 +316,12 @@
         "MapFX": {
           "$path": "src/client/MapFX"
         },
+        "DjStageClient": {
+          "$path": "src/client/DjStageClient"
+        },
+        "DjStageAdmin": {
+          "$path": "src/client/DjStageAdmin.client.luau"
+        },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
         },

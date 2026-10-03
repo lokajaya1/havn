@@ -58,10 +58,10 @@ local screenMode = liveSystem:FindFirstChild("ScreenMode")
 if not screenMode then
 	screenMode = Instance.new("StringValue")
 	screenMode.Name = "ScreenMode"
-	screenMode.Value = "VJ"
+	screenMode.Value = "Gambar"
 	screenMode.Parent = liveSystem
 else
-	screenMode.Value = "VJ"
+	screenMode.Value = "Gambar"
 end
 
 local screenModeRemote = liveSystem:FindFirstChild("UpdateScreenModeEvent")
@@ -93,7 +93,7 @@ local lastCameraModeTime = 0
 local donationVersion    = 0
 local isDonationActive   = false
 local savedAdminTarget   = ""
-local savedAdminMode     = "VJ"
+local savedAdminMode     = "Gambar"
 local savedAdminCamMode  = "Static"
 
 -- ═══════════════════════════════════════════════════════════
@@ -112,7 +112,7 @@ end
 -- ═══════════════════════════════════════════════════════════
 local function forceSetMode(mode)
 	if screenMode.Value == mode then
-		screenMode.Value = (mode == "Live") and "VJ" or "Live"
+		screenMode.Value = (mode == "Live") and "Gambar" or "Live"
 		task.wait()
 	end
 	screenMode.Value = mode
@@ -166,8 +166,8 @@ local function showDonorOnScreen(playerName, price)
 			print(string.format("[LiveScreen] 🔄 Restored admin: Live/%s", savedAdminTarget))
 		else
 			currentTarget.Value = ""
-			screenMode.Value = "VJ"
-			print("[LiveScreen] ⏹ Donation ended, back to VJ")
+			screenMode.Value = "Gambar"
+			print("[LiveScreen] ⏹ Donation ended, back to Gambar")
 		end
 	end)
 end
@@ -243,7 +243,7 @@ end)
 -- ═══════════════════════════════════════════════════════════
 screenModeRemote.OnServerEvent:Connect(function(player, newMode)
 	if not isAdmin(player) then return end
-	if newMode ~= "Live" and newMode ~= "VJ" then return end
+	if newMode ~= "Live" and newMode ~= "Gambar" then return end
 
 	local now = os.clock()
 	if now - lastScreenModeTime < MODE_COOLDOWN then return end
@@ -271,8 +271,8 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
 		donationVersion += 1
 		isDonationActive = false
 		currentTarget.Value = ""
-		screenMode.Value = "VJ"
-		print("[LiveScreen] Donor left, back to VJ")
+		screenMode.Value = "Gambar"
+		print("[LiveScreen] Donor left, back to Gambar")
 		return
 	end
 
@@ -282,4 +282,4 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
 	end
 end)
 
-print("[LiveScreen] ✅ Server loaded! Attribute-based admin | Default: VJ | Donation auto-display ready")
+print("[LiveScreen] ✅ Server loaded! Attribute-based admin | Default: Gambar | Donation auto-display ready")
