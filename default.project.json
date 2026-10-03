@@ -343,9 +343,6 @@
       "GlowStickServer": {
         "$path": "src/legacy/ServerScriptService/GlowStickServer.server.luau"
       },
-      "HammerServer": {
-        "$path": "src/legacy/ServerScriptService/HammerServer.server.luau"
-      },
       "Likesystem": {
         "$path": "src/legacy/ServerScriptService/Likesystem.server.luau"
       },
@@ -528,9 +525,6 @@
         },
         "MenuSystemInit": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau"
-        },
-        "Mirrorscript": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Mirrorscript.client.luau"
         },
         "MultiScreenController": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MultiScreenController.client.luau"
