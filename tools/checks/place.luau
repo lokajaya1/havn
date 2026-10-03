@@ -4,7 +4,8 @@
 --
 -- Mensimulasikan apa yang akan dilakukan plugin Rojo saat Connect, memakai `rojo build`:
 --   GAGAL  • node yang pasangannya di place ambigu (>1 instance nama+kelas sama) → risiko salinan/salah tempel
---          • instance di place yang akan DIHAPUS Rojo (ada di bawah node $path tapi tidak ada di repo)
+--          • instance di place yang akan DIHAPUS Rojo (ada di bawah node $path tapi tidak ada di repo;
+--            node "$ignoreUnknownInstances": true dikecualikan — Rojo membiarkan anak yang tidak dikenal)
 --   INFO   • BARU   : instance yang akan DITAMBAH Rojo (wajar untuk file baru)
 --          • DIUBAH : skrip yang isinya beda dengan place (harus persis file yang memang kamu ubah)
 -- Aturan Rojo 7.7 yang dipakai: pasangan dicari lewat Nama+ClassName (plugin hydrate.lua), node dengan
@@ -35,12 +36,16 @@ local place = roblox.deserializePlace(fs.readFile(placePath))
 
 local project = serde.decode("json", fs.readFile("default.project.json"))
 local managed: { [string]: boolean } = {}
+local keepUnknown: { [string]: boolean } = {}
 local function collect(node: any, prefix: string?)
 	for k, v in node do
 		if string.sub(k, 1, 1) ~= "$" and type(v) == "table" then
 			local p = if prefix then `{prefix}/{k}` else k
 			if v["$path"] then
 				managed[p] = true
+			end
+			if v["$ignoreUnknownInstances"] == true then
+				keepUnknown[p] = true
 			end
 			collect(v, p)
 		end
@@ -100,7 +105,7 @@ local function walk(b: any, o: any)
 		if fileBacked and bc.Source ~= oc.Source then
 			table.insert(changed, p)
 		end
-		if underManaged(p) then
+		if underManaged(p) and not keepUnknown[p] then
 			for _, occ in oc:GetChildren() do
 				local keep = false
 				for _, bcc in bc:GetChildren() do
