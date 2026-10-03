@@ -18,6 +18,7 @@ local DataStoreService  = game:GetService("DataStoreService")
 local MessagingService  = game:GetService("MessagingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SSS               = game:GetService("ServerScriptService")
+local RunService        = game:GetService("RunService")
 
 -- ── ReceiptHandler (ganti shared["_db/connect"]) ─────────────
 -- Tunggu ReceiptHandler dengan TIMEOUT, jangan hang selamanya.
@@ -38,7 +39,13 @@ do
 end
 
 local Config  = require(ReplicatedStorage:WaitForChild("ShopConfig"))
-local Store   = DataStoreService:GetDataStore(Config.dataStore.name)
+-- Studio: store & topik gift ber-akhiran _studio (Config/StudioData) → pembelian uji di Studio
+-- tidak menjadi pass asli di live. Server live: nama PERSIS sama.
+local StudioData = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO  = RunService:IsStudio()
+local STORE_NAME = StudioData.name(Config.dataStore.name, IS_STUDIO)
+local GIFT_TOPIC = StudioData.name(Config.messaging.giftTopic, IS_STUDIO)
+local Store   = DataStoreService:GetDataStore(STORE_NAME)
 local Cache   = {}   -- [userId]  → data
 local Intents = {}   -- [player]  → { recipient, passName, timestamp }
 local RankCache = {} -- [userId]  → bool (isAdmin), cleared on leave
@@ -503,7 +510,7 @@ local function processGift(receipt, intent)
 
 	-- Cross-server
 	task.spawn(function()
-		retry(MessagingService.PublishAsync, MessagingService, Config.messaging.giftTopic, {
+		retry(MessagingService.PublishAsync, MessagingService, GIFT_TOPIC, {
 			SenderId=senderId, SenderName=senderName,
 			RecipientId=recipientId, PassName=passName,
 		})
@@ -540,7 +547,7 @@ local function processAdminGift(sender, recipientId, passName)
 
 	-- Cross-server
 	task.spawn(function()
-		retry(MessagingService.PublishAsync, MessagingService, Config.messaging.giftTopic, {
+		retry(MessagingService.PublishAsync, MessagingService, GIFT_TOPIC, {
 			SenderId=sender.UserId, SenderName=senderName,
 			RecipientId=recipientId, PassName=passName,
 		})
@@ -732,7 +739,7 @@ end)
 -- ── Cross-server gift via MessagingService ─────────────────────
 task.spawn(function()
 	retry(function()
-		return MessagingService:SubscribeAsync(Config.messaging.giftTopic, function(msg)
+		return MessagingService:SubscribeAsync(GIFT_TOPIC, function(msg)
 			local d         = msg.Data
 			local recipient = Players:GetPlayerByUserId(d.RecipientId)
 			if not recipient then return end
@@ -804,3 +811,6 @@ _G.ShopServer = {
 print(("[ShopServer] Ready | %d gamepasses | adminRankMin=%d | Gift system %s"):format(
 	#Config.gamepasses, Config.group.adminRankMin,
 	ReceiptHandler and "active" or "GRATIS-only (no ReceiptHandler)"))
+if IS_STUDIO then
+	print(("[DataStudio] ShopServer: %s · topik %s"):format(STORE_NAME, GIFT_TOPIC))
+end

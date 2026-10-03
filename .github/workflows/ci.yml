@@ -33,5 +33,8 @@ jobs:
       - name: Daftar dance (DanceAssets)
         run: lune run tools/checks/dances
 
+      - name: Store & topik Studio (DATA-STUDIO)
+        run: lune run tools/checks/data
+
       - name: rojo build
         run: rojo build default.project.json -o ci-build.rbxl

@@ -8,8 +8,17 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
-local PurchaseHistoryDS = DataStoreService:GetDataStore("PurchaseHistory")
+-- Studio: PurchaseHistory_studio (Config/StudioData) → struk pembelian uji tidak dicatat di live.
+local StudioData = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO = RunService:IsStudio()
+local HISTORY_STORE = StudioData.name("PurchaseHistory", IS_STUDIO)
+local PurchaseHistoryDS = DataStoreService:GetDataStore(HISTORY_STORE)
+if IS_STUDIO then
+	print("[DataStudio] ReceiptHandler: " .. HISTORY_STORE)
+end
 
 local Handler = {}
 Handler.ProductHandlers = {}

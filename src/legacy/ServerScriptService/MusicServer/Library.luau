@@ -2,18 +2,33 @@
 -- Library global (bersama) + "Library Saya" milik tiap player.
 -- Tidak tahu apa-apa soal playback.
 --
--- DataStore yang dipakai TETAP yang lama, tidak ada store baru:
---   SharedMusicLibrary_v2  -> key "GlobalLib"        (library global)
---   PlayerMusicVolume_v2   -> key "Vol_<UserId>"     (volume, dipakai MusicServer)
---                          -> key "MyLib_<UserId>"   (Library Saya)
+-- DataStore (nama live TETAP; Studio: + "_studio" lewat Config/StudioData):
+--   MusicLibrary    -> key "GlobalLib"        (library global)
+--   MusicFavorites  -> key "MyLib_<UserId>"   (Library Saya)
+--   (volume: MusicVolume "Vol_<UserId>" di MusicServer/Volume)
+-- Studio: selama MusicLibrary_studio belum punya GlobalLib, isi MusicLibrary LIVE dipakai
+-- sebagai salinan awal — HANYA dibaca (GetAsync), tulisan Studio selalu ke _studio.
 
 local Players = game:GetService("Players")
 local RS      = game:GetService("ReplicatedStorage")
 local DSS     = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 
 local Shared   = require(RS:WaitForChild("MusicShared"))
-local DS       = DSS:GetDataStore("MusicLibrary")
-local FavDS    = DSS:GetDataStore("MusicFavorites")
+local StudioData = require(RS:WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO = RunService:IsStudio()
+local LIB_BASE  = "MusicLibrary"
+local LIB_STORE = StudioData.name(LIB_BASE, IS_STUDIO)
+local FAV_STORE = StudioData.name("MusicFavorites", IS_STUDIO)
+local DS       = DSS:GetDataStore(LIB_STORE)
+local FavDS    = DSS:GetDataStore(FAV_STORE)
+-- Studio saja: library live untuk salinan awal (tidak pernah ditulis). Live: nil.
+local LiveDS   = if IS_STUDIO then DSS:GetDataStore(LIB_BASE) else nil
+-- Isi live yang jadi dasar gabung selama _studio belum punya GlobalLib (Studio saja).
+local seed = nil
+if IS_STUDIO then
+	print(("[DataStudio] MusicServer: %s · %s"):format(LIB_STORE, FAV_STORE))
+end
 
 local Library = {}
 local list = {}
@@ -190,7 +205,7 @@ local function writeNow()
 		addedIds, removedIds = {}, {}
 		local ok, merged = Shared.retry(3, 1, function()
 			return DS:UpdateAsync("GlobalLib", function(old)
-				return mergeInto(old, snap, adds, dels)
+				return mergeInto(if old == nil then seed else old, snap, adds, dels)
 			end)
 		end)
 		saveRunning = false
@@ -221,8 +236,28 @@ function Library.saveNow()
 	writeNow()
 end
 
+-- Baca GlobalLib dari store sesi ini. Studio: _studio belum punya GlobalLib → salinan awal
+-- dari library live (hanya GetAsync). Server live: sama persis dengan get(DS).
+local function readLib(get)
+	local ok, data = get(DS)
+	if ok and data == nil and LiveDS then
+		local okLive, live = get(LiveDS)
+		if okLive and type(live) == "table" then
+			seed = live
+			print(("[DataStudio] MusicServer: %s kosong → salinan awal dari %s live: %d lagu (hanya dibaca)")
+				:format(LIB_STORE, LIB_BASE, #live))
+		elseif not okLive then
+			warn("[DataStudio] MusicServer: library live gagal dibaca untuk salinan awal:", live)
+		end
+		return true, seed
+	end
+	return ok, data
+end
+
 function Library.load()
-	local ok, data = Shared.retry(3, function(i) return 0.5 * i end, DS.GetAsync, DS, "GlobalLib")
+	local ok, data = readLib(function(store)
+		return Shared.retry(3, function(i) return 0.5 * i end, store.GetAsync, store, "GlobalLib")
+	end)
 	if ok then
 		local clean, seen = {}, {}
 		if type(data) == "table" then
@@ -247,7 +282,7 @@ function Library.load()
 	task.spawn(function()
 		for _ = 1, 20 do
 			task.wait(30)
-			local okLate, late = pcall(DS.GetAsync, DS, "GlobalLib")
+			local okLate, late = readLib(function(store) return pcall(store.GetAsync, store, "GlobalLib") end)
 			if okLate then
 				adopt(type(late) == "table" and late or {})
 				print("[Music] library global termuat ulang:", #list, "lagu")
@@ -600,7 +635,7 @@ function Library.bindToClose()
 			local snap, adds, dels = snapshotAll(), addedIds, removedIds
 			pcall(function()
 				DS:UpdateAsync("GlobalLib", function(old)
-					return mergeInto(old, snap, adds, dels)
+					return mergeInto(if old == nil then seed else old, snap, adds, dels)
 				end)
 			end)
 		end

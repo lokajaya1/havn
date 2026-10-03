@@ -20,13 +20,17 @@ local TextChatService     = game:GetService("TextChatService")
 local TextService         = game:GetService("TextService")
 local Players             = game:GetService("Players")
 local ServerScriptService = game:GetService("ServerScriptService")
+local RunService          = game:GetService("RunService")
 
 local RankConfig = require(ServerScriptService:WaitForChild("RankConfig"))
+local StudioData = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO  = RunService:IsStudio()
 
 -- ── Constants ───────────────────────────────────────────────
 
 local MIN_ANNOUNCE_RANK = RankConfig.ADMIN_MIN_RANK -- 250
-local TOPIC             = "GlobalAnnouncement"
+-- Studio: GlobalAnnouncement_studio (Config/StudioData) → /global uji tidak sampai ke server live.
+local TOPIC             = StudioData.name("GlobalAnnouncement", IS_STUDIO)
 local DEFAULT_DURATION  = 5
 
 -- Batas MessagingService adalah 1 kB per pesan. 200 karakter cukup untuk
@@ -50,6 +54,10 @@ local function remote(name: string): RemoteEvent
 end
 
 local GlobalAnnouncementEvent = remote("GlobalAnnouncementEvent")
+
+if IS_STUDIO then
+	print("[DataStudio] AnnouncementHandler: topik " .. TOPIC)
+end
 
 -- ── Helpers ─────────────────────────────────────────────────
 

@@ -9,18 +9,26 @@
 local MSS = game:GetService("MemoryStoreService")
 local Msg = game:GetService("MessagingService")
 local Shared = require(game:GetService("ReplicatedStorage"):WaitForChild("MusicShared"))
+local StudioData = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO = game:GetService("RunService"):IsStudio()
 
 local Live = {}
 
+-- MemoryStore Studio sudah terpisah dari live (dok resmi) → MAP_NAME tanpa akhiran.
+-- Topik MessagingService: Studio + _studio (Config/StudioData) → siaran uji tidak sampai ke live.
 local MAP_NAME = "MusicLive"
 local KEY      = "state"
-local TOPIC    = "MusicLive"
+local TOPIC    = StudioData.name("MusicLive", IS_STUDIO)
 local LEASE    = Shared.live.lease
 local RENEW    = Shared.live.renew
 local MAX_MISS = Shared.live.maxMiss
 
 local map   = MSS:GetHashMap(MAP_NAME)
 local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. game:GetService("HttpService"):GenerateGUID(false)) -- unik tiap sesi Studio
+
+if IS_STUDIO then
+	print("[DataStudio] MusicServer: topik " .. TOPIC)
+end
 
 local active = false
 local djName, djId
