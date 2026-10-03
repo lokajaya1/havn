@@ -162,6 +162,35 @@ function DanceShared.loadTrack(animator, danceName)
 	return track
 end
 
+-- Sync follower (SyncCommand). Server MENULIS TimePosition track follower, dan
+-- tiap tulisan sampai ke client sebagai lompatan (tanpa interpolasi), jadi
+-- ditulis sesedikit mungkin: sekali saat mulai, lalu hanya kalau meleset jauh.
+DanceShared.SYNC = {
+	DRIFT_RATE      = 0.1,  -- detik antar cek drift
+	DRIFT_THRESHOLD = 0.25, -- detik selisih fase (melingkar) sebelum dikoreksi
+	DRIFT_GAP       = 1,    -- detik minimal antar koreksi per track
+	SPEED_THRESHOLD = 0.05, -- selisih speed sebelum disamakan
+	SNAP_WAIT       = 0.5,  -- maks detik menunggu track follower termuat sebelum snap
+}
+
+-- Selisih fase terpendek dua posisi di loop sepanjang `length` detik. Tanpa
+-- ini, tepat di batas loop (lead sudah kembali ke 0, follower belum) selisihnya
+-- terbaca ≈ panjang loop dan dianggap meleset.
+function DanceShared.loopDelta(a, b, length)
+	local d = math.abs(a - b)
+	if not length or length <= 0 then return d end
+	d = d % length
+	return math.min(d, length - d)
+end
+
+-- Perlu koreksi fase? Selisih melingkar > ambang DAN koreksi terakhir track ini
+-- (lastFix, detik os.clock) sudah ≥ DRIFT_GAP lalu.
+function DanceShared.needsResync(followerPos, leadPos, length, now, lastFix)
+	local cfg = DanceShared.SYNC
+	if lastFix and now - lastFix < cfg.DRIFT_GAP then return false end
+	return DanceShared.loopDelta(followerPos, leadPos, length) > cfg.DRIFT_THRESHOLD
+end
+
 -- RemoteEvent di ReplicatedStorage (dibuat kalau belum ada).
 function DanceShared.remote(name)
 	local remote = ReplicatedStorage:FindFirstChild(name)

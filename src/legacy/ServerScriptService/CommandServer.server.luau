@@ -166,9 +166,14 @@ local function getCurrentDesc(p)
 	return ok and d or nil
 end
 
-local function applyDesc(p, hum, d)
+-- reset = true → ApplyDescriptionReset: karakter disamakan PENUH dengan
+-- deskripsi walau sudah diubah di luar sistem deskripsi (mis. /clearhats
+-- menghapus aksesoris langsung). ApplyDescription biasa hanya menerapkan
+-- SELISIH dari deskripsi terakhir, jadi aksesoris yang dihapus tidak kembali.
+local function applyDesc(p, hum, d, reset)
 	task.spawn(function()
-		local ok = safeCall(hum.ApplyDescription, "ApplyDescription gagal", hum, d)
+		local method = reset and hum.ApplyDescriptionReset or hum.ApplyDescription
+		local ok = safeCall(method, "ApplyDescription gagal", hum, d)
 		if ok and p and p.Parent then
 			appearanceApplied:Fire(p)
 		end
@@ -252,10 +257,20 @@ local function clearDTEffects(char)
 	char:SetAttribute("DT_StatusKind", nil)
 end
 
+-- Reset hanya kalau Humanoid sudah punya HumanoidDescription (Reset tanpa
+-- deskripsi pernah membuat server crash, DevForum 1819128) dan pemain tidak
+-- sedang carry (CarryWeld menempel di UpperTorso; Reset membangun ulang
+-- karakter — belum terbukti aman untuk las carry). Selain itu cara lama.
+local function canReset(p, hum)
+	return hum:FindFirstChildOfClass("HumanoidDescription") ~= nil
+		and p:GetAttribute("InCarry") ~= true
+		and p:GetAttribute("Carried") ~= true
+end
+
 local function resetToBaseDesc(p, char, hum)
 	clearDTEffects(char)
 	local base = getBaseDesc(p)
-	if base and hum then applyDesc(p, hum, base) end
+	if base and hum then applyDesc(p, hum, base, canReset(p, hum)) end
 	fixAccVisibility(char)
 end
 
@@ -280,12 +295,40 @@ H.normal = function(p)
 	end
 end
 
+-- /rejoin kembali ke server YANG SAMA kalau server ini publik
+-- (TeleportOptions.ServerInstanceId = JobId). Server privat/reserved tidak bisa
+-- dituju begitu → cara lama (server publik mana saja). Gagal ke server yang
+-- sama (mis. penuh) → sekali coba cara lama.
+local rejoinSame = {}
+
+local function rejoinAny(p)
+	safeCall(TeleportService.TeleportAsync, "Rejoin gagal (" .. p.Name .. ")",
+		TeleportService, game.PlaceId, {p})
+end
+
 H.rejoin = function(p)
 	task.spawn(function()
-		safeCall(TeleportService.TeleportAsync, "Rejoin gagal (" .. p.Name .. ")",
-			TeleportService, game.PlaceId, {p})
+		if game.PrivateServerId ~= "" or game.JobId == "" then
+			rejoinAny(p)
+			return
+		end
+		local options = Instance.new("TeleportOptions")
+		options.ServerInstanceId = game.JobId
+		rejoinSame[p.UserId] = true
+		local ok = safeCall(TeleportService.TeleportAsync, "Rejoin ke server sama gagal (" .. p.Name .. ")",
+			TeleportService, game.PlaceId, {p}, options)
+		if not ok and rejoinSame[p.UserId] then
+			rejoinSame[p.UserId] = nil
+			rejoinAny(p)
+		end
 	end)
 end
+
+TeleportService.TeleportInitFailed:Connect(function(p)
+	if not (p and rejoinSame[p.UserId]) then return end
+	rejoinSame[p.UserId] = nil
+	if p.Parent then rejoinAny(p) end
+end)
 
 -- Butuh akses
 H.reset = function(p)
@@ -603,7 +646,7 @@ MarketplaceSvc.PromptGamePassPurchaseFinished:Connect(function(player, passId, p
 end)
 
 -- ── Player lifecycle ──────────────────────────────────────
-local PER_USER_CACHES = {stamps, undoStacks, _rankCache, _passCache, buckets}
+local PER_USER_CACHES = {stamps, undoStacks, _rankCache, _passCache, buckets, rejoinSame}
 
 local function onPlayerAdded(p)
 	hookChat(p)

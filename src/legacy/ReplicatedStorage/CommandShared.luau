@@ -36,7 +36,7 @@ CommandShared.LIST = {
 	{ id="reset",     cmd="/reset",     args="",          desc="Respawn"                                  },
 	{ id="rejoin",    cmd="/rejoin",    args="",          desc="Keluar & masuk kembali ke server"         },
 	{ id="fps",  cmd="/fps",  args="",          desc="Toggle overlay FPS & ping",      s="client" },
-	{ id="cam",  cmd="/cam",  args="<5–128>",   desc="Jarak kamera, contoh: /cam 30",  s="client" },
+	{ id="cam",  cmd="/cam",  args="<5–128>",   desc="Jarak kamera: /cam 30 · /cam = bawaan", s="client" },
 	{ id="fov",  cmd="/fov",  args="<30–120>",  desc="Field of view, contoh: /fov 90", s="client" },
 	{ id="time", cmd="/time", args="",          desc="Waktu in-game saat ini",         s="client" },
 }
@@ -48,5 +48,68 @@ CommandShared.COOLDOWN = {
 	highlight=1, sparkle=1, fire=1, smoke=1, trail=1,
 	glow=1, hat=1, nametag=1, normal=2, undo=1,
 }
+
+-- Rentang /cam (sama dengan teks argumen di LIST). hold = detik kamera
+-- dikunci sesaat di jarak tujuan supaya modul kamera melompat ke sana.
+CommandShared.CAM = { min = 5, max = 128, hold = 0.1 }
+
+-- Kata perintah dari teks kotak cari: tanpa spasi depan & "/", huruf kecil.
+function CommandShared.word(raw)
+	return string.lower(string.match(raw or "", "^%s*/?%s*(%S*)") or "")
+end
+
+-- Argumen dari teks kotak cari: kata pertama (perintah) dibuang, sisanya
+-- dipecah per spasi. Spasi di depan tidak menggeser argumen (sama dengan word).
+function CommandShared.args(raw)
+	local rest = string.match(raw or "", "^%s*/?%s*%S*(.*)$") or ""
+	local out = {}
+	for a in string.gmatch(rest, "%S+") do
+		table.insert(out, a)
+	end
+	return out
+end
+
+-- Hasil cari panel "/" berurutan: id PERSIS → id berawalan kata → id
+-- mengandung kata → deskripsi mengandung kata. Dalam satu tingkat urutan LIST
+-- dipertahankan; kata kosong = semua perintah urutan LIST. Baris pertama hasil
+-- adalah yang dijalankan Enter, jadi "/hat" menjalankan hat (bukan clearhats)
+-- dan "/reset" menjalankan reset (bukan normal yang deskripsinya "Reset…").
+function CommandShared.search(raw)
+	local word = CommandShared.word(raw)
+	local found = {}
+	for index, c in ipairs(CommandShared.LIST) do
+		local tier
+		if word == "" or c.id == word then
+			tier = 1
+		elseif string.sub(c.id, 1, #word) == word then
+			tier = 2
+		elseif string.find(c.id, word, 1, true) then
+			tier = 3
+		elseif string.find(string.lower(c.desc), word, 1, true) then
+			tier = 4
+		end
+		if tier then
+			table.insert(found, { cmd = c, tier = tier, index = index })
+		end
+	end
+	table.sort(found, function(a, b)
+		if a.tier ~= b.tier then return a.tier < b.tier end
+		return a.index < b.index
+	end)
+	return found, word
+end
+
+-- /cam tanpa mengunci zoom. Dengan angka: kamera lompat ke jarak itu, lalu zoom
+-- bebas lagi (maks dinaikkan kalau angkanya di atas maks bawaan). Tanpa angka:
+-- kembali ke rentang bawaan place. Kembalian: { jump = jarak|nil, min, max }.
+function CommandShared.camZoom(arg, defaultMin, defaultMax)
+	local n = tonumber(arg)
+	if n ~= n then n = nil end -- tolak NaN ("nan" lolos math.clamp)
+	if not n then
+		return { jump = nil, min = defaultMin, max = defaultMax }
+	end
+	n = math.clamp(n, CommandShared.CAM.min, CommandShared.CAM.max)
+	return { jump = n, min = defaultMin, max = math.max(defaultMax, n) }
+end
 
 return CommandShared
