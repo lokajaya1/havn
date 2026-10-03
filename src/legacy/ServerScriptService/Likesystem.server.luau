@@ -7,17 +7,24 @@
 --   • validasi semua permintaan like dari client (server-authoritative)
 --   • persist ke DataStore pakai UpdateAsync + DELTA, bukan SetAsync,
 --     supaya save "hantu" dari server lama tidak menimpa data baru
+--   • angka yang tampil = dasar tersimpan + selisih yang sedang/akan
+--     disimpan. Dasar DIGANTI (bukan ditambah) saat load, jadi keluar-masuk
+--     ke server yang sama tidak menggandakan like.
+--   • Studio memakai store "<StoreName>_studio": like saat uji tidak
+--     menulis data live.
 --
 -- leaderstats TIDAK disentuh di sini. TeamSystem yang mirror
 -- Attribute "Likes" → leaderstats.Likes.
 -- ═══════════════════════════════════════════════════════════
 
-local Players = game:GetService("Players")
-local RS      = game:GetService("ReplicatedStorage")
-local DSS     = game:GetService("DataStoreService")
+local Players    = game:GetService("Players")
+local RS         = game:GetService("ReplicatedStorage")
+local DSS        = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 
 local CONFIG = {
 	StoreName        = "AvatarLikes",
+	StudioSuffix     = "_studio",
 	UseDataStore     = true,   -- false = mode sesi saja (Studio tanpa API Services)
 	AllowUnlike      = true,   -- klik lagi = batal like
 	AllowSelfLike    = false,
@@ -52,9 +59,10 @@ if not likeEvent then
 end
 
 -- ── DataStore (opsional) ────────────────────────────────────
+local storeName = CONFIG.StoreName .. (RunService:IsStudio() and CONFIG.StudioSuffix or "")
 local store
 if CONFIG.UseDataStore then
-	local ok, result = pcall(function() return DSS:GetDataStore(CONFIG.StoreName) end)
+	local ok, result = pcall(function() return DSS:GetDataStore(storeName) end)
 	if ok then
 		store = result
 	else
@@ -63,18 +71,24 @@ if CONFIG.UseDataStore then
 end
 
 -- ── State sesi ──────────────────────────────────────────────
--- received  : nilai yang ditampilkan  = base tersimpan + delta belum tersimpan
+-- base      : jumlah like yang terakhir diketahui TERSIMPAN (dari load / hasil save)
 -- delta     : selisih yang BELUM masuk DataStore (bisa negatif kalau unlike)
+-- inflight  : selisih yang SEDANG disimpan (UpdateAsync belum selesai)
+-- yang tampil = base + inflight + delta (lihat total)
 -- given     : set target yang sudah di-like pemain ini
 -- givenDelta: perubahan set yang belum tersimpan ([id] = true tambah / false hapus)
-local received   = {}
+-- generation: naik tiap profil dibersihkan; save yang selesai SETELAH itu
+--             tidak boleh menghidupkan lagi angka sesi lama.
+local base       = {}
 local delta      = {}
+local inflight   = {}
 local given      = {}
 local givenOrder = {}
 local givenDelta = {}
 local loaded     = {}
 local dirty      = {}
 local saving     = {}
+local generation = {}
 local lastToggle = {}
 local lastQuery  = {}
 local notified   = {} -- [likerId] = { [targetId] = os.clock() } → anti spam toast
@@ -83,16 +97,21 @@ local pulseCounter = 0 -- attribute harus BERUBAH nilainya untuk memicu sinyal
 
 local function key(userId) return "u_" .. userId end
 
+local function total(uid)
+	return math.max(0, (base[uid] or 0) + (inflight[uid] or 0) + (delta[uid] or 0))
+end
+
 local function publish(userId)
 	local player = Players:GetPlayerByUserId(userId)
 	if player and player.Parent then
-		player:SetAttribute("Likes", math.max(0, received[userId] or 0))
+		player:SetAttribute("Likes", total(userId))
 	end
 end
 
 local function ensure(uid)
-	received[uid]   = received[uid]   or 0
+	base[uid]       = base[uid]       or 0
 	delta[uid]      = delta[uid]      or 0
+	inflight[uid]   = inflight[uid]   or 0
 	given[uid]      = given[uid]      or {}
 	givenOrder[uid] = givenOrder[uid] or {}
 	givenDelta[uid] = givenDelta[uid] or {}
@@ -112,8 +131,8 @@ end
 -- ── Load ────────────────────────────────────────────────────
 local function loadProfile(player)
 	local uid = player.UserId
-	-- Diinisialisasi DULU: like yang masuk selama GetAsync yield tidak boleh
-	-- hilang, jadi nilai DataStore DITAMBAHKAN ke yang sudah ada.
+	-- Diinisialisasi DULU: like yang masuk selama GetAsync yield tercatat di
+	-- delta (bukan di base), jadi tidak hilang saat base diganti nilai load.
 	ensure(uid)
 
 	if not store then
@@ -132,8 +151,16 @@ local function loadProfile(player)
 		return
 	end
 
+	-- Profil bisa sudah dibersihkan selama GetAsync (pemain keluar lagi).
+	if base[uid] == nil then return end
+
 	if type(data) == "table" then
-		received[uid] += (tonumber(data.likes) or 0)
+		-- DIGANTI, bukan ditambah: sisa sesi sebelumnya di server ini (rejoin
+		-- cepat) sudah ada di base. Save yang sedang berjalan akan memasang
+		-- base dari hasil UpdateAsync, jadi load tidak menimpanya.
+		if not saving[uid] then
+			base[uid] = tonumber(data.likes) or 0
+		end
 		if type(data.given) == "table" then
 			for _, raw in ipairs(data.given) do
 				local t = tonumber(raw)
@@ -143,6 +170,8 @@ local function loadProfile(player)
 				end
 			end
 		end
+	elseif not saving[uid] then
+		base[uid] = 0
 	end
 
 	loaded[uid] = true
@@ -156,12 +185,15 @@ local function saveProfile(uid, playerName)
 	saving[uid] = true
 
 	-- Diambil dulu lalu direset: like yang masuk SELAMA UpdateAsync yield
-	-- akan tercatat sebagai delta baru, bukan hilang atau dobel.
+	-- akan tercatat sebagai delta baru, bukan hilang atau dobel. Selama
+	-- disimpan, selisih ini tetap ikut tampil lewat inflight.
 	local pendingDelta = delta[uid] or 0
 	local pendingGiven = givenDelta[uid] or {}
+	local gen          = generation[uid]
 	delta[uid]      = 0
 	givenDelta[uid] = {}
 	dirty[uid]      = nil
+	if base[uid] ~= nil then inflight[uid] = pendingDelta end
 
 	local ok, result = retry(function()
 		return store:UpdateAsync(key(uid), function(old)
@@ -209,10 +241,17 @@ local function saveProfile(uid, playerName)
 	end)
 
 	saving[uid] = nil
+	-- Profil sudah dibersihkan (keluar > 8 dtk) selama UpdateAsync berjalan →
+	-- angka sesi lama tidak dihidupkan lagi (kalau dihidupkan, rejoin
+	-- berikutnya ke server ini mulai dari angka basi).
+	local live = generation[uid] == gen and base[uid] ~= nil
 
 	if not ok then
 		-- Rollback supaya perubahan tidak hilang; dicoba lagi di autosave berikutnya
+		-- (juga kalau profilnya sudah dibersihkan).
+		if live then inflight[uid] = 0 end
 		delta[uid] = (delta[uid] or 0) + pendingDelta
+		givenDelta[uid] = givenDelta[uid] or {}
 		for id, add in pairs(pendingGiven) do
 			if givenDelta[uid][id] == nil then givenDelta[uid][id] = add end
 		end
@@ -221,18 +260,22 @@ local function saveProfile(uid, playerName)
 		return
 	end
 
+	if not live then return end
+
 	-- Koreksi: hasil UpdateAsync adalah nilai final di DataStore, jadi
 	-- like yang masuk dari server lain (atau load yang gagal) ikut terperbaiki.
+	inflight[uid] = 0
 	if type(result) == "table" then
-		received[uid] = math.max(0, (tonumber(result.likes) or 0) + (delta[uid] or 0))
-		publish(uid)
+		base[uid] = tonumber(result.likes) or 0
 	end
+	publish(uid)
 end
 
 local function clearProfile(uid)
-	received[uid], delta[uid] = nil, nil
+	base[uid], delta[uid], inflight[uid] = nil, nil, nil
 	given[uid], givenOrder[uid], givenDelta[uid] = nil, nil, nil
 	loaded[uid], dirty[uid], saving[uid] = nil, nil, nil
+	generation[uid] = (generation[uid] or 0) + 1
 	lastToggle[uid], lastQuery[uid] = nil, nil
 	notified[uid] = nil
 	lastPulse[uid] = nil
@@ -291,14 +334,12 @@ local function handleToggle(liker, targetId)
 		end
 		removeGiven(likerId, targetId)
 		givenDelta[likerId][targetId] = false
-		received[targetId] = math.max(0, received[targetId] - 1)
-		delta[targetId]    -= 1
+		delta[targetId] -= 1
 	else
 		given[likerId][targetId] = true
 		table.insert(givenOrder[likerId], targetId)
 		givenDelta[likerId][targetId] = true
-		received[targetId] += 1
-		delta[targetId]    += 1
+		delta[targetId] += 1
 
 		-- Pulse: dilihat SEMUA pemain lewat replikasi attribute.
 		-- Di-throttle per target (bukan per pasangan) supaya target yang
@@ -412,11 +453,11 @@ end)
 
 -- ── API untuk script server lain ────────────────────────────
 _G.LikeSystem = {
-	Get      = function(userId) return math.max(0, received[userId] or 0) end,
+	Get      = function(userId) return total(userId) end,
 	HasLiked = function(giverId, targetId)
 		local set = given[giverId]
 		return (set and set[targetId]) or false
 	end,
 }
 
-print("[LikeSystem] Ready | DataStore:", store ~= nil)
+print("[LikeSystem] Ready | DataStore:", store ~= nil and storeName or "nonaktif")

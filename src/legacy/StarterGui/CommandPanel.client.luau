@@ -234,20 +234,42 @@ local function toast(msg, isError)
 end
 
 -- ── Client-side command handlers ──────────────────────────
+local StarterPlayer = game:GetService("StarterPlayer")
+local camToken = 0
+
 local CLIENT = {
 	fps = toggleFps,
 
+	-- Zoom TIDAK dikunci: kamera dilompatkan ke jarak n (min = maks = n selama
+	-- CommandShared.CAM.hold dtk), lalu rentang zoom kembali ke bawaan place
+	-- (maks dinaikkan kalau n lebih jauh). "/cam" tanpa angka = rentang bawaan.
+	-- Tidak menunggu di sini, jadi panel langsung tertutup.
 	cam = function(a)
-		local n = tonumber(a[1]); if n ~= n then n = nil end -- tolak NaN ("nan" lolos math.clamp)
-		n = math.clamp(n or 16, 5, 128)
-		player.CameraMaxZoomDistance = n
-		player.CameraMinZoomDistance = math.max(n - 5, 0.5)
-		toast("Kamera: " .. n .. " studs")
+		local z = CommandShared.camZoom(a[1], StarterPlayer.CameraMinZoomDistance, StarterPlayer.CameraMaxZoomDistance)
+		camToken += 1
+		local token = camToken
+		local function release()
+			if camToken ~= token then return end -- /cam yang lebih baru menang
+			player.CameraMinZoomDistance = z.min
+			player.CameraMaxZoomDistance = z.max
+		end
+		if z.jump then
+			player.CameraMaxZoomDistance = math.max(player.CameraMaxZoomDistance, z.jump)
+			player.CameraMinZoomDistance = z.jump
+			player.CameraMaxZoomDistance = z.jump
+			task.delay(CommandShared.CAM.hold, release)
+		else
+			release()
+		end
+		toast(z.jump and ("Kamera: " .. z.jump .. " studs") or "Kamera: bawaan")
 	end,
 
+	-- FOV dasar disimpan di atribut lokal "BaseFOV" supaya sprint kembali
+	-- ke angka ini (bukan ke 70) setelah berlari.
 	fov = function(a)
 		local n = tonumber(a[1]); if n ~= n then n = nil end
 		n = math.clamp(n or 70, 30, 120)
+		player:SetAttribute("BaseFOV", n)
 		local cam = workspace.CurrentCamera
 		if cam then cam.FieldOfView = n end
 		toast("FOV: " .. n .. "°")
@@ -523,6 +545,7 @@ local function build()
 
 	-- Baris command: dua baris seperti di screenshot
 	local allRows = {}
+	local rowById = {}
 
 	for i, cmd in ipairs(CMDS) do
 		local free = cmdIsFree(cmd)
@@ -577,6 +600,7 @@ local function build()
 			row = row, bar = bar, stroke = rowStroke, cmd = cmd, free = free,
 			cmdLbl = cmdLbl, argsLbl = argsLbl, descLbl = descLbl, lock = lockLbl,
 		}
+		rowById[cmd.id] = allRows[i]
 	end
 
 	local foot = new("TextLabel", {
@@ -629,18 +653,25 @@ local function build()
 		end
 	end
 
+	-- Urutan hasil = CommandShared.search: id persis dulu, lalu awalan, lalu
+	-- sisanya. Baris diurutkan ulang (LayoutOrder) supaya baris teratas = yang
+	-- disorot = yang dijalankan Enter (/hat → hat, bukan clearhats).
 	local function filter(raw)
-		local word = raw:gsub("^/", ""):lower():split(" ")[1] or ""
 		local prev = vis[sel]
 		if prev then paintRow(prev, false) end
 
+		local shown = {}
 		vis = {}
+		for order, found in ipairs(CommandShared.search(raw)) do
+			local r = rowById[found.cmd.id]
+			if r then
+				shown[r] = true
+				r.row.LayoutOrder = order
+				vis[#vis + 1] = r
+			end
+		end
 		for _, r in ipairs(allRows) do
-			local ok = word == ""
-				or r.cmd.id:find(word, 1, true) ~= nil
-				or r.cmd.desc:lower():find(word, 1, true) ~= nil
-			r.row.Visible = ok
-			if ok then vis[#vis + 1] = r end
+			r.row.Visible = shown[r] == true
 		end
 
 		sel = 0
@@ -657,15 +688,17 @@ local function build()
 	end
 
 	local function parseArgs()
-		local parts = searchBox.Text:gsub("^/", ""):split(" ")
-		local args  = {}
-		for i = 2, #parts do
-			if parts[i] ~= "" then args[#args + 1] = parts[i] end
-		end
-		return args
+		return CommandShared.args(searchBox.Text)
 	end
 
 	local function runSelected(target)
+		-- Enter tepat setelah mengetik: hasil cari yang masih menunggu jeda
+		-- dihitung SEKARANG, supaya yang jalan sesuai teks terakhir.
+		if filterThread then
+			task.cancel(filterThread)
+			filterThread = nil
+			filter(searchBox.Text)
+		end
 		local t = target or vis[sel] or vis[1]
 		if not t then return end
 		exec(t.cmd.id, parseArgs())
@@ -692,7 +725,8 @@ local function build()
 
 	searchBox.FocusLost:Connect(function(enterPressed)
 		tw(searchStroke, TF, { Transparency = 0.9, Color = T.LINE })
-		if enterPressed then runSelected() end
+		-- Kotak kosong + Enter (di HP: tombol Return) tidak menjalankan apa pun.
+		if enterPressed and CommandShared.word(searchBox.Text) ~= "" then runSelected() end
 	end)
 
 	filterBtn.Activated:Connect(function()

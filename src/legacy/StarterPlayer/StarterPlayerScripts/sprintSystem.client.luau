@@ -86,6 +86,14 @@ local function tweenTo(instance, property, value)
 	t:Play()
 end
 
+-- FOV dasar: /fov (CommandPanel) menyimpan pilihan pemain di atribut lokal
+-- "BaseFOV"; tanpa itu = FOV kamera saat skrip mulai. Sprint & respawn kembali
+-- ke angka ini (dulu selalu ke FOV awal, jadi /fov hilang setelah berlari).
+local function getBaseFOV()
+	local v = player:GetAttribute("BaseFOV")
+	return type(v) == "number" and v or baseFOV
+end
+
 local function isLocked()
 	return humanoid ~= nil and humanoid:GetAttribute(CONFIG.LockAttribute) == true
 end
@@ -115,7 +123,7 @@ local function refresh()
 	end
 
 	if CONFIG.EnableFOV and camera then
-		local fov = baseFOV + ((flags.sprint and not isDancing()) and CONFIG.FOVBoost or 0)
+		local fov = getBaseFOV() + ((flags.sprint and not isDancing()) and CONFIG.FOVBoost or 0)
 		if force or fov ~= currentFOV then
 			currentFOV = fov
 			tweenTo(camera, "FieldOfView", fov)
@@ -302,7 +310,7 @@ local function onCharacterAdded(character)
 	currentSpeed, currentFOV, wasLocked = nil, nil, false
 
 	humanoid.WalkSpeed = CONFIG.WalkSpeed
-	if camera then camera.FieldOfView = baseFOV end
+	if camera then camera.FieldOfView = getBaseFOV() end
 	if resetMobileButtonVisual then resetMobileButtonVisual() end
 
 	humanoid:GetAttributeChangedSignal(CONFIG.LockAttribute):Connect(refresh)
@@ -315,6 +323,7 @@ if player.Character then onCharacterAdded(player.Character) end
 -- Mulai/berhenti menari atau sync → hitung ulang kecepatan (6 ↔ jalan/sprint).
 player:GetAttributeChangedSignal("IsDancing"):Connect(refresh)
 player:GetAttributeChangedSignal("IsSyncing"):Connect(refresh)
+player:GetAttributeChangedSignal("BaseFOV"):Connect(refresh)
 
 ContextActionService:BindAction(SPRINT_ACTION, makeHandler("sprint", CONFIG.SprintToggle),
 	false, CONFIG.SprintKey, CONFIG.SprintPad)

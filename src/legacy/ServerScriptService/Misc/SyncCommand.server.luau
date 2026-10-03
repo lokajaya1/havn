@@ -1,6 +1,5 @@
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService        = game:GetService("RunService")
 
 local DanceShared = require(ReplicatedStorage.Modules.DanceShared)
 
@@ -10,11 +9,8 @@ local DEFAULT_WALKSPEED = DanceShared.WALKSPEED.default
 local FADE_IN           = 0.20
 local FADE_OUT          = 0.20
 local STOP_FADE         = 0.35
-local DRIFT_RATE        = 0.1
-local DRIFT_THRESHOLD   = 0.03
-local SPEED_THRESHOLD   = 0.05
+local SYNC              = DanceShared.SYNC -- cek drift, ambang, jeda koreksi, tunggu snap
 local LEAD_STOP_GRACE   = 0.25
-local TIGHT_SYNC_TIME   = 0.4
 local CARRY_WATCH_INTERVAL = 0.2 -- watchdog jaga mirror hidup selama follower di-carry
 local START_STOP_GAP    = 0.5  -- jeda start/stop sync (remote maupun chat)
 local STATUS_GAP        = 1    -- jeda getSyncStatus
@@ -169,28 +165,26 @@ local function rehomeFollowers(oldLead, newLead)
 	end
 end
 
-local function tightSync(follower, followerTrack, targetTrack, duration)
+-- Samakan fase follower dengan lead SATU kali: tunggu track follower termuat
+-- (Length > 0, maks SYNC.SNAP_WAIT dtk), lalu set TimePosition & Speed. Dulu
+-- ditulis tiap Heartbeat selama 0,4 dtk; tiap tulisan sampai ke client sebagai
+-- lompatan → follower kejang (track lead tidak pernah ditulis → mulus).
+local function snapOnce(follower, animName, followerTrack, targetTrack)
 	local userId = follower.UserId
-	local startT = os.clock()
-
-	local conn
-	conn = RunService.Heartbeat:Connect(function()
-		local d = syncData[userId]
-		if not d
-			or not followerTrack.IsPlaying
-			or not targetTrack.IsPlaying then
-			conn:Disconnect()
-			return
+	task.spawn(function()
+		local deadline = os.clock() + SYNC.SNAP_WAIT
+		while followerTrack.Length <= 0 and os.clock() < deadline do
+			task.wait()
 		end
+		local d = syncData[userId]
+		if not d or d.tracks[animName] ~= followerTrack then return end
+		if not (followerTrack.IsPlaying and targetTrack.IsPlaying) then return end
 
 		followerTrack.TimePosition = targetTrack.TimePosition
 		if math.abs(followerTrack.Speed - targetTrack.Speed) > 0.001 then
 			followerTrack:AdjustSpeed(targetTrack.Speed)
 		end
-
-		if os.clock() - startT >= duration then
-			conn:Disconnect()
-		end
+		d.fixedAt[animName] = os.clock()
 	end)
 end
 
@@ -237,12 +231,11 @@ mirrorTrack = function(follower, targetTrack, isInitial)
 	end
 
 	local snapTarget = targetTrack
-	if snapTarget.IsPlaying then
-		newTrack.TimePosition = snapTarget.TimePosition
-	end
-	tightSync(follower, newTrack, snapTarget, TIGHT_SYNC_TIME)
-
 	data.tracks[animName] = newTrack
+	-- Loop drift menunggu ≥ DRIFT_GAP: snap di bawah yang menyamakan fase.
+	data.fixedAt[animName] = os.clock()
+	snapOnce(follower, animName, newTrack, snapTarget)
+
 	notifyClient(follower, true, data.targetPlayer.Name, nil, animName)
 
 	snapTarget.Stopped:Once(function()
@@ -348,6 +341,7 @@ startSync = function(follower, targetPlayer)
 	syncData[userId] = {
 		targetPlayer   = targetPlayer,
 		tracks         = {},
+		fixedAt        = {}, -- [animName] = os.clock() koreksi fase terakhir
 		connections    = {},
 		animPlayedConn = nil,
 		paused         = false,
@@ -411,7 +405,7 @@ end
 
 task.spawn(function()
 	while true do
-		task.wait(DRIFT_RATE)
+		task.wait(SYNC.DRIFT_RATE)
 
 		local activeIds = {}
 		for userId in pairs(syncData) do
@@ -432,15 +426,20 @@ task.spawn(function()
 			end
 
 			for animName, followerTrack in pairs(data.tracks) do
-				if not followerTrack.IsPlaying then continue end
+				if not followerTrack.IsPlaying or followerTrack.Length <= 0 then continue end
 				local targetTrack = targetMap[animName]
 				if not (targetTrack and targetTrack.IsPlaying) then continue end
 
-				if math.abs(followerTrack.TimePosition - targetTrack.TimePosition) > DRIFT_THRESHOLD then
+				-- Selisih MELINGKAR (batas loop bukan meleset), ambang SYNC.DRIFT_THRESHOLD,
+				-- dan paling sering sekali per SYNC.DRIFT_GAP per track.
+				local now = os.clock()
+				if DanceShared.needsResync(followerTrack.TimePosition, targetTrack.TimePosition,
+					targetTrack.Length, now, data.fixedAt[animName]) then
 					followerTrack.TimePosition = targetTrack.TimePosition
+					data.fixedAt[animName] = now
 				end
 
-				if math.abs(followerTrack.Speed - targetTrack.Speed) > SPEED_THRESHOLD then
+				if math.abs(followerTrack.Speed - targetTrack.Speed) > SYNC.SPEED_THRESHOLD then
 					followerTrack:AdjustSpeed(targetTrack.Speed)
 				end
 			end
