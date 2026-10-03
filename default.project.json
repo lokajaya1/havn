@@ -112,9 +112,6 @@
       "MusicServer": {
         "$path": "src/legacy/ServerScriptService/MusicServer"
       },
-      "Namailang": {
-        "$path": "src/legacy/ServerScriptService/Namailang.server.luau"
-      },
       "OverheadTag": {
         "$path": "src/legacy/ServerScriptService/OverheadTag.server.luau"
       },
@@ -126,6 +123,9 @@
       },
       "RankConfig": {
         "$path": "src/legacy/ServerScriptService/RankConfig.luau"
+      },
+      "RankRules": {
+        "$path": "src/legacy/ServerScriptService/RankRules.luau"
       },
       "ReceiptHandler": {
         "$path": "src/legacy/ServerScriptService/ReceiptHandler.luau"
@@ -318,6 +318,27 @@
             "Script": {
               "$path": "src/legacy/StarterPack/Sign/SignTextColor.server.luau"
             }
+          }
+        }
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$ignoreUnknownInstances": true,
+      "TimePlayedLeaderboard": {
+        "$className": "Model",
+        "$ignoreUnknownInstances": true,
+        "TimePlayedClass": {
+          "$path": "src/legacy/Workspace/TimePlayedLeaderboard/TimePlayedClass.server.luau"
+        },
+        "Settings": {
+          "$path": "src/legacy/Workspace/TimePlayedLeaderboard/Settings.luau"
+        },
+        "First Place Avatar": {
+          "$className": "Model",
+          "$ignoreUnknownInstances": true,
+          "PlayAnimationInRig": {
+            "$path": "src/legacy/Workspace/TimePlayedLeaderboard/FirstPlaceAvatar/PlayAnimationInRig.luau"
           }
         }
       }
