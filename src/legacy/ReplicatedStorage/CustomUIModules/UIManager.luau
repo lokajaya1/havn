@@ -26,7 +26,9 @@ local currentTargetPlayer: Player? = nil
 local restPos:          { [string]: UDim2 }  = {}
 local lastActionTime:   { [string]: number } = {}
 local activeTweens:     { [string]: Tween }  = {}
-local connections:      { RBXScriptConnection } = {}
+-- selene: allow(unused_variable)
+local connections:      { RBXScriptConnection } = {} -- referensi koneksi seumur sesi (tidak pernah dilepas)
+-- selene: allow(unused_variable)
 local disconnectResize: (() -> ())? = nil
 local initComplete = false
 local initCallbacks: { () -> () } = {}
@@ -218,7 +220,9 @@ local function initOnce(): boolean
 	end
 
 	guis.CarrySelect   = waitForGUI("CarrySelectGui", 10)
-	guis.FriendRequest = waitForGUI("FriendRequestGui", 10)
+	-- FriendRequestGui tidak dibuat skrip mana pun (add friend memakai prompt resmi Roblox): dulu ditunggu
+	-- 10 dtk → kartu pemain belum bisa dipakai 10 dtk pertama sesudah join (ruangan SOCIAL K10).
+	guis.FriendRequest = playerGui:FindFirstChild("FriendRequestGui") :: ScreenGui?
 
 	setupGUI(guis.PlayerMenu,    "MenuFrame")
 	setupGUI(guis.CarrySelect,   "CarrySelectFrame")
@@ -235,7 +239,6 @@ local function initOnce(): boolean
 	for _, cb in ipairs(initCallbacks) do task.spawn(cb) end
 	table.clear(initCallbacks)
 
-	print("[UIManager] Ready |", Responsive.Device(), "|", Responsive.Orientation())
 	return true
 end
 

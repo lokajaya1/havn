@@ -3,7 +3,8 @@
 -- Data murni (tanpa GetService/Instance/yield). Aturannya ada di ReplicatedStorage.Modules.SocialRules;
 -- batas terima remote memakai ToolRules.bucket/take (token bucket per pemain, sama dengan ruangan TOOLS).
 -- Dibaca: Communityinfoservice + CustomUIModules/Communityinfo (komunitas di kartu pemain),
--- CarrySystemHandler + CustomUIModules/CarryManager (permintaan carry), tes.
+-- CarrySystemHandler + CustomUIModules/CarryManager (permintaan carry), CustomUIModules/PrivateChatManager,
+-- CustomUIModules/HideAvatarManager, tes.
 --
 -- Istilah:
 --   batas terima = token bucket: RATE permintaan/dtk rata-rata, boleh beruntun sampai BURST. Di atas batas DIBUANG
@@ -41,6 +42,23 @@ Config.CARRY = {
 	TARGET_GAP = 3, -- dtk, target menerima paling banyak 1 permintaan baru per jeda (dari siapa pun)
 	PRUNE_EVERY = 60, -- dtk, buang catatan jeda yang sudah lewat
 	RECEIVE = { RATE = 2, BURST = 6 }, -- event CarryRemote per pemain
+}
+
+-- ── Private chat (whisper TextChatService bawaan) ────────────────────────────────────────────────────────────────
+Config.WHISPER = {
+	WAIT = 5, -- dtk menunggu channel whisper muncul sesudah perintah "/w @username" (kode lama: 5)
+}
+
+-- ── Hide avatar (lokal, hanya di layar pemain yang menyembunyikan) ──────────────────────────────────────────────
+-- Cara per kelas (dicek berurutan dengan IsA):
+--   LTM     → LocalTransparencyModifier = 1 (khusus client ini, tidak ditimpa Transparency dari server)
+--   ENABLED → Enabled = false (kelas yang tidak pernah dinyalakan-matikan server; nilai asli dipulihkan saat Show)
+--   DETACH  → dilepas sementara dari karakter (Parent = nil lokal) lalu dikembalikan saat Show. Untuk efek yang
+--             dinyalakan-matikan server (WaterGun, Money Gun, Broom): status Enabled dari server tetap benar saat Show.
+Config.HIDE = {
+	LTM = { "BasePart", "Decal" }, -- Decal mencakup Texture
+	ENABLED = { "BillboardGui", "SurfaceGui" },
+	DETACH = { "ParticleEmitter", "Beam", "Trail", "Fire", "Smoke", "Sparkles", "Light", "Highlight" },
 }
 
 return Config

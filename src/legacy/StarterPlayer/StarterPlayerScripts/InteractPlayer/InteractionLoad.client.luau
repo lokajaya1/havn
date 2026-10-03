@@ -170,8 +170,6 @@ end)
 -- MAIN
 -- ════════════════════════════════════════════════════════════
 
-if initializeSystem() then
-	print("[Interact] Sistem interaksi siap")
-else
+if not initializeSystem() then
 	warn("[Interact] Sistem UI belum siap — klik pemain mungkin tidak merespon")
 end

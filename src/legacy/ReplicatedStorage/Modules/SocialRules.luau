@@ -2,6 +2,7 @@
 -- ReplicatedStorage/Modules/SocialRules (ModuleScript) — aturan MURNI ruangan SOCIAL (claude/Rencana_Social.md).
 -- Tanpa GetService / Instance / yield: jam dioper oleh pemanggil (os.clock) → bisa dites dengan jam palsu.
 -- Angka di ReplicatedStorage.Config.Social. Batas terima remote memakai ToolRules.bucket/take.
+-- Isi: carry (jeda pasangan/target), private chat (nama channel whisper), hide avatar (cara per kelas).
 
 local SocialRules = {}
 
@@ -125,6 +126,37 @@ function SocialRules.carryPrune(state: CarryState, now: number, cfg: CarryConfig
 			state.incoming[targetId] = nil
 		end
 	end
+end
+
+-- ── private chat ─────────────────────────────────────────────────────────────────────────────────────────────────
+-- Channel whisper resmi TextChatService bernama "RBXWhisper:<UserId1>_<UserId2>" (urutan id tidak dijanjikan dok).
+function SocialRules.isWhisperChannel(name: string, a: number, b: number): boolean
+	local x, y = tostring(a), tostring(b)
+	return name == "RBXWhisper:" .. x .. "_" .. y or name == "RBXWhisper:" .. y .. "_" .. x
+end
+
+-- ── hide avatar ──────────────────────────────────────────────────────────────────────────────────────────────────
+export type HideConfig = { LTM: { string }, ENABLED: { string }, DETACH: { string } }
+
+-- Cara menyembunyikan satu instance: "ltm" | "enabled" | "detach" | nil (tidak disentuh).
+-- isA = function(kelas) return instance:IsA(kelas) end (dioper pemanggil → modul tetap murni).
+function SocialRules.hideAction(isA: (string) -> boolean, cfg: HideConfig): string?
+	for _, c in cfg.LTM do
+		if isA(c) then
+			return "ltm"
+		end
+	end
+	for _, c in cfg.ENABLED do
+		if isA(c) then
+			return "enabled"
+		end
+	end
+	for _, c in cfg.DETACH do
+		if isA(c) then
+			return "detach"
+		end
+	end
+	return nil
 end
 
 return SocialRules

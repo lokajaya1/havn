@@ -4,6 +4,10 @@
 --
 -- MenuBinder TIDAK menggambar apa pun. Visual PlayerMenu dibuat
 -- MenuSystemInit, visual carry dibuat CarryUI. Di sini murni wiring.
+-- Baris statistik ("# connections # followers") disembunyikan: remote
+-- GetPlayerStats tidak punya server lagi dan Roblox tidak punya API follower
+-- (ruangan SOCIAL K7, claude/Rencana_Social.md). Baris "Hide avatar" menjadi
+-- "Show avatar" kalau pemain yang dibuka sedang disembunyikan.
 -- ═══════════════════════════════════════════════════════════
 
 local RS = game:GetService("ReplicatedStorage")
@@ -40,7 +44,6 @@ local HideAvatarManager = optionalRequire("HideAvatarManager")
 local MenuBinder     = {}
 local currentPlayer  = nil
 local hideDebounce   = false
-local getStatsRemote = nil
 local bound          = false
 
 local connections: { RBXScriptConnection } = {}
@@ -59,32 +62,12 @@ local function setText(el, text)
 	if el and el:IsA("TextLabel") then el.Text = text end
 end
 
-local function fmtNum(n)
-	if type(n) ~= "number" or n ~= n then return "#" end
-	if n >= 1e6 then return string.format("%.1fM", n / 1e6) end
-	if n >= 1e3 then return string.format("%.1fK", n / 1e3) end
-	return tostring(math.floor(n))
-end
-
 local function isValid(plr)
 	return plr ~= nil and plr:IsA("Player") and plr.Parent ~= nil
 end
 
 local function track(conn)
 	table.insert(connections, conn)
-end
-
--- ── Stats ───────────────────────────────────────────────────
-
-task.spawn(function()
-	getStatsRemote = RS:WaitForChild("GetPlayerStats", 10)
-end)
-
-local function fetchStats(userId)
-	if not getStatsRemote then return "#", 0 end
-	local ok, r = pcall(getStatsRemote.InvokeServer, getStatsRemote, userId)
-	if ok and type(r) == "table" then return r.connections or "#", r.followers or 0 end
-	return "#", 0
 end
 
 -- ── Update player info ──────────────────────────────────────
@@ -105,20 +88,19 @@ local function updatePlayerInfo(target)
 
 	setText(container:FindFirstChild("PlayerName"), display)
 	setText(container:FindFirstChild("PlayerUsername"), "@" .. target.Name)
-	setText(container:FindFirstChild("StatsLabel"), "# connections  # followers")
+
+	local stats = container:FindFirstChild("StatsLabel")
+	if stats and stats:IsA("GuiObject") then stats.Visible = false end
+
+	local hideRow = find(gui, "MenuFrame.ScrollFrame.ScrollContent.ButtonsSection.ButtonsFrame.Choose_HideAvatar.Container.TextLabel")
+	if HideAvatarManager and HideAvatarManager.IsAvatarHidden then
+		setText(hideRow, HideAvatarManager:IsAvatarHidden(target) and "Show avatar" or "Hide avatar")
+	end
 
 	local avatar = profile:FindFirstChild("CharacterViewport")
 	if avatar and avatar:IsA("ImageLabel") and ShowAvatarModule then
 		ShowAvatarModule:ShowCharacter(target, avatar)
 	end
-
-	task.spawn(function()
-		local conn, foll = fetchStats(target.UserId)
-		if currentPlayer == target then
-			setText(container:FindFirstChild("StatsLabel"),
-				fmtNum(conn) .. " connections  " .. fmtNum(foll) .. " followers")
-		end
-	end)
 end
 
 -- ── Wire Player Menu ────────────────────────────────────────
@@ -239,7 +221,7 @@ function MenuBinder.BindAll()
 	if bound then return true end
 
 	bound = wirePlayerMenu()
-	print("[MenuBinder] BindAll:", bound and "OK" or "FAILED")
+	if not bound then warn("[MenuBinder] BindAll gagal — tombol kartu pemain tidak tersambung") end
 	return bound
 end
 

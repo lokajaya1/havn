@@ -78,6 +78,12 @@ local STRICT = {
 	"src/legacy/ServerScriptService/CarrySystemHandler.server.luau",
 	"src/legacy/ReplicatedStorage/CustomUIModules/Communityinfo.luau",
 	"src/legacy/ReplicatedStorage/CustomUIModules/CarryManager.luau",
+	"src/legacy/ReplicatedStorage/CustomUIModules/PrivateChatManager.luau",
+	"src/legacy/ReplicatedStorage/CustomUIModules/HideAvatarManager.luau",
+	"src/legacy/ReplicatedStorage/CustomUIModules/MenuBinder.luau",
+	"src/legacy/ReplicatedStorage/CustomUIModules/UIManager.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/InteractPlayer/InteractionLoad.client.luau",
 }
 local REPORT = { "src/legacy" }
 

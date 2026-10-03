@@ -897,5 +897,3 @@ applyConfig(cfg)
 Responsive.OnChange(function()
 	if frame.Parent then applyConfig(getConfig()) end
 end)
-
-print(string.format("[PlayerMenu] Ready | %s | %s", cfg.device, cfg.orientation))
