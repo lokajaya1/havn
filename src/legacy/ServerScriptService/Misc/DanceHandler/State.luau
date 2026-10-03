@@ -33,6 +33,8 @@ local function getState(player)
 			watchToken = 0,
 			lastRequest = 0,
 			requestSeq  = 0,     -- permintaan terakhir yang menang (lihat playDance)
+			-- pending    : permintaan dance terakhir yang menunggu jeda/kuota ({dance, speed}; nil = tidak ada)
+			-- pendingDue : os.clock() timer terdekat yang akan menjalankan pending (nil = tidak ada)
 			buckets     = {},
 			initialized = false,
 		}

@@ -5,9 +5,12 @@
 -- Penyebab dance pertama terasa lambat: AnimationTrack yang baru di-load punya
 -- Length 0 sampai data keyframe turun, dan Play pada track Length 0 tidak
 -- menampilkan apa pun. Karena itu:
---   • AnimationWarmup memanaskan cache asset satu kali per server.
+--   • AnimationWarmup memanaskan cache asset satu kali per server: dance
+--     populer dulu, lalu semua dance lain bertahap.
 --   • ensureTrack menunggu Length > 0 sebelum dance benar-benar diputar.
 --   • Fade dibuat pendek supaya respons terasa instan.
+--   • Klik cepat beruntun tidak dibuang: permintaan TERAKHIR menunggu jeda /
+--     kuota lalu dijalankan, jadi avatar selalu sama dengan baris di panel.
 --
 -- Catatan:
 --   • Animator punya batas 256 AnimationTrack dan track tidak dibersihkan
@@ -63,8 +66,7 @@ local startWatch     = Motion.startWatch
 -- ═══════════════════════════════════════════════════════════
 
 -- Token bucket per pemain: `burst` langsung, lalu `refill` per detik.
-local function takeToken(s, key, burst, refill)
-	local now = os.clock()
+local function refillBucket(s, key, burst, refill, now)
 	local b = s.buckets[key]
 	if not b then
 		b = { tokens = burst, at = now }
@@ -72,9 +74,21 @@ local function takeToken(s, key, burst, refill)
 	end
 	b.tokens = math.min(burst, b.tokens + (now - b.at) * refill)
 	b.at = now
+	return b
+end
+
+local function takeToken(s, key, burst, refill)
+	local b = refillBucket(s, key, burst, refill, os.clock())
 	if b.tokens < 1 then return false end
 	b.tokens -= 1
 	return true
+end
+
+-- Detik sampai satu token tersedia (0 = sekarang), tanpa memakainya.
+local function tokenWait(s, key, burst, refill, now)
+	local b = refillBucket(s, key, burst, refill, now)
+	if b.tokens >= 1 then return 0 end
+	return (1 - b.tokens) / refill
 end
 
 local danceRemote     = DanceShared.remote("DanceRequest")
@@ -86,31 +100,73 @@ local function sendFavorites(player, kind, list)
 end
 Favorites.setSend(sendFavorites)
 
-danceRemote.OnServerEvent:Connect(function(player, danceName, speed)
-	if danceName ~= nil and type(danceName) ~= "string" then return end
-	if not player.Parent then return end
+-- Permintaan yang belum boleh jalan (jeda REQUEST_COOLDOWN, atau kuota ganti
+-- dance habis) TIDAK dibuang lagi: hanya yang TERAKHIR disimpan (s.pending) dan
+-- dijalankan begitu boleh (paling lama 1/SWITCH_REFILL dtk). Dulu klik cepat
+-- beruntun dibuang diam-diam → panel menyorot dance baru padahal avatar masih
+-- dance lama, dan nilai slider speed terakhir bisa hilang. Kuota tetap sama.
+local runPending
 
-	local s   = getState(player)
-	local now = os.clock()
-	if now - s.lastRequest < CONFIG.REQUEST_COOLDOWN then return end
+-- Satu timer per waktu jatuh tempo: timer yang jatuh tempo lebih awal (atau
+-- sama) sudah ada → tidak dibuat lagi. Timer yang terlambat aman: runPending
+-- tidak berbuat apa-apa kalau pending sudah dijalankan.
+local function schedulePending(player, s, delaySec)
+	local due = os.clock() + delaySec
+	if s.pendingDue and s.pendingDue <= due + 1e-3 then return end
+	s.pendingDue = due
+	task.delay(delaySec, function()
+		if s.pendingDue == due then s.pendingDue = nil end
+		runPending(player, s)
+	end)
+end
 
-	-- Dance manual ditolak saat sync (mirror diurus SyncHandler).
-	-- Dance saat di-carry diizinkan; stop hanya lewat drop-cleanup.
-	if player:GetAttribute("IsSyncing") then return end
-
-	local switching = danceName ~= nil and danceName ~= "" and danceName ~= s.dance
-	if switching then
-		if not DANCES[danceName] then return end
-		if not takeToken(s, "switch", CONFIG.SWITCH_BURST, CONFIG.SWITCH_REFILL) then return end
+runPending = function(player, s)
+	local request = s.pending
+	if not request then return end
+	-- Keluar, mulai sync, atau state diganti → permintaan lama tidak berlaku.
+	if states[player.UserId] ~= s or not player.Parent or player:GetAttribute("IsSyncing") then
+		s.pending = nil
+		return
 	end
+
+	local danceName = request.dance
+	local now       = os.clock()
+	local switching = danceName ~= nil and danceName ~= "" and danceName ~= s.dance
+	local waitFor   = CONFIG.REQUEST_COOLDOWN - (now - s.lastRequest)
+	if switching then
+		waitFor = math.max(waitFor, tokenWait(s, "switch", CONFIG.SWITCH_BURST, CONFIG.SWITCH_REFILL, now))
+	end
+	if waitFor > 0 then
+		schedulePending(player, s, waitFor)
+		return
+	end
+
+	s.pending = nil
+	if switching then takeToken(s, "switch", CONFIG.SWITCH_BURST, CONFIG.SWITCH_REFILL) end
 	s.lastRequest = now
-	s.requestSeq += 1
 
 	if not danceName or danceName == "" then
 		stopDance(player)
 	else
-		playDance(player, danceName, speed, s.requestSeq)
+		playDance(player, danceName, request.speed, s.requestSeq)
 	end
+end
+
+danceRemote.OnServerEvent:Connect(function(player, danceName, speed)
+	if danceName ~= nil and type(danceName) ~= "string" then return end
+	if not player.Parent then return end
+
+	-- Dance manual ditolak saat sync (mirror diurus SyncHandler).
+	-- Dance saat di-carry diizinkan; stop hanya lewat drop-cleanup.
+	if player:GetAttribute("IsSyncing") then return end
+	if danceName ~= nil and danceName ~= "" and not DANCES[danceName] then return end
+
+	local s = getState(player)
+	-- Permintaan terbaru menang: playDance yang masih menunggu aset dingin dari
+	-- permintaan sebelumnya berhenti begitu nomor ini naik (lihat Motion.playDance).
+	s.requestSeq += 1
+	s.pending = { dance = danceName, speed = speed }
+	runPending(player, s)
 end)
 
 favoritesRemote.OnServerEvent:Connect(function(player, action, data)
@@ -171,6 +227,7 @@ local function onCharacterAdded(player, character)
 
 	s.rig         = nil
 	s.dance       = nil
+	s.pending     = nil -- permintaan untuk karakter lama tidak dijalankan di karakter baru
 	s.watchToken += 1  -- matikan watchdog carry dari karakter lama
 	DancePlayer.reset(s.slot)
 	clearTracks(s)
@@ -221,7 +278,8 @@ local function onPlayerAdded(player)
 		if not player:GetAttribute("IsSyncing") then return end
 		local current = states[player.UserId]
 		if current then
-			current.dance = nil
+			current.dance   = nil
+			current.pending = nil
 			current.watchToken += 1
 		end
 		player:SetAttribute("IsDancing", false)
@@ -268,8 +326,26 @@ task.spawn(function()
 	end
 end)
 
--- Hanya dance populer yang dipanaskan di server. Sisanya dipanaskan saat
--- benar-benar dibutuhkan; memanaskan 200+ animasi sekaligus justru bikin lag.
+-- Dance populer dipanaskan dulu, lalu SEMUA dance lain BERTAHAP
+-- (SERVER_WARMUP_CHUNK nama tiap SERVER_WARMUP_STEP dtk, urut abjad seperti
+-- panel). Dance yang pertama kali diputar di server ini jadi tidak menunggu aset
+-- termuat (Tracks.ensureTrack, ≤ LOAD_TIMEOUT). Tidak sekaligus: ratusan animasi
+-- sekaligus membanjiri asset request.
 task.delay(CONFIG.SERVER_WARMUP_DELAY, function()
 	AnimationWarmup.addByName(DANCES, CONFIG.POPULAR_DANCES)
+
+	local rest = {}
+	for name in pairs(DANCES) do
+		if not table.find(CONFIG.POPULAR_DANCES, name) then
+			table.insert(rest, name)
+		end
+	end
+	table.sort(rest)
+
+	task.wait(CONFIG.SERVER_WARMUP_REST_DELAY)
+	local chunk = CONFIG.SERVER_WARMUP_CHUNK
+	for i = 1, #rest, chunk do
+		AnimationWarmup.addByName(DANCES, table.move(rest, i, math.min(i + chunk - 1, #rest), 1, {}))
+		task.wait(CONFIG.SERVER_WARMUP_STEP)
+	end
 end)

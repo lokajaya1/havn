@@ -21,10 +21,11 @@ local CONFIG = {
 	MAX_SPEED = 2.0,
 
 	MAX_TRACKS       = 48,   -- jauh di bawah batas 256 track per Animator
-	REQUEST_COOLDOWN = 0.05, -- anti spam FireServer
+	REQUEST_COOLDOWN = 0.05, -- jeda antar permintaan yang DIJALANKAN (yang datang lebih cepat menunggu, tidak dibuang)
 
 	-- Kuota GANTI dance (tiap dance baru = LoadAnimation di server + semua
 	-- client mengunduh animasinya). Ubah speed dance yang sama tidak dihitung.
+	-- Kuota habis → permintaan TERAKHIR menunggu token berikutnya (init: runPending).
 	SWITCH_BURST  = 6,
 	SWITCH_REFILL = 3,       -- token per detik
 
@@ -36,6 +37,11 @@ local CONFIG = {
 
 	WARMUP_DELAY        = 0.4,
 	SERVER_WARMUP_DELAY = 2,
+	-- Sesudah POPULAR_DANCES, semua dance lain dipanaskan bertahap di server:
+	-- SERVER_WARMUP_CHUNK nama tiap SERVER_WARMUP_STEP dtk (±50 dtk untuk ±190 dance).
+	SERVER_WARMUP_REST_DELAY = 8,
+	SERVER_WARMUP_CHUNK      = 4,
+	SERVER_WARMUP_STEP       = 1,
 	-- Nama harus sama persis dengan key di DanceAssets.dances (case-sensitive).
 	-- Nama yang salah akan di-warn saat warm-up, tidak diam-diam dilewati.
 	POPULAR_DANCES = {
