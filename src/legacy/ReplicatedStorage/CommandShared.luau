@@ -69,6 +69,25 @@ function CommandShared.args(raw)
 	return out
 end
 
+-- Pesan chat → perintah panel yang dijalankan di CLIENT (s = "client": /fps /cam /fov /time), atau nil.
+-- Hanya pesan berawalan "/" (spasi depan boleh) dengan kata perintah PERSIS. Perintah server tetap lewat
+-- Player.Chatted di CommandServer (pesan tetap terkirim ke chat seperti biasa).
+function CommandShared.chatClient(text)
+	if type(text) ~= "string" or not string.match(text, "^%s*/") then
+		return nil
+	end
+	local word = CommandShared.word(text)
+	for _, c in ipairs(CommandShared.LIST) do
+		if c.id == word then
+			if c.s == "client" then
+				return c.id, CommandShared.args(text)
+			end
+			return nil
+		end
+	end
+	return nil
+end
+
 -- Hasil cari panel "/" berurutan: id PERSIS → id berawalan kata → id
 -- mengandung kata → deskripsi mengandung kata. Dalam satu tingkat urutan LIST
 -- dipertahankan; kata kosong = semua perintah urutan LIST. Baris pertama hasil

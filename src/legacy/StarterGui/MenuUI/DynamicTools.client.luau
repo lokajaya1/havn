@@ -111,6 +111,7 @@ local S = {
 	overlay   = nil,
 	scroll    = nil,
 	titleLbl  = nil,
+	resetBtn  = nil,
 	btn       = nil,
 	btnStroke = nil,
 	btnText   = nil,
@@ -241,6 +242,13 @@ local function showBtn(on)
 	end)
 end
 
+-- Tombol Reset di baris judul: hanya kalau tool yang dipegang mendaftarkan meta.reset (kembali ke setelan bawaan).
+local TITLE_W, TITLE_W_RESET = -46, -96
+local function showReset(on)
+	if S.resetBtn then S.resetBtn.Visible = on end
+	if S.titleLbl then S.titleLbl.Size = UDim2.new(1, on and TITLE_W_RESET or TITLE_W, 0, 15) end
+end
+
 -- ── Tool lifecycle ────────────────────────────────────────
 local function clearToolConn()
 	if S.toolConn then S.toolConn:Disconnect() S.toolConn = nil end
@@ -254,6 +262,7 @@ local function resetToNoTool()
 	clearToolConn()
 	clearToolUI()
 	S.curTool = nil
+	showReset(false)
 	showBtn(false)
 end
 
@@ -294,6 +303,7 @@ local function injectTool(tool)
 	end
 
 	if S.titleLbl then S.titleLbl.Text = meta.title or "Tool Settings" end
+	showReset(type(meta.reset) == "function")
 	showBtn(true)
 
 	S.toolConn = tool.AncestryChanged:Connect(function()
@@ -397,7 +407,7 @@ local function buildPanel()
 	end
 
 	S.titleLbl = new("TextLabel", {
-		Name = "Title", Position = UDim2.new(0, 12, 0, 8), Size = UDim2.new(1, -46, 0, 15),
+		Name = "Title", Position = UDim2.new(0, 12, 0, 8), Size = UDim2.new(1, TITLE_W, 0, 15),
 		BackgroundTransparency = 1, Text = "Tool Settings", TextColor3 = T.ACCENT,
 		Font = FONT.BOLD, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd, Parent = S.panel,
@@ -415,6 +425,34 @@ local function buildPanel()
 	closeBtn.Activated:Connect(function()
 		if isDraggingPanel and isDraggingPanel() then return end
 		pmClose()
+	end)
+
+	-- Reset: setelan tool yang dipegang kembali bawaan (meta.reset milik panel tool), lalu panelnya dibangun ulang.
+	S.resetBtn = new("TextButton", {
+		Name = "Reset", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -36, 0, 7),
+		Size = UDim2.new(0, 46, 0, 20), BackgroundColor3 = T.CARD, BackgroundTransparency = 0,
+		Text = "Reset", TextColor3 = T.TEXT_DIM, Font = FONT.BOLD, TextSize = 11,
+		AutoButtonColor = false, Visible = false, ZIndex = 55, Parent = S.panel,
+	})
+	corner(6, S.resetBtn)
+	bindHover(S.resetBtn, function(on)
+		tw(S.resetBtn, TF, { TextColor3 = on and T.TEXT or T.TEXT_DIM, BackgroundColor3 = on and T.CARD_HOVER or T.CARD })
+	end)
+	S.resetBtn.Activated:Connect(function()
+		if isDraggingPanel and isDraggingPanel() then return end
+		local tool = S.curTool
+		local cfg = tool and S.registry[tool.Name]
+		local fn = cfg and cfg.meta and cfg.meta.reset
+		if type(fn) ~= "function" then return end
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("[DynamicTools] Reset gagal:", tool.Name, err)
+			return
+		end
+		if S.curTool == tool then
+			S.curTool = nil
+			injectTool(tool)
+		end
 	end)
 
 	S.scroll = new("ScrollingFrame", {

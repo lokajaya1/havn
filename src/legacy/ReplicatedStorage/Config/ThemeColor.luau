@@ -27,6 +27,11 @@ ThemeColor.store = {
 ThemeColor.selectCooldown = 1 -- dtk minimal antar ganti tema per pemain
 ThemeColor.saveGap = 7 -- dtk minimal antar tulis DataStore per pemain (batas Roblox: 6 dtk per kunci)
 ThemeColor.passWait = 15 -- dtk menunggu ShopServer (_G.ShopHasGamepass) siap
+-- Staf: rank grup (atribut Player di bawah, ditulis UnifiedRankManager) ≥ freeRankMin = semua tema terbuka tanpa pass
+-- Themes (Staff 250, Developer 251, Co-Owner 253, Owner 255; berubah di tengah sesi ikut). nil = mati.
+-- Khusus tema warna: VIP/VVIP/Commands & free gift Shop tetap ShopConfig.group.adminRankMin.
+ThemeColor.freeRankMin = 250
+ThemeColor.rankAttribute = "RankInGroup"
 ThemeColor.repaintDelays = { 0.35, 1 } -- lukis ulang lagi sesudah tween hover/buka panel selesai
 -- Garis tepi bergerak (modul ThemeColor.glow): cahaya aksen berputar mengelilingi tepi + denyut (pulse) transparansi.
 ThemeColor.outline = {
