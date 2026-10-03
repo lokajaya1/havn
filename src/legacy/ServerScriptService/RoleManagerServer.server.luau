@@ -3,7 +3,8 @@
 --
 -- SATU DATASTORE: "AdminTitles". Titik.
 -- Tidak ada store cadangan, tidak ada migrasi antar store, dan jangan
--- pernah bikin nama store baru lagi.
+-- pernah bikin nama store baru lagi. Pengecualian: Play di Studio memakai
+-- "AdminTitles_studio" supaya uji tidak menulis title live.
 --
 -- Kalau nanti ada field baru, cukup tambahkan di normalize() dengan
 -- nilai default — data lama tetap kebaca dari store yang sama.
@@ -14,6 +15,7 @@ local RS               = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
 local TextService      = game:GetService("TextService")
 local SSS              = game:GetService("ServerScriptService")
+local RunService       = game:GetService("RunService")
 
 local TitleStyle
 do
@@ -28,20 +30,25 @@ do
 end
 
 local RankConfig      = require(SSS:WaitForChild("RankConfig"))
+local RankRules       = require(SSS:WaitForChild("RankRules"))
 local attributesReady = SSS:WaitForChild("PlayerAttributesReady", 30)
 
 -- ── DATASTORE ──────────────────────────────────────────────
 
-local STORE_NAME = "AdminTitles"
+local STORE_NAME = "AdminTitles" .. (RunService:IsStudio() and "_studio" or "")
 local store      = DataStoreService:GetDataStore(STORE_NAME)
 
 -- [userId] = data | false (sudah dicek, tidak punya title)
 -- Cegah GetAsync ditembak dua kali untuk player yang sama.
 local cache = {}
 
-local MANAGE_RANK = 250
+local MANAGE_RANK = RankConfig.ADMIN_MIN_RANK -- sama dengan atribut IsAdmin
 local COOLDOWN    = 0.75
 local MAX_CHARS   = 30
+local ACCESS_GAP  = 1    -- detik antar CheckAccess per pemain (lebih cepat → jawab tanpa menunggu)
+local LIST_GAP    = 0.5  -- detik antar GetPlayers per admin (lebih cepat → daftar terakhir)
+local LOAD_RETRY_AT    = { 5, 15, 30, 60 } -- detik; GetAsync title gagal saat join → coba lagi
+local LOAD_RETRY_EVERY = 60                -- lalu tiap sekian detik selama pemain masih di server
 
 local DEFAULTS = {
 	text       = "",
@@ -85,10 +92,25 @@ local getPlayers   = remote("RemoteFunction", "GetPlayers")
 local setTitle     = remote("RemoteEvent",    "SetTitle")
 local clearTitle   = remote("RemoteEvent",    "ClearTitle")
 local titleUpdated = remote("RemoteEvent",    "TitleUpdated")
+-- Jawaban SetTitle/ClearTitle ke admin pengirim:
+-- (aksi "set"/"clear", targetId, ok, alasan, nomor permintaan dari client).
+-- Alasan: access, cooldown, invalid, target, empty, filter, save.
+-- Dulu panel selalu bilang "Tersimpan" walau server menolak.
+local titleResult  = remote("RemoteEvent",    "TitleResult")
 
 -- ── helpers ────────────────────────────────────────────────
 
 local lastAction = {}
+local lastAccess = {}
+local lastList   = {} -- [userId] = { at = os.clock(), list = {...} }
+
+local function reply(plr, action, targetId, ok, reason, req)
+	if plr and plr.Parent then
+		titleResult:FireClient(plr, action,
+			type(targetId) == "number" and targetId or nil, ok, reason,
+			type(req) == "number" and req or nil)
+	end
+end
 
 local function canManage(plr)
 	return plr and (plr:GetAttribute("EffectiveRank") or 0) >= MANAGE_RANK
@@ -174,7 +196,8 @@ end
 
 -- ── baca / tulis ───────────────────────────────────────────
 
-local function save(userId, data)
+-- onDone(ok): dipanggil setelah tulisan berhasil / semua percobaan gagal.
+local function save(userId, data, onDone)
 	cache[userId] = data or false
 
 	task.spawn(function()
@@ -189,6 +212,7 @@ local function save(userId, data)
 			if ok then
 				print(("[AdminTitle] tersimpan untuk %d%s"):format(
 					userId, data and "" or " (dihapus)"))
+				if onDone then onDone(true) end
 				return
 			end
 			warn(("[AdminTitle] percobaan %d gagal: %s"):format(attempt, tostring(err)))
@@ -196,24 +220,30 @@ local function save(userId, data)
 		end
 		warn("[AdminTitle] gagal menyimpan data untuk " .. userId
 			.. " — di Studio, aktifkan Game Settings > Security > Enable Studio Access to API Services.")
+		if onDone then onDone(false) end
 	end)
 end
 
+-- Kembalian: data (atau nil), terbaca? (false = GetAsync gagal).
 local function load(userId)
 	local cached = cache[userId]
-	if cached ~= nil then return cached or nil end
+	if cached ~= nil then return cached or nil, true end
 
 	local ok, data = pcall(store.GetAsync, store, tostring(userId))
+	-- Admin bisa memasang/menghapus title selama GetAsync menunggu: nilai
+	-- itu yang terbaru, jangan ditimpa data lama dari store.
+	local fresh = cache[userId]
+	if fresh ~= nil then return fresh or nil, true end
 	if not ok then
 		-- Gagal baca BUKAN berarti tidak punya title. Jangan di-cache dan
 		-- jangan ditimpa, supaya data yang ada tidak ketutup default kosong.
 		warn(("[AdminTitle] gagal membaca %d: %s"):format(userId, tostring(data)))
-		return nil
+		return nil, false
 	end
 
 	local current = normalize(data)
 	cache[userId] = current or false
-	return current
+	return current, true
 end
 
 -- ── apply ──────────────────────────────────────────────────
@@ -237,16 +267,51 @@ local function apply(plr, data)
 	plr:SetAttribute("TitleEffect",     data and data.effect     or DEFAULTS.effect)
 	plr:SetAttribute("TitleOutline",    outline)
 
+	table.clear(lastList) -- daftar GetPlayers yang ditahan sudah basi
 	titleUpdated:FireAllClients(plr.UserId)
 end
 
+local retrying = {} -- [player] = true selama coba-baca ulang
+
+-- GetAsync gagal saat join → title kosong dulu, lalu dibaca ulang di latar
+-- (LOAD_RETRY_AT, lalu tiap LOAD_RETRY_EVERY). Dulu title hilang sepanjang sesi.
+local function retryLoad(plr)
+	if retrying[plr] then return end
+	retrying[plr] = true
+	task.spawn(function()
+		local attempt = 0
+		while plr.Parent and retrying[plr] do
+			attempt += 1
+			task.wait(RankRules.waitBefore(LOAD_RETRY_AT, LOAD_RETRY_EVERY, attempt))
+			if not (plr.Parent and retrying[plr]) then break end
+			local data, ok = load(plr.UserId)
+			if ok then
+				retrying[plr] = nil
+				apply(plr, data)
+				return
+			end
+		end
+		retrying[plr] = nil
+	end)
+end
+
 local function restore(plr)
-	apply(plr, load(plr.UserId))
+	local data, ok = load(plr.UserId)
+	apply(plr, data)
+	if not ok then retryLoad(plr) end
 end
 
 -- ── handlers ───────────────────────────────────────────────
 
 checkAccess.OnServerInvoke = function(plr)
+	-- Rate limit: panggilan beruntun dijawab langsung tanpa menunggu (satu
+	-- pemain tidak bisa menahan banyak thread server 5 dtk sekaligus).
+	local now = os.clock()
+	if lastAccess[plr.UserId] and now - lastAccess[plr.UserId] < ACCESS_GAP then
+		return canManage(plr)
+	end
+	lastAccess[plr.UserId] = now
+
 	local waited = 0
 	while plr:GetAttribute("EffectiveRank") == nil and waited < 5 do
 		task.wait(0.2)
@@ -257,6 +322,9 @@ end
 
 getPlayers.OnServerInvoke = function(plr)
 	if not canManage(plr) then return {} end
+	local now = os.clock()
+	local last = lastList[plr.UserId]
+	if last and now - last.at < LIST_GAP then return last.list end
 
 	local list = {}
 	for _, target in ipairs(Players:GetPlayers()) do
@@ -287,24 +355,28 @@ getPlayers.OnServerInvoke = function(plr)
 		end
 		return a.EffectiveRank > b.EffectiveRank
 	end)
+	lastList[plr.UserId] = { at = now, list = list }
 	return list
 end
 
 setTitle.OnServerEvent:Connect(function(sender, targetId, payload)
-	if not canManage(sender) then return end
-	if onCooldown(sender) then return end
-	if type(targetId) ~= "number" or type(payload) ~= "table" then return end
+	local req = type(payload) == "table" and payload.req or nil
+	local function answer(ok, reason) reply(sender, "set", targetId, ok, reason, req) end
+
+	if not canManage(sender) then return answer(false, "access") end
+	if onCooldown(sender) then return answer(false, "cooldown") end
+	if type(targetId) ~= "number" or type(payload) ~= "table" then return answer(false, "invalid") end
 
 	local target = Players:GetPlayerByUserId(targetId)
-	if not target then return end
+	if not target then return answer(false, "target") end
 
 	local raw = clampChars(tostring(payload.text or ""):match("^%s*(.-)%s*$"), MAX_CHARS)
-	if raw == "" then return end
+	if raw == "" then return answer(false, "empty") end
 
 	local safe = filterText(raw, sender.UserId)
 	if not safe or safe == "" then
 		warn("[AdminTitle] title ditolak filter untuk " .. target.Name)
-		return
+		return answer(false, "filter")
 	end
 
 	local data = {
@@ -319,19 +391,25 @@ setTitle.OnServerEvent:Connect(function(sender, targetId, payload)
 		assignedAt = os.time(),
 	}
 
-	save(targetId, data)
+	save(targetId, data, function(ok)
+		answer(ok, not ok and "save" or nil)
+	end)
 	apply(target, data)
 end)
 
-clearTitle.OnServerEvent:Connect(function(sender, targetId)
-	if not canManage(sender) then return end
-	if onCooldown(sender) then return end
-	if type(targetId) ~= "number" then return end
+clearTitle.OnServerEvent:Connect(function(sender, targetId, req)
+	local function answer(ok, reason) reply(sender, "clear", targetId, ok, reason, req) end
+
+	if not canManage(sender) then return answer(false, "access") end
+	if onCooldown(sender) then return answer(false, "cooldown") end
+	if type(targetId) ~= "number" then return answer(false, "invalid") end
 
 	local target = Players:GetPlayerByUserId(targetId)
-	if not target then return end
+	if not target then return answer(false, "target") end
 
-	save(targetId, nil)
+	save(targetId, nil, function(ok)
+		answer(ok, not ok and "save" or nil)
+	end)
 	apply(target, nil)
 end)
 
@@ -345,7 +423,10 @@ end
 
 Players.PlayerRemoving:Connect(function(plr)
 	lastAction[plr.UserId] = nil
+	lastAccess[plr.UserId] = nil
+	lastList[plr.UserId]   = nil
 	cache[plr.UserId]      = nil
+	retrying[plr]          = nil
 end)
 
 for _, plr in ipairs(Players:GetPlayers()) do

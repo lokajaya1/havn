@@ -44,6 +44,13 @@ local STRICT = {
 	"src/legacy/ReplicatedStorage/Config/Inventory.luau",
 	"src/legacy/ReplicatedStorage/Modules/Inventory.luau",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/CustomBackpackUI.client.luau",
+	-- ruangan TITLES & RANK
+	"src/legacy/ServerScriptService/UnifiedRankManager.server.luau",
+	"src/legacy/ServerScriptService/RankRules.luau",
+	"src/legacy/ServerScriptService/RankConfig.luau",
+	"src/legacy/ServerScriptService/RoleManagerServer.server.luau",
+	"src/legacy/StarterGui/RoleManagerClient.client.luau",
+	"src/legacy/ServerScriptService/RagDollTag.server.luau",
 }
 local REPORT = { "src/legacy" }
 

@@ -20,7 +20,6 @@ local Players      = game:GetService("Players")
 local RS           = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService   = game:GetService("RunService")
-local TextService  = game:GetService("TextService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -65,8 +64,19 @@ local getPlayers   = remotes:WaitForChild("GetPlayers")
 local setTitle     = remotes:WaitForChild("SetTitle")
 local clearTitle   = remotes:WaitForChild("ClearTitle")
 local titleUpdated = remotes:WaitForChild("TitleUpdated")
+local titleResult  = remotes:WaitForChild("TitleResult")
 
-if not checkAccess:InvokeServer() then return end
+-- Ditolak → tanya lagi tiap EffectiveRank berubah (rank bisa datang
+-- terlambat: API grup lambat/gagal lalu dicoba ulang server). Dulu satu
+-- jawaban "tidak" = panel tidak dibuat sampai respawn.
+while true do
+	local rankBefore = player:GetAttribute("EffectiveRank")
+	local ok, allowed = pcall(checkAccess.InvokeServer, checkAccess)
+	if ok and allowed == true then break end
+	if player:GetAttribute("EffectiveRank") == rankBefore then
+		player:GetAttributeChangedSignal("EffectiveRank"):Wait()
+	end
+end
 
 -- ════════════════════════════════════════════════════════════
 -- THEME
@@ -90,6 +100,7 @@ local THEME = ThemeColor.view({
 
 local TWEEN = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local MAX_CHARS = 30
+local RESULT_TIMEOUT = 20 -- detik; server mencoba simpan 3x (±12 dtk) sebelum menyerah
 
 local state = {
 	list       = {},
@@ -473,14 +484,16 @@ end
 local applyButton, applyText = actionRow("Terapkan title", THEME.ACCENT)
 local clearButton, clearText = actionRow("Hapus title", THEME.DANGER)
 
-local feedbackToken = 0
-local function feedback(label, message, color, original)
-	feedbackToken += 1
-	local token = feedbackToken
+-- Token per label: pesan tombol satu tidak membatalkan kembalinya teks
+-- tombol lain (dulu satu token bersama → label bisa macet).
+local feedbackToken = {}
+local function feedback(label, message, color, original, duration)
+	local token = (feedbackToken[label] or 0) + 1
+	feedbackToken[label] = token
 	label.Text = message
 	TweenService:Create(label, TWEEN, { TextColor3 = color }):Play()
-	task.delay(2.2, function()
-		if token ~= feedbackToken then return end
+	task.delay(duration or 2.2, function()
+		if feedbackToken[label] ~= token then return end
 		label.Text = original
 		TweenService:Create(label, TWEEN, {
 			TextColor3 = original == "Terapkan title" and THEME.ACCENT or THEME.DANGER,
@@ -715,6 +728,55 @@ input:GetPropertyChangedSignal("Text"):Connect(function()
 	repaint()
 end)
 
+-- ── jawaban server (TitleResult) ───────────────────────────
+-- Pesan "Tersimpan"/"Title dihapus" baru muncul setelah server menjawab.
+-- Dulu muncul langsung walau server menolak (cooldown, filter, gagal simpan).
+
+local REASON_TEXT = {
+	access   = "Akses ditolak",
+	cooldown = "Terlalu cepat, coba lagi",
+	invalid  = "Data tidak valid",
+	target   = "Player sudah keluar",
+	empty    = "Teks masih kosong",
+	filter   = "Ditolak filter Roblox",
+}
+local ACTION_UI = {
+	set   = { label = applyText, original = "Terapkan title", busy = "Menyimpan…",
+		done = "Tersimpan", saveFail = "Terpasang, gagal disimpan" },
+	clear = { label = clearText, original = "Hapus title", busy = "Menghapus…",
+		done = "Title dihapus", saveFail = "Terhapus, gagal disimpan" },
+}
+
+local requestSeq = 0
+local pending = {} -- [aksi] = nomor permintaan terakhir yang ditunggu
+
+local function awaitResult(action)
+	requestSeq += 1
+	local req = requestSeq
+	local ui = ACTION_UI[action]
+	pending[action] = req
+	feedback(ui.label, ui.busy, THEME.TEXT_DIM, ui.original, RESULT_TIMEOUT + 2.2)
+	task.delay(RESULT_TIMEOUT, function()
+		if pending[action] ~= req then return end
+		pending[action] = nil
+		feedback(ui.label, "Server tidak menjawab", THEME.DANGER, ui.original)
+	end)
+	return req
+end
+
+titleResult.OnClientEvent:Connect(function(action, _targetId, ok, reason, req)
+	local ui = ACTION_UI[action]
+	if not ui or req == nil or pending[action] ~= req then return end
+	pending[action] = nil
+	if ok then
+		feedback(ui.label, ui.done, THEME.OK, ui.original)
+	else
+		local message = reason == "save" and ui.saveFail
+			or REASON_TEXT[reason] or "Gagal, coba lagi"
+		feedback(ui.label, message, THEME.DANGER, ui.original)
+	end
+end)
+
 applyButton.Activated:Connect(function()
 	if not state.targetId then
 		feedback(applyText, "Pilih player dulu", THEME.DANGER, "Terapkan title")
@@ -725,6 +787,7 @@ applyButton.Activated:Connect(function()
 		feedback(applyText, "Teks masih kosong", THEME.DANGER, "Terapkan title")
 		return
 	end
+	local req = awaitResult("set")
 	setTitle:FireServer(state.targetId, {
 		text       = text,
 		color      = TitleStyle.ToHex(state.color),
@@ -733,8 +796,8 @@ applyButton.Activated:Connect(function()
 		font       = state.font,
 		effect     = state.effect,
 		outline    = state.outline,
+		req        = req,
 	})
-	feedback(applyText, "Tersimpan", THEME.OK, "Terapkan title")
 	task.delay(0.6, fetchPlayers)
 end)
 
@@ -743,9 +806,9 @@ clearButton.Activated:Connect(function()
 		feedback(clearText, "Pilih player dulu", THEME.DANGER, "Hapus title")
 		return
 	end
-	clearTitle:FireServer(state.targetId)
+	local req = awaitResult("clear")
+	clearTitle:FireServer(state.targetId, req)
 	input.Text = ""
-	feedback(clearText, "Title dihapus", THEME.OK, "Hapus title")
 	task.delay(0.6, fetchPlayers)
 end)
 

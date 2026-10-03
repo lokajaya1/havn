@@ -112,9 +112,6 @@
       "MusicServer": {
         "$path": "src/legacy/ServerScriptService/MusicServer"
       },
-      "Namailang": {
-        "$path": "src/legacy/ServerScriptService/Namailang.server.luau"
-      },
       "OverheadTag": {
         "$path": "src/legacy/ServerScriptService/OverheadTag.server.luau"
       },
@@ -126,6 +123,9 @@
       },
       "RankConfig": {
         "$path": "src/legacy/ServerScriptService/RankConfig.luau"
+      },
+      "RankRules": {
+        "$path": "src/legacy/ServerScriptService/RankRules.luau"
       },
       "ReceiptHandler": {
         "$path": "src/legacy/ServerScriptService/ReceiptHandler.luau"

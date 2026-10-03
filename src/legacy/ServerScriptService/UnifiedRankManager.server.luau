@@ -3,21 +3,38 @@
 -- Location: ServerScriptService > UnifiedRankManager
 -- ═══════════════════════════════════════════════════════════
 
-local Players     = game:GetService("Players")
-local Marketplace = game:GetService("MarketplaceService")
-local SSS         = game:GetService("ServerScriptService")
-local RankConfig  = require(SSS:WaitForChild("RankConfig"))
-local ShopConfig  = require(game:GetService("ReplicatedStorage"):WaitForChild("ShopConfig"))
+local Players      = game:GetService("Players")
+local Marketplace  = game:GetService("MarketplaceService")
+local GroupService = game:GetService("GroupService")
+local SSS          = game:GetService("ServerScriptService")
+local RankConfig   = require(SSS:WaitForChild("RankConfig"))
+local RankRules    = require(SSS:WaitForChild("RankRules"))
+local ShopConfig   = require(game:GetService("ReplicatedStorage"):WaitForChild("ShopConfig"))
 
 local attributesReadyEvent      = Instance.new("BindableEvent")
 attributesReadyEvent.Name       = "PlayerAttributesReady"
 attributesReadyEvent.Parent     = SSS
 
-local cache     = {}
+local cache     = {} -- gamepass per pemain (dibersihkan tiap forceRefresh)
 local ShopReady = false
+
+-- Info grup per pemain: { rank, isMember, ok }. TIDAK dibersihkan forceRefresh:
+-- IsInGroup/GetRankInGroup di server di-cache Roblox sejak panggilan pertama,
+-- jadi bertanya ulang memberi jawaban yang sama. Yang diulang hanya yang
+-- GAGAL (ok = false) dan cek keanggotaan lewat GetGroupsAsync (lihat bawah).
+local groupInfo = {}
+local retrying  = {} -- [player] = true selama loop coba-ulang jalan
+local rechecking = {} -- [player] = true selama loop cek-member jalan
+local setAttributes -- diisi di bawah (dipakai loop cek ulang)
 
 -- ─────────────────────────────────────────────────────────
 local function clearCache(player) cache[player.UserId] = nil end
+local function forgetPlayer(player)
+	cache[player.UserId]     = nil
+	groupInfo[player.UserId] = nil
+	retrying[player]         = nil
+	rechecking[player]       = nil
+end
 local function ensureCache(uid)  if not cache[uid] then cache[uid] = {} end end
 
 local function hasGamepass(player, passId)
@@ -46,35 +63,95 @@ local function hasGamepass(player, passId)
 end
 
 -- ─────────────────────────────────────────────────────────
--- FIX UTAMA: getGroupRank lama cuma pakai IsInGroup buat keputusan internal
--- lalu MEMBUANG hasilnya — jadi member rankless (rank 0) dan non-member
--- sama-sama menghasilkan groupRank = 0, tidak bisa dibedakan lagi.
---
--- Diganti jadi getGroupInfo() yang cache & return DUA nilai:
--- rank DAN isGroupMember, supaya isGroupMember bisa diteruskan ke
--- RankConfig.GetRoleName / GetQueueLimit seperti yang memang dibutuhkan.
+-- INFO GRUP: rank DAN isGroupMember (member rankless ≠ bukan member).
+-- IsInGroup / GetRankInGroup error → cadangan GroupService:GetGroupsAsync.
+-- Masih gagal → ok = false: dipakai dulu seperti dulu (rank 0 / member
+-- sesuai IsInGroup), lalu dicoba ulang di latar (scheduleRetry). Dulu hasil
+-- error dianggap final → admin kehilangan akses sepanjang sesi.
 -- ─────────────────────────────────────────────────────────
-local function getGroupInfo(player)
-	ensureCache(player.UserId)
-	local c = cache[player.UserId]
-	if c.groupRank ~= nil and c.isGroupMember ~= nil then
-		return c.groupRank, c.isGroupMember
+local function fetchGroupInfo(player)
+	local okMember, isMember = pcall(player.IsInGroup, player, RankConfig.GROUP_ID)
+	if okMember and not isMember then
+		return { rank = 0, isMember = false, ok = true }
+	end
+	if okMember then
+		local okRank, rank = pcall(player.GetRankInGroup, player, RankConfig.GROUP_ID)
+		if okRank and type(rank) == "number" then
+			return { rank = rank, isMember = true, ok = true }
+		end
 	end
 
-	local isMember = false
-	local rank = 0
-
-	local okMember, memberResult = pcall(player.IsInGroup, player, RankConfig.GROUP_ID)
-	if okMember then isMember = memberResult end
-
-	if isMember then
-		local okRank, r = pcall(player.GetRankInGroup, player, RankConfig.GROUP_ID)
-		rank = okRank and r or 0
+	local okGroups, groups = pcall(GroupService.GetGroupsAsync, GroupService, player.UserId)
+	if okGroups and type(groups) == "table" then
+		local member, rank, hasRank = RankRules.fromGroups(groups, RankConfig.GROUP_ID)
+		return { rank = rank, isMember = member, ok = hasRank }
 	end
 
-	c.groupRank     = rank
-	c.isGroupMember = isMember
-	return rank, isMember
+	return { rank = 0, isMember = okMember and isMember == true, ok = false }
+end
+
+local function getGroupInfo(player, refresh)
+	local info = groupInfo[player.UserId]
+	if not info or (refresh and not info.ok) then
+		info = fetchGroupInfo(player)
+		groupInfo[player.UserId] = info
+	end
+	return info
+end
+
+-- API grup gagal → coba lagi (RankConfig.GROUP_RETRY_AT, lalu tiap
+-- GROUP_RETRY_EVERY) sampai berhasil; atribut dipasang ulang saat pulih.
+local function scheduleRetry(player)
+	if retrying[player] then return end
+	retrying[player] = true
+	task.spawn(function()
+		local attempt = 0
+		while player.Parent and retrying[player] do
+			attempt += 1
+			task.wait(RankRules.waitBefore(RankConfig.GROUP_RETRY_AT, RankConfig.GROUP_RETRY_EVERY, attempt))
+			if not (player.Parent and retrying[player]) then break end
+			local info = fetchGroupInfo(player)
+			if info.ok then
+				groupInfo[player.UserId] = info
+				retrying[player] = nil
+				setAttributes(player, false)
+				return
+			end
+		end
+		retrying[player] = nil
+	end)
+end
+
+-- Join komunitas di tengah sesi (prompt CommunNFav / InfoTopBar / Donasi):
+-- IsInGroup di server tidak pernah melihatnya (di-cache sejak panggilan
+-- pertama; PromptJoinAsync hanya membersihkan cache di client). Bukan-member
+-- dicek lewat GetGroupsAsync (tidak di-cache) pada RankConfig.MEMBER_RECHECK_AT,
+-- lalu tiap MEMBER_RECHECK_EVERY. Ketemu → VIP tanpa rejoin.
+local function scheduleMemberRecheck(player)
+	if rechecking[player] then return end
+	rechecking[player] = true
+	task.spawn(function()
+		local attempt = 0
+		while player.Parent and rechecking[player] do
+			attempt += 1
+			task.wait(RankRules.waitBefore(RankConfig.MEMBER_RECHECK_AT, RankConfig.MEMBER_RECHECK_EVERY, attempt))
+			if not (player.Parent and rechecking[player]) then break end
+			local current = groupInfo[player.UserId]
+			if current and current.isMember then break end
+			local ok, groups = pcall(GroupService.GetGroupsAsync, GroupService, player.UserId)
+			if ok and type(groups) == "table" then
+				local member, rank = RankRules.fromGroups(groups, RankConfig.GROUP_ID)
+				if member then
+					groupInfo[player.UserId] = { rank = rank, isMember = true, ok = true }
+					rechecking[player] = nil
+					setAttributes(player, false)
+					print("[RankManager] " .. player.Name .. " bergabung ke komunitas → atribut diperbarui")
+					return
+				end
+			end
+		end
+		rechecking[player] = nil
+	end)
 end
 
 local function ensureBool(player, name, value)
@@ -86,62 +163,44 @@ end
 -- ─────────────────────────────────────────────────────────
 -- CORE — set semua attribute lalu fire event
 -- ─────────────────────────────────────────────────────────
-local function setAttributes(player, forceRefresh)
+-- Rumus atribut: RankRules.compute (murni, dites semua kombinasi).
+setAttributes = function(player, forceRefresh)
 	if not player or not player.Parent then return end
 	if forceRefresh then clearCache(player) end
 
-	local groupRank, isGroupMember = getGroupInfo(player)
-	local hasVIP    = hasGamepass(player, RankConfig.VIP_GAMEPASS_ID)
-	local hasVVIP   = hasGamepass(player, RankConfig.VVIP_GAMEPASS_ID)
+	local group   = getGroupInfo(player, forceRefresh)
+	local hasVIP  = hasGamepass(player, RankConfig.VIP_GAMEPASS_ID)
+	local hasVVIP = hasGamepass(player, RankConfig.VVIP_GAMEPASS_ID)
+	if not player.Parent then return end -- keluar selama API di atas menunggu
 
-	local effective = groupRank
-	-- FIX: member community (rankless) minimal dianggap setara rank VIP_MIN_RANK
-	if isGroupMember and effective < RankConfig.VIP_MIN_RANK then
-		effective = RankConfig.VIP_MIN_RANK
+	local attrs = RankRules.compute(RankConfig, {
+		groupRank     = group.rank,
+		isGroupMember = group.isMember,
+		hasVIP        = hasVIP,
+		hasVVIP       = hasVVIP,
+	})
+	for _, name in ipairs(RankRules.ATTRIBUTES) do
+		player:SetAttribute(name, attrs[name])
 	end
-	-- Gamepass VIP/VVIP tetap boost ke rank 5 seperti sebelumnya
-	if (hasVIP or hasVVIP) and effective < 5 then
-		effective = 5
-	end
 
-	-- FIX: kirim isGroupMember sebagai parameter ke-4 (sebelumnya hilang,
-	-- jadi member rankless selalu ke-detect "Guest")
-	local roleName  = RankConfig.GetRoleName(effective, hasVIP, hasVVIP, isGroupMember)
-	local roleData  = RankConfig.RANKS[roleName] or RankConfig.RANKS.Guest
-	local isPremium = roleData.isPremium == true
-	-- FIX: isGroupMember juga dimasukkan ke perhitungan isVIP
-	local isVIP     = hasVIP or hasVVIP or isGroupMember or (roleData.isVIP == true)
-	local isOwner   = effective == RankConfig.OWNER_RANK
-	local isAdmin   = effective >= RankConfig.ADMIN_MIN_RANK
-	local isDeveloper = effective >= RankConfig.DEV_MIN_RANK
-	-- FIX: kirim isGroupMember juga ke GetQueueLimit
-	local queueLimit = RankConfig.GetQueueLimit(effective, hasVIP, hasVVIP, isGroupMember)
-
-	player:SetAttribute("RankInGroup",   groupRank)
-	player:SetAttribute("IsGroupMember", isGroupMember)
-	player:SetAttribute("EffectiveRank", effective)
-	player:SetAttribute("Role",          roleName)
-	player:SetAttribute("RoleDisplay",   roleData.displayText)
-	player:SetAttribute("TeamName",      roleData.teamName)
-	player:SetAttribute("RoleColor",     roleData.color)
-	player:SetAttribute("IsOwner",       isOwner)
-	player:SetAttribute("IsAdmin",       isAdmin)
-	player:SetAttribute("IsDeveloper",   isDeveloper)
-	player:SetAttribute("IsVIP",         isVIP)
-	player:SetAttribute("IsPremium",     isPremium)
-	player:SetAttribute("QueueLimit",    queueLimit)
-
-	ensureBool(player, "Owner", isOwner)
-	ensureBool(player, "Admin", isAdmin)
-	ensureBool(player, "VIP",   isVIP)
+	ensureBool(player, "Owner", attrs.IsOwner)
+	ensureBool(player, "Admin", attrs.IsAdmin)
+	ensureBool(player, "VIP",   attrs.IsVIP)
 
 	attributesReadyEvent:Fire(player)
 
 	print(string.format(
-		"[RankManager] %s | GroupRank:%d Member:%s Effective:%d Role:%s VIP:%s VVIP:%s Admin:%s",
-		player.Name, groupRank, tostring(isGroupMember), effective, roleName,
-		tostring(hasVIP), tostring(hasVVIP), tostring(isAdmin)
+		"[RankManager] %s | GroupRank:%d Member:%s Effective:%d Role:%s VIP:%s VVIP:%s Admin:%s%s",
+		player.Name, group.rank, tostring(group.isMember), attrs.EffectiveRank, attrs.Role,
+		tostring(hasVIP), tostring(hasVVIP), tostring(attrs.IsAdmin),
+		group.ok and "" or " (API grup gagal — dicoba lagi)"
 		))
+
+	if not group.ok then
+		scheduleRetry(player)
+	elseif not group.isMember then
+		scheduleMemberRecheck(player)
+	end
 end
 
 -- ─────────────────────────────────────────────────────────
@@ -151,7 +210,7 @@ Players.PlayerAdded:Connect(function(player)
 	task.spawn(setAttributes, player, true)
 end)
 
-Players.PlayerRemoving:Connect(clearCache)
+Players.PlayerRemoving:Connect(forgetPlayer)
 
 -- ─────────────────────────────────────────────────────────
 -- SHOPSERVER POLLING
@@ -200,29 +259,9 @@ task.spawn(function()
 	print("[RankManager] Gift listener aktif")
 end)
 
--- ─────────────────────────────────────────────────────────
--- GROUP MEMBERSHIP RECHECK (periodic)
--- Roblox tidak punya event native untuk "player join group saat sedang
--- online". Recheck berkala untuk player yang belum terdeteksi member,
--- supaya yang join community di tengah sesi main juga ke-upgrade VIP
--- tanpa perlu rejoin server.
--- ─────────────────────────────────────────────────────────
-local GROUP_RECHECK_INTERVAL = 30 -- detik
-
-task.spawn(function()
-	while true do
-		task.wait(GROUP_RECHECK_INTERVAL)
-		for _, player in ipairs(Players:GetPlayers()) do
-			local c = cache[player.UserId]
-			if not c or not c.isGroupMember then
-				local ok, isMember = pcall(player.IsInGroup, player, RankConfig.GROUP_ID)
-				if ok and isMember then
-					setAttributes(player, true)
-				end
-			end
-		end
-	end
-end)
+-- Join komunitas di tengah sesi: lihat scheduleMemberRecheck (dulu loop
+-- IsInGroup tiap 30 dtk — tidak pernah melihat member baru karena hasil
+-- IsInGroup di server di-cache sejak panggilan pertama).
 
 -- Init player yang sudah ada
 for _, p in ipairs(Players:GetPlayers()) do

@@ -6,6 +6,10 @@
   
   Do not change this script. All configurations can be found
   in the Settings script.
+
+  HAVN: diubah sedikit (cari "HAVN:") — store _studio saat Play di Studio,
+  pemain baru tanpa error, IncrementAsync per pemain, kolom Time Played
+  ikut naik tiap menit.
 ]]
 
 local PlayersService = game:GetService("Players")
@@ -15,6 +19,10 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(script.Parent.Settings)
 
+-- HAVN: Play di Studio memakai store <nama>_studio supaya waktu main uji
+-- tidak masuk papan live (dulu Team Test membuat kunci TimePlayed-1/-2).
+local STORE_SUFFIX = RunService:IsStudio() and "_studio" or ""
+
 local TimePlayedClass = {}
 TimePlayedClass.__index = TimePlayedClass
 
@@ -23,7 +31,7 @@ function TimePlayedClass.new()
   local new = {}
   setmetatable(new, TimePlayedClass)
 
-  new._dataStoreName = Config.DATA_STORE
+  new._dataStoreName = Config.DATA_STORE .. STORE_SUFFIX
   new._dataStoreStatName = Config.NAME_OF_STAT
   new._scoreUpdateDelay = Config.SCORE_UPDATE * 60
   new._boardUpdateDelay = Config.LEADERBOARD_UPDATE * 60
@@ -102,7 +110,9 @@ function TimePlayedClass:_init()
         local success, resultOrError = pcall(function ()
           return self._datastore:GetAsync(self._dataStoreStatName .. player.UserId)
         end)
-        stat.Value = not success and 0 or resultOrError
+        -- HAVN: pemain baru → GetAsync nil → dulu `stat.Value = nil` (merah).
+        local saved = success and tonumber(resultOrError) or 0
+        stat.Value = math.max(stat.Value, saved) -- kolom bisa sudah diisi update menit (K5)
         if self._doDebug and not success then print("Failed to GetAsync the player's time played. Will retry later.") end
       end)
     end
@@ -200,16 +210,30 @@ function TimePlayedClass:_updateBoard ()
 end
 
 
+-- HAVN: tiap pemain di-pcall sendiri. Dulu IncrementAsync error sesudah
+-- yield lolos dari coroutine.resume → merah, dan sisa pemain menit itu
+-- tidak dihitung. Nilai baru langsung dipasang ke kolom Time Played (K5).
 function TimePlayedClass:_updateScore ()
-  local suc, err = coroutine.resume(coroutine.create(function ()
+  task.spawn(function ()
     local players = PlayersService:GetPlayers()
+    local failed, firstError = 0, nil
     for _, player in pairs(players) do
       local stat = self._dataStoreStatName .. player.UserId
-      local newval = self._datastore:IncrementAsync(stat, self._scoreUpdateDelay / 60)
-      if self._doDebug then print("Incremented time played stat of", player, stat, "to", newval) end
+      local suc, newval = pcall(function ()
+        return self._datastore:IncrementAsync(stat, self._scoreUpdateDelay / 60)
+      end)
+      if suc then
+        if self._doDebug then print("Incremented time played stat of", player, stat, "to", newval) end
+        self:_onPlayerScoreUpdate(player.UserId, newval)
+      else
+        failed += 1
+        firstError = firstError or newval
+      end
     end
-  end))
-  if not suc then warn(err) end
+    if failed > 0 then
+      warn(("TopTimePlayed Board: IncrementAsync gagal untuk %d pemain: %s"):format(failed, tostring(firstError)))
+    end
+  end)
 end
 
 
@@ -219,8 +243,12 @@ function TimePlayedClass:_onPlayerScoreUpdate (userid, minutes)
   if not self._isMainScript then return end
   local player = PlayersService:GetPlayerByUserId(userid)
   if not player or not player:FindFirstChild("leaderstats") then return end
-  local leaderstat = player.leaderstats[self._nameLeaderstats]
-  leaderstat.Value = tonumber(minutes)
+  -- HAVN: kolom bisa belum dibuat / nilai bukan angka → lewati (dulu merah).
+  -- Waktu main hanya naik: nilai papan (bisa tertinggal) tidak menurunkan kolom.
+  local leaderstat = player.leaderstats:FindFirstChild(self._nameLeaderstats)
+  local value = tonumber(minutes)
+  if not leaderstat or not value then return end
+  leaderstat.Value = math.max(leaderstat.Value, value)
 end
 
 
@@ -259,7 +287,7 @@ end
 function TimePlayedClass:_checkDataStoreUp()
   local status, message = pcall(function()
     -- This will error if current instance has no Studio API access:
-    DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
+    DataStoreService:GetDataStore("____PS" .. STORE_SUFFIX):SetAsync("____PS", os.time())
   end)
   if status == false and
     (string.find(message, "404", 1, true) ~= nil or 

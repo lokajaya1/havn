@@ -25,21 +25,13 @@ RankConfig.VVIP_GAMEPASS_ID = VVIP_PASS.id
 -- mereka sudah jadi anggota.
 --
 -- Jadi status VIP TIDAK lagi ditentukan dari rank == 1, melainkan dari
--- KEANGGOTAAN komunitas itu sendiri (player:IsInGroup(GROUP_ID)).
+-- KEANGGOTAAN komunitas itu sendiri.
 --
--- ⚠️ PENTING UNTUK SEMUA CALLER ⚠️
--- JANGAN panggil GetRoleByRank() sendirian untuk nentuin Role attribute
--- player — fungsi itu CUMA cocokkan angka rank, tidak tahu soal
--- keanggotaan community atau gamepass, jadi member rankless akan SELALU
--- balik "Guest".
---
--- Untuk assign Role attribute / cek status player, WAJIB pakai:
---
---     local roleName = RankConfig.ResolvePlayerRole(player)
---     player:SetAttribute("Role", roleName)
---
--- Fungsi ini otomatis handle rank + gamepass + group membership dalam
--- satu panggilan, jadi tidak ada lagi caller yang lupa kirim isGroupMember.
+-- Role & status pemain dihitung SATU tempat: UnifiedRankManager (rumus di
+-- RankRules) lalu dipasang sebagai atribut (Role, EffectiveRank, IsAdmin,
+-- IsVIP, …). Sistem lain membaca ATRIBUT itu, bukan menghitung sendiri.
+-- JANGAN pakai GetRoleByRank() sendirian untuk menentukan Role — ia hanya
+-- mencocokkan angka rank (member rankless → "Guest").
 ------------------------------------------------------------------------
 
 ------------------------------------------------------------------------
@@ -55,6 +47,22 @@ RankConfig.ADMIN_MIN_RANK = 250
 RankConfig.DEV_MIN_RANK   = 251
 RankConfig.OWNER_RANK     = 255  -- ⚠️ CEK: komentar lama bilang Owner rank aslinya 254, tapi RANKS.Owner.rank = 255.
 -- Pastikan angka ini SAMA PERSIS dengan rank Owner di group Roblox kamu.
+RankConfig.PASS_BOOST_RANK = 5   -- pemilik pass VIP/VVIP minimal dianggap rank ini
+
+------------------------------------------------------------------------
+-- CEK ULANG GRUP (UnifiedRankManager)
+-- *_AT = detik sejak percobaan pertama; sesudah daftar habis → tiap *_EVERY.
+-- GROUP_RETRY    : API grup ERROR saat join (rank/keanggotaan belum diketahui)
+--                  → dicoba lagi; dulu admin bisa kehilangan akses sepanjang sesi.
+-- MEMBER_RECHECK : bukan member → dicek lewat GroupService:GetGroupsAsync
+--                  (tidak di-cache) supaya join komunitas di tengah sesi langsung
+--                  jadi VIP. IsInGroup di server di-cache sejak panggilan pertama.
+------------------------------------------------------------------------
+
+RankConfig.GROUP_RETRY_AT       = { 5, 15, 30, 60 }
+RankConfig.GROUP_RETRY_EVERY    = 60
+RankConfig.MEMBER_RECHECK_AT    = { 15, 45, 120, 300, 600 }
+RankConfig.MEMBER_RECHECK_EVERY = 600
 
 ------------------------------------------------------------------------
 -- RANKS
@@ -219,7 +227,7 @@ end
 
 -- Cari roleData berdasarkan rank number (exact match)
 -- ⚠️ JANGAN pakai ini sendirian untuk assign Role attribute — tidak tahu
--- soal gamepass/group membership. Pakai RankConfig.ResolvePlayerRole(player).
+-- soal gamepass/group membership. Role dipasang UnifiedRankManager.
 function RankConfig.GetRoleByRank(rank)
 	for _, entry in ipairs(getSorted()) do
 		if entry.data.rank == rank then
@@ -248,109 +256,6 @@ function RankConfig.GetRoleName(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMe
 	return "Guest"
 end
 
-------------------------------------------------------------------------
--- RESOLVE PLAYER ROLE (single entry point — PAKAI INI, bukan GetRoleByRank)
---
--- Ini SATU-SATUNYA fungsi yang boleh dipakai caller (PlayerAdded handler,
--- OverheadTag, leaderstats, dll) untuk nentuin Role attribute seorang
--- player. Dia otomatis ambil rank, cek 2 gamepass, DAN cek keanggotaan
--- community — jadi tidak mungkin ada caller yang lupa kirim isGroupMember
--- lagi (itu penyebab bug "member udah join tapi masih GUEST").
---
--- Return: roleName (string)
-------------------------------------------------------------------------
-
-function RankConfig.ResolvePlayerRole(player)
-	local rank = 0
-	local isGroupMember = false
-	local hasVIPGamepass = false
-	local hasVVIPGamepass = false
-
-	local okRank, rankResult = pcall(player.GetRankInGroup, player, RankConfig.GROUP_ID)
-	if okRank then rank = rankResult end
-
-	local okGroup, groupResult = pcall(player.IsInGroup, player, RankConfig.GROUP_ID)
-	if okGroup then isGroupMember = groupResult end
-
-	hasVIPGamepass  = ShopConfig.userOwnsPass(player.UserId, VIP_PASS)
-	hasVVIPGamepass = ShopConfig.userOwnsPass(player.UserId, VVIP_PASS)
-
-	return RankConfig.GetRoleName(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember),
-	rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember
-end
-
-------------------------------------------------------------------------
--- TIER FUNCTIONS
--- Semua fungsi tier mengacu ke RANKS.isVVIP / RANKS.isVIP
--- sehingga otomatis sync jika RANKS diubah.
-------------------------------------------------------------------------
-
--- Apakah player ini VVIP tier? (tembus DoorVIP + DoorVVIP)
--- VVIP TIDAK dipengaruhi keanggotaan biasa — tetap butuh rank tinggi/gamepass.
-function RankConfig.IsVVIP(rank, hasVVIPGamepass)
-	if hasVVIPGamepass then return true end
-	local _, data = RankConfig.GetRoleByRank(rank)
-	return data.isVVIP == true
-end
-
--- Apakah player ini VIP tier atau lebih? (tembus DoorVIP minimal)
--- VVIP selalu dianggap VIP juga.
---
--- FIX (Roblox Communities update): rank 1 TIDAK otomatis di-assign lagi
--- waktu member join. Maka member community (isGroupMember == true)
--- otomatis dianggap VIP, TANPA perlu rank 1 lagi.
---
--- isGroupMember: kirim hasil player:IsInGroup(RankConfig.GROUP_ID) dari caller.
-function RankConfig.IsVIP(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember)
-	if RankConfig.IsVVIP(rank, hasVVIPGamepass) then return true end
-	if hasVIPGamepass then return true end
-	if isGroupMember then return true end -- FIX: member community = VIP otomatis
-	local _, data = RankConfig.GetRoleByRank(rank)
-	return data.isVIP == true
-end
-
--- Return collision tier string: "VVIP" | "VIP" | "Normal"
--- Dipakai CollisionManager dan sistem lain yang butuh tier.
---
--- WAJIB kirim isGroupMember = player:IsInGroup(RankConfig.GROUP_ID)
--- supaya member community otomatis dapat tier "VIP".
-function RankConfig.GetCollisionTier(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember)
-	if RankConfig.IsVVIP(rank, hasVVIPGamepass) then return "VVIP" end
-	if RankConfig.IsVIP(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember) then return "VIP" end
-	return "Normal"
-end
-
--- Versi untuk CollisionManager yang hanya punya roleName (string attribute)
--- Gamepass/membership dikirim sebagai BoolValue di player object.
--- (Tidak berubah — masih berbasis nama role/attribute, bukan rank mentah)
-function RankConfig.GetCollisionTierByRole(roleName)
-	if RankConfig.VVIP_ROLE_NAMES[roleName] then return "VVIP" end
-	if RankConfig.VIP_ROLE_NAMES[roleName]  then return "VIP"  end
-	return "Normal"
-end
-
-------------------------------------------------------------------------
--- UTILITY FUNCTIONS
--- Semua menggunakan konstanta threshold agar konsisten.
-------------------------------------------------------------------------
-
-function RankConfig.IsOwner(rank)
-	return rank == RankConfig.OWNER_RANK
-end
-
-function RankConfig.IsAdmin(rank)
-	return rank >= RankConfig.ADMIN_MIN_RANK
-end
-
-function RankConfig.IsDeveloper(rank)
-	return rank >= RankConfig.DEV_MIN_RANK
-end
-
-function RankConfig.IsPremium(rank)
-	local _, data = RankConfig.GetRoleByRank(rank)
-	return data.isPremium == true
-end
-
 -- WAJIB kirim isGroupMember supaya member community dapat queueLimit VIP,
 -- bukan queueLimit Guest, walaupun rank mereka 0/rankless.
 function RankConfig.GetQueueLimit(rank, hasVIPGamepass, hasVVIPGamepass, isGroupMember)
@@ -361,27 +266,6 @@ function RankConfig.GetQueueLimit(rank, hasVIPGamepass, hasVVIPGamepass, isGroup
 	if data.isVVIP or data.isVIP then return data.queueLimit end
 	if isGroupMember then return RankConfig.RANKS.VIP.queueLimit end -- FIX: member = limit VIP
 	return data.queueLimit or 1
-end
-
-function RankConfig.GetAllTeams()
-	local teams, added = {}, {}
-	for _, data in pairs(RankConfig.RANKS) do
-		if data.teamName and not added[data.teamName] then
-			table.insert(teams, {
-				name  = data.teamName,
-				color = data.color,
-				rank  = data.rank,
-			})
-			added[data.teamName] = true
-		end
-	end
-	table.sort(teams, function(a, b) return a.rank > b.rank end)
-	return teams
-end
-
-function RankConfig.GetOutfit(rank)
-	local _, data = RankConfig.GetRoleByRank(rank)
-	return data.outfit
 end
 
 return RankConfig
