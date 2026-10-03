@@ -1,10 +1,13 @@
--- DanceHandler/Favorites — favorit dance di DataStore (DanceFavorites / favorites_<uid>).
+-- DanceHandler/Favorites — favorit dance di DataStore (DanceFavorites / favorites_<uid>;
+-- Studio: DanceFavorites_studio lewat Config/StudioData).
 
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService  = game:GetService("DataStoreService")
+local RunService        = game:GetService("RunService")
 
 local DanceShared = require(ReplicatedStorage.Modules.DanceShared)
+local StudioData  = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("StudioData"))
 local CONFIG      = require(script.Parent.Config)
 local State       = require(script.Parent.State)
 
@@ -16,10 +19,16 @@ local getState = State.getState
 -- FAVORIT (DataStore)
 -- ═══════════════════════════════════════════════════════════
 
+local IS_STUDIO  = RunService:IsStudio()
+local STORE_NAME = StudioData.name(CONFIG.DATASTORE_NAME, IS_STUDIO)
+if IS_STUDIO then
+	print("[DataStudio] DanceHandler: " .. STORE_NAME)
+end
+
 local favoritesStore
 do
 	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(CONFIG.DATASTORE_NAME)
+		return DataStoreService:GetDataStore(STORE_NAME)
 	end)
 	if ok then
 		favoritesStore = result

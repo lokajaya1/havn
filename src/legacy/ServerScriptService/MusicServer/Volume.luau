@@ -1,11 +1,19 @@
 -- MusicServer/Volume  (ModuleScript)  dipindah dari init.server
--- Volume pribadi pemain. Store & kunci TETAP: MusicVolume / "Vol_<UserId>".
+-- Volume pribadi pemain. Store & kunci TETAP: MusicVolume / "Vol_<UserId>"
+-- (Studio: MusicVolume_studio lewat Config/StudioData).
 
 local DSS = game:GetService("DataStoreService")
 local RS  = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = require(RS:WaitForChild("MusicShared"))
-local VolDS  = DSS:GetDataStore("MusicVolume")
+local StudioData = require(RS:WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO = RunService:IsStudio()
+local VOL_STORE = StudioData.name("MusicVolume", IS_STUDIO)
+local VolDS  = DSS:GetDataStore(VOL_STORE)
+if IS_STUDIO then
+	print("[DataStudio] MusicServer: " .. VOL_STORE)
+end
 
 local Volume = {}
 local timers = {}

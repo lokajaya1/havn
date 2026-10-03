@@ -69,6 +69,8 @@ local STRICT = {
 	"src/legacy/StarterGui/MoneyGunUI.client.luau",
 	"src/legacy/StarterGui/WaterGunUI.client.luau",
 	"src/legacy/StarterGui/Flyingbroomui.client.luau",
+	-- ruangan DATA-STUDIO
+	"src/legacy/ReplicatedStorage/Config/StudioData.luau",
 }
 local REPORT = { "src/legacy" }
 

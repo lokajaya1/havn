@@ -3,6 +3,7 @@
 | Perintah | Di mana | Guna |
 |---|---|---|
 | `lune run tools/checks/syntax` | CI + lokal | semua `.luau` di `src/` & `tools/` terkompilasi, semua JSON valid |
+| `lune run tools/checks/data` | CI + lokal | DATA-STUDIO: daftar file pemakai DataStore / OrderedDataStore / MessagingService / MemoryStore + cara isolasi Studio; pemakai baru atau jumlah panggilan berubah → GAGAL (nama baru wajib lewat `ReplicatedStorage/Config/StudioData`: Studio + `_studio`, live nama persis) |
 | `lune run tools/checks/dances` | CI + lokal | DanceAssets: tidak ada id kembar, nama kembar beda kapital, id tidak valid; semua `poseNames` & `POPULAR_DANCES` (DanceHandler/Config) ada di daftar |
 | `lune run tools/checks/place <place.rbxl>` | lokal saja | simulasi Connect Rojo: GAGAL kalau ada pasangan ambigu atau instance yang akan dihapus (anak node `$ignoreUnknownInstances: true` tidak dihitung, sama seperti Rojo); daftar BARU/DIUBAH; **ASET WAJIB** (`assets.luau`): Tool tanpa Handle/bagian wajib, rujukan `script.X` / `script["X"]` / `:WaitForChild("X")` yang anaknya tidak ada di place maupun repo |
 | `tools/checks/studio/cek_aset.luau` | Command Bar Studio (mode Edit) | **HITUNG + CEK ASET**: JUMLAH SKRIP + aturan aset wajib yang sama, di place yang sedang terbuka (tidak mengubah apa pun) |

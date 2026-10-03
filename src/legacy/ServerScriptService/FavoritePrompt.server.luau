@@ -4,8 +4,16 @@
 local Players = game:GetService("Players")
 local DSS = game:GetService("DataStoreService")
 local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
-local FavoriteStore = DSS:GetDataStore("FavoritePrompted")
+-- Studio: FavoritePrompted_studio (Config/StudioData) → uji di Studio tidak menulis data pemain live.
+local StudioData = require(RS:WaitForChild("Config"):WaitForChild("StudioData"))
+local IS_STUDIO = RunService:IsStudio()
+local STORE_NAME = StudioData.name("FavoritePrompted", IS_STUDIO)
+local FavoriteStore = DSS:GetDataStore(STORE_NAME)
+if IS_STUDIO then
+	print("[DataStudio] FavoritePrompt: " .. STORE_NAME)
+end
 
 -- =====================================================
 -- REMOTE EVENT
