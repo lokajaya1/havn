@@ -53,8 +53,7 @@ local fcActive, fpsActive, pingActive = false, false, false
 local fpsConn, pingThread = nil, nil
 local fpsLbl, pingLbl = nil, nil
 local fcSet, fpsSet, pingSet, ntSet, bcSet
-local setLiveState, setRoleState
-local LiveMainFrame
+local setRoleState
 local adminElements = {}
 
 -- ── Nametag ────────────────────────────────────────────────
@@ -106,25 +105,7 @@ local function applyBubbleChat(hide)
 end
 
 -- ── Hook panel eksternal ───────────────────────────────────
-
-local function hookLiveFrame(frame)
-	LiveMainFrame = frame
-	frame.Visible = false
-	frame:GetPropertyChangedSignal("Visible"):Connect(function()
-		if setLiveState then setLiveState(frame.Visible) end
-	end)
-end
-
-local function findLiveFrame()
-	if LiveMainFrame and LiveMainFrame.Parent then return LiveMainFrame end
-	local pg = LocalPlayer:FindFirstChild("PlayerGui")
-	local ls = pg and pg:FindFirstChild("LiveScreenGui")
-	if not ls then return nil end
-	ls.DisplayOrder = 100
-	local frame = ls:FindFirstChild("MainFrame")
-	if frame then hookLiveFrame(frame) end
-	return LiveMainFrame
-end
+-- (Panel Live Screen buatan Studio sudah digabung ke panel "Layar panggung" — DjStageAdmin, ruangan WORLD.)
 
 task.spawn(function()
 	local pg = LocalPlayer:WaitForChild("PlayerGui", 60)
@@ -138,13 +119,6 @@ task.spawn(function()
 			fcActive = freecamGui.Enabled
 			if fcSet then fcSet(fcActive) end
 		end)
-	end
-
-	local ls = pg:WaitForChild("LiveScreenGui", 30)
-	if ls then
-		ls.DisplayOrder = 100
-		local frame = ls:FindFirstChild("MainFrame")
-		if frame then hookLiveFrame(frame) end
 	end
 
 	local hud = UI.new("ScreenGui", {
@@ -251,7 +225,7 @@ local function Switch(parent, initState)
 	return pill, set
 end
 
--- Tombol aksi buka/tutup; dipakai Live Screen dan Role Manager.
+-- Tombol aksi buka/tutup; dipakai panel admin (Role Manager, Tema map, Layar panggung).
 local function ActionButton(parent, labelClosed, labelOpen)
 	local W, H = 62, 24
 	local btn = UI.button({
@@ -331,18 +305,6 @@ local function build()
 	admHeader.Visible = false
 	table.insert(adminElements, admHeader)
 
-	local liveRow = Row(content, L(), "Live Screen")
-	liveRow.Visible = false
-	table.insert(adminElements, liveRow)
-
-	local liveBtn
-	liveBtn, setLiveState = ActionButton(liveRow, "Buka", "Tutup")
-	liveBtn.Activated:Connect(function()
-		local frame = findLiveFrame()
-		if not frame then return end
-		frame.Visible = not frame.Visible   -- setLiveState dipanggil lewat listener
-	end)
-
 	local roleRow = Row(content, L(), "Role Manager")
 	roleRow.Visible = false
 	table.insert(adminElements, roleRow)
@@ -395,6 +357,33 @@ local function build()
 		setThemeState(_G.ThemeMapMenu.IsOpen())
 		_G.ThemeMapMenu.OnChanged = function(open)
 			if themeBtn.Parent then setThemeState(open) end
+		end
+	end)
+
+	-- Layar panggung (ruangan WORLD): panel DjStageAdmin (StarterPlayerScripts) — _G.ToggleDjStage / _G.DjStageMenu.
+	-- Satu panel: tab "Live Screen" (dulu panel terpisah) + tab "Media" (layar utama/samping).
+	local stageRow = Row(content, L(), "Layar panggung")
+	stageRow.Visible = false
+	table.insert(adminElements, stageRow)
+
+	local stageBtn, setStageState = ActionButton(stageRow, "Buka", "Tutup")
+	stageBtn.Activated:Connect(function()
+		if type(_G.ToggleDjStage) ~= "function" then
+			warn("[Settings] _G.ToggleDjStage belum tersedia")
+			return
+		end
+		_G.ToggleDjStage()
+	end)
+
+	task.spawn(function()
+		local start = os.clock()
+		while not (_G.DjStageMenu and _G.DjStageMenu.IsOpen) do
+			if os.clock() - start > 30 then return end
+			task.wait(0.2)
+		end
+		setStageState(_G.DjStageMenu.IsOpen())
+		_G.DjStageMenu.OnChanged = function(open)
+			if stageBtn.Parent then setStageState(open) end
 		end
 	end)
 
@@ -642,6 +631,9 @@ local function build()
 		end
 		if _G.ThemeMapMenu and type(_G.ThemeMapMenu.Close) == "function" then
 			pcall(_G.ThemeMapMenu.Close)
+		end
+		if _G.DjStageMenu and type(_G.DjStageMenu.Close) == "function" then
+			pcall(_G.DjStageMenu.Close)
 		end
 		if _G.ThemeColorMenu and type(_G.ThemeColorMenu.Close) == "function" then
 			pcall(_G.ThemeColorMenu.Close)

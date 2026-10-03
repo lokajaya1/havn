@@ -23,6 +23,69 @@
           "CarryWeld": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryRemotes/CarryWeld.luau"
           }
+        },
+        "CarryChoices": {
+          "$className": "Folder",
+          "Bridal Carry": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/BridalCarry.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Couple Hug": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/CoupleHug.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Dragging Carry": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/DraggingCarry.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Fireman's Carry": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/FiremansCarry.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Front Carry": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/FrontCarry.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Gelut": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Gelut.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Hug": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Hug.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Kuli": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Kuli.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Nyeret": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Nyeret.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Piggyback": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Piggyback.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "PiggyUpperBack": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/PiggyUpperBack.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Pundak": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Pundak.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Shoulder": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Shoulder.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Side Carry": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/SideCarry.luau",
+            "$ignoreUnknownInstances": true
+          },
+          "Tangan Satu": {
+            "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/TanganSatu.luau",
+            "$ignoreUnknownInstances": true
+          }
         }
       },
       "Config": {
@@ -72,6 +135,9 @@
       },
       "ThemeColor": {
         "$path": "src/server/ThemeColor"
+      },
+      "DjStage": {
+        "$path": "src/server/DjStage"
       },
       "AnnouncementHandler": {
         "$path": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau"
@@ -250,6 +316,12 @@
         "MapFX": {
           "$path": "src/client/MapFX"
         },
+        "DjStageClient": {
+          "$path": "src/client/DjStageClient"
+        },
+        "DjStageAdmin": {
+          "$path": "src/client/DjStageAdmin.client.luau"
+        },
         "360": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau"
         },
@@ -320,6 +392,12 @@
             }
           }
         }
+      },
+      "GlowStick": {
+        "$className": "Tool",
+        "ServerScript": {
+          "$path": "src/legacy/StarterPack/GlowStick/ServerScript.server.luau"
+        }
       }
     },
     "Workspace": {
@@ -352,6 +430,21 @@
         "$className": "Tool",
         "Serverscript": {
           "$path": "src/legacy/ServerStorage/MoneyGun/Serverscript.server.luau"
+        },
+        "LocalScript": {
+          "$path": "src/legacy/ServerStorage/MoneyGun/LocalScript.client.luau"
+        }
+      },
+      "WaterGun": {
+        "$className": "Tool",
+        "LocalScript": {
+          "$path": "src/legacy/ServerStorage/WaterGun/LocalScript.client.luau"
+        }
+      },
+      "Flying Broom": {
+        "$className": "Tool",
+        "LocalScript": {
+          "$path": "src/legacy/ServerStorage/FlyingBroom/LocalScript.client.luau"
         }
       }
     }
