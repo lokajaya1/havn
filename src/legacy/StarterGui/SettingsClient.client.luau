@@ -9,6 +9,9 @@ local Stats           = game:GetService("Stats")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+-- "Sembunyikan nametag" lewat satu sumber dengan "Hide avatar" & GraphicsClient (ruangan SETTINGS,
+-- claude/Rencana_Settings.md): nametag yang dibangun ulang / sesudah respawn ikut tersembunyi tanpa jeda.
+local HideAvatarManager = require(ReplicatedStorage:WaitForChild("CustomUIModules"):WaitForChild("HideAvatarManager"))
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -48,37 +51,12 @@ end
 -- ── State ─────────────────────────────────────────────────
 
 local HideNametags, HideBubbleChat = false, false
-local FreecamEvent = nil
 local fcActive, fpsActive, pingActive = false, false, false
 local fpsConn, pingThread = nil, nil
 local fpsLbl, pingLbl = nil, nil
 local fcSet, fpsSet, pingSet, ntSet, bcSet
 local setRoleState
 local adminElements = {}
-
--- ── Nametag ────────────────────────────────────────────────
-
-local function applyBB(enabled)
-	for _, p in ipairs(Players:GetPlayers()) do
-		local char = p.Character
-		if char then
-			for _, d in ipairs(char:GetDescendants()) do
-				if d:IsA("BillboardGui") then d.Enabled = enabled end
-			end
-		end
-	end
-end
-
-Players.PlayerAdded:Connect(function(p)
-	p.CharacterAdded:Connect(function(char)
-		task.wait(0.5)
-		if HideNametags then
-			for _, d in ipairs(char:GetDescendants()) do
-				if d:IsA("BillboardGui") then d.Enabled = false end
-			end
-		end
-	end)
-end)
 
 -- ── Bubble chat ────────────────────────────────────────────
 
@@ -104,22 +82,14 @@ local function applyBubbleChat(hide)
 	end
 end
 
--- ── Hook panel eksternal ───────────────────────────────────
+-- ── HUD FPS / Ping ─────────────────────────────────────────
 -- (Panel Live Screen buatan Studio sudah digabung ke panel "Layar panggung" — DjStageAdmin, ruangan WORLD.)
+-- Dibuat langsung: dulu menunggu ScreenGui "UltimateFreecam" (freecam lama, tidak ada lagi) 30 dtk → sakelar FPS/Ping
+-- mati 30 dtk pertama sesudah join. Freecam sekarang lewat _G.ToggleFreecam / _G.OnFreecamStateChanged (FreeCam).
 
 task.spawn(function()
 	local pg = LocalPlayer:WaitForChild("PlayerGui", 60)
 	if not pg then return end
-
-	local freecamGui = pg:WaitForChild("UltimateFreecam", 30)
-	if freecamGui then
-		FreecamEvent = freecamGui:FindFirstChild("Toggle") or freecamGui:WaitForChild("Toggle", 5)
-		freecamGui:GetPropertyChangedSignal("Enabled"):Connect(function()
-			if freecamGui.Enabled == fcActive then return end
-			fcActive = freecamGui.Enabled
-			if fcSet then fcSet(fcActive) end
-		end)
-	end
 
 	local hud = UI.new("ScreenGui", {
 		Name = "SettingsHUD", ResetOnSpawn = false, IgnoreGuiInset = true,
@@ -441,27 +411,14 @@ local function build()
 	fcPill.Activated:Connect(function()
 		if type(_G.ToggleFreecam) == "function" then
 			_G.ToggleFreecam()
-			return
-		end
-		if not FreecamEvent then
-			local pg  = LocalPlayer:FindFirstChild("PlayerGui")
-			local gui = pg and pg:FindFirstChild("UltimateFreecam")
-			FreecamEvent = gui and gui:FindFirstChild("Toggle")
-		end
-		if FreecamEvent then
-			fcActive = not fcActive
-			fcSet(fcActive)
-			FreecamEvent:Fire(fcActive)
+		else
+			warn("[Settings] Freecam belum siap")
 		end
 	end)
 
 	table.insert(resetFns, function()
-		if fcActive then
-			if type(_G.ToggleFreecam) == "function" then
-				_G.ToggleFreecam()
-			elseif FreecamEvent then
-				FreecamEvent:Fire(false)
-			end
+		if fcActive and type(_G.ToggleFreecam) == "function" then
+			_G.ToggleFreecam()
 		end
 		fcActive = false
 		fcSet(false)
@@ -473,12 +430,12 @@ local function build()
 	ntPill.Activated:Connect(function()
 		HideNametags = not HideNametags
 		ntSet(HideNametags)
-		applyBB(not HideNametags)
+		HideAvatarManager:SetHideNametags(HideNametags)
 	end)
 	table.insert(resetFns, function()
 		HideNametags = false
 		ntSet(false)
-		applyBB(true)
+		HideAvatarManager:SetHideNametags(false)
 	end)
 
 	local bcRow = Row(content, L(), "Sembunyikan bubble chat")

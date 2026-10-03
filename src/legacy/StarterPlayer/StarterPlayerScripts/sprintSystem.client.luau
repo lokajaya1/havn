@@ -166,9 +166,11 @@ local function createMobileSprintButton()
 	-- Visibilitas reaktif: nggak cuma dicek sekali di awal, tapi ngikutin
 	-- input type terakhir yang dipakai player. Ini nutup celah kalau
 	-- TouchEnabled belum sinkron pas script pertama jalan.
+	local attachToJumpButton -- diisi di bawah (sesudah tombol dibuat)
 	UserInputService.LastInputTypeChanged:Connect(function()
 		if CONFIG.ForceShowMobileButton then return end
 		gui.Enabled = UserInputService.TouchEnabled
+		if gui.Enabled and attachToJumpButton then attachToJumpButton() end
 	end)
 
 	local size = CONFIG.ButtonSize
@@ -195,24 +197,38 @@ local function createMobileSprintButton()
 
 	-- Nempelin tombol sprint ke tombol jump asli (bukan angka offset statis),
 	-- supaya posisinya selalu pas di semua device/orientasi/resolusi.
-	task.spawn(function()
-		local touchGui = player.PlayerGui:WaitForChild("TouchGui", 5)
-		local frame = touchGui and touchGui:WaitForChild("TouchControlFrame", 5)
-		local jumpButton = frame and frame:WaitForChild("JumpButton", 5)
-		if not jumpButton then
-			warn("[SickHavn] JumpButton default tidak ditemukan, pakai posisi fallback statis.")
-			return
+	-- Tombol jump bawaan HANYA ada di perangkat sentuh: dicari saat tombol sprint aktif saja, ditunggu
+	-- tanpa batas waktu & tanpa warn (dulu: warn kuning di setiap join PC, dan HP lambat > 5 dtk
+	-- terjebak di posisi cadangan). Sebelum ketemu: posisi cadangan.
+	local function waitChild(parent, name)
+		local found = parent:FindFirstChild(name)
+		while not found do
+			local child = parent.ChildAdded:Wait()
+			if child.Name == name then found = child end
 		end
+		return found
+	end
 
-		local function followJumpButton()
-			local pos, jSize = jumpButton.AbsolutePosition, jumpButton.AbsoluteSize
-			btn.Position = UDim2.fromOffset(pos.X - CONFIG.GapFromJump, pos.Y + jSize.Y / 2)
-		end
+	local attached = false
+	attachToJumpButton = function()
+		if attached then return end
+		attached = true
+		task.spawn(function()
+			local touchGui = waitChild(player:WaitForChild("PlayerGui"), "TouchGui")
+			local frame = waitChild(touchGui, "TouchControlFrame")
+			local jumpButton = waitChild(frame, "JumpButton")
 
-		followJumpButton()
-		jumpButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(followJumpButton)
-		jumpButton:GetPropertyChangedSignal("AbsoluteSize"):Connect(followJumpButton)
-	end)
+			local function followJumpButton()
+				local pos, jSize = jumpButton.AbsolutePosition, jumpButton.AbsoluteSize
+				btn.Position = UDim2.fromOffset(pos.X - CONFIG.GapFromJump, pos.Y + jSize.Y / 2)
+			end
+
+			followJumpButton()
+			jumpButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(followJumpButton)
+			jumpButton:GetPropertyChangedSignal("AbsoluteSize"):Connect(followJumpButton)
+		end)
+	end
+	if gui.Enabled then attachToJumpButton() end
 
 	local activeRing = Instance.new("UIStroke")
 	activeRing.Name = "ActiveRing"
@@ -373,16 +389,10 @@ local function isButtonCoveredByPanel()
 					-- tombol, atau punya background / gambar / teks kelihatan.
 					-- Frame transparan (sekadar wadah layout) diabaikan supaya
 					-- tombol nggak salah disembunyiin.
-					local solid = false
-					if obj:IsA("GuiButton") then
-						solid = true
-					elseif obj.BackgroundTransparency < 0.95 then
-						solid = true
-					elseif obj:IsA("ImageLabel") and obj.Image ~= "" and obj.ImageTransparency < 0.95 then
-						solid = true
-					elseif obj:IsA("TextLabel") and obj.Text ~= "" and obj.TextTransparency < 0.95 then
-						solid = true
-					end
+					local solid = obj:IsA("GuiButton")
+						or obj.BackgroundTransparency < 0.95
+						or (obj:IsA("ImageLabel") and obj.Image ~= "" and obj.ImageTransparency < 0.95)
+						or (obj:IsA("TextLabel") and obj.Text ~= "" and obj.TextTransparency < 0.95)
 					if solid then return true end
 				end
 			end

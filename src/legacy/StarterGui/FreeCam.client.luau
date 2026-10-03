@@ -577,6 +577,8 @@ end
 
 local function enable()
 	if Active then return end
+	-- Kamera 360 (StarterPlayerScripts/360) juga mengendalikan kamera tiap frame → tidak bersamaan.
+	if type(_G.Is360Active) == "function" and _G.Is360Active() then return end
 	Active = true
 
 	origType, origSubject, origFOV = Cam.CameraType, Cam.CameraSubject, Cam.FieldOfView
@@ -832,7 +834,3 @@ end
 
 buildUI()
 wireInput()
-
-print("✅ [FreeCam v2] Ready — responsive UI (" .. (IS_TOUCH and "touch" or "desktop") .. ")")
-print("   PC  : WASD=gerak | Space=naik | LShift=turun | Q/E=FOV | [/]=speed | Arrow/Mouse=rotasi | H=hide UI | F8=toggle")
-print("   MOB : D-Pad=gerak | ▲▼=naik/turun | +/− & F+/F−=speed/FOV | Swipe=rotasi | Pinch=zoom | ⊘=hide UI | X=close")
