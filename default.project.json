@@ -136,6 +136,9 @@
       "ThemeColor": {
         "$path": "src/server/ThemeColor"
       },
+      "DjStage": {
+        "$path": "src/server/DjStage"
+      },
       "AnnouncementHandler": {
         "$path": "src/legacy/ServerScriptService/AnnouncementHandler.server.luau"
       },
