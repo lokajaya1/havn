@@ -4,6 +4,9 @@
 --
 -- Semua tampilan (request / drop / toast / pemilih jenis) ada di CarryUI.
 -- File ini murni protokol + pemulihan karakter setelah carry dilepas.
+-- Server bisa menjawab "Cooldown" (jeda sebelum meminta orang yang sama lagi)
+-- dan "RequestCancelled" (peminta membatalkan → kartu permintaan hilang).
+-- Angka di ReplicatedStorage.Config.Social (CARRY).
 -- ═══════════════════════════════════════════════════════════
 
 local Players    = game:GetService("Players")
@@ -11,6 +14,7 @@ local RunService = game:GetService("RunService")
 local RS         = game:GetService("ReplicatedStorage")
 
 local CarryUI = require(RS:WaitForChild("CustomUIModules"):WaitForChild("CarryUI"))
+local CARRY   = require(RS:WaitForChild("Config"):WaitForChild("Social")).CARRY
 
 -- DanceShared membaca DanceAssets langsung; tunggu replikasinya dulu.
 RS:WaitForChild("Assets"):WaitForChild("Animations"):WaitForChild("Dances"):WaitForChild("DanceAssets")
@@ -21,7 +25,7 @@ local DanceShared = require(RS:WaitForChild("Modules"):WaitForChild("DanceShared
 local DEFAULT_JUMPPOWER  = 50
 local DEFAULT_JUMPHEIGHT = 7.2
 
-local REQUEST_TIMEOUT  = 15
+local REQUEST_TIMEOUT  = CARRY.CLIENT_TIMEOUT
 local UNFREEZE_TIMEOUT = 3
 
 -- ── State ───────────────────────────────────────────────────
@@ -226,8 +230,6 @@ function CarryManager:_loadCarryTypes()
 
 	if count == 0 then
 		warn("[CarryManager] Tidak ada jenis carry di CarryReplic.CarryChoices maupun Assets.Carry")
-	else
-		print("[CarryManager] " .. count .. " jenis carry termuat")
 	end
 end
 
@@ -261,7 +263,12 @@ function CarryManager:_handleServerEvent(args)
 		pendingOutgoing = nil
 
 		if pending then
-			CarryUI.Toast("Request Declined", pending.targetName .. " declined your request", 3)
+			if args.expired then
+				-- kartu habis waktu di layar target (tidak dijawab), bukan ditolak
+				CarryUI.Toast("No Response", pending.targetName .. " didn't respond to your carry request", 3)
+			else
+				CarryUI.Toast("Request Declined", pending.targetName .. " declined your request", 3)
+			end
 		else
 			CarryUI.Toast("Cannot Carry", nameOf(args.targetPlr) .. " is busy right now", 3)
 		end
@@ -269,6 +276,20 @@ function CarryManager:_handleServerEvent(args)
 	elseif cmd == "TooFar" then
 		pendingOutgoing = nil
 		CarryUI.Toast("Too Far", "Get closer to " .. nameOf(args.targetPlr) .. " to carry", 3)
+
+	elseif cmd == "Cooldown" then
+		-- Jeda pasangan dari server: belum boleh meminta orang yang sama lagi.
+		pendingOutgoing = nil
+		local secs = math.max(1, math.ceil(tonumber(args.wait) or 1))
+		CarryUI.Toast("Please Wait", "Try asking " .. nameOf(args.targetPlr) .. " again in " .. secs .. "s", 3)
+
+	elseif cmd == "RequestCancelled" then
+		-- Peminta membatalkan / keluar / respawn: kartu permintaannya dihapus.
+		if incoming and incoming.from == args.fromPlr then
+			incoming = nil
+			CarryUI.HideRequest()
+			CarryUI.Toast("Request Cancelled", nameOf(args.fromPlr) .. " cancelled the carry request", 2)
+		end
 
 	elseif cmd == "DestroyCarryInfo" then
 		if state.active then
@@ -297,7 +318,7 @@ function CarryManager:_onRequestReceived(fromPlayer, carryModule)
 	task.delay(REQUEST_TIMEOUT, function()
 		if not incoming or incoming.timestamp ~= ts then return end
 		incoming = nil
-		fireServer({ cmd = "Declinecarry" })
+		fireServer({ cmd = "Declinecarry", expired = true })
 		CarryUI.HideRequest()
 		CarryUI.Toast("Request Expired", "Carry request timed out", 2)
 	end)

@@ -2,14 +2,17 @@
 -- CommunityInfoService — ServerScriptService
 --
 -- Remote yang dibuat otomatis di ReplicatedStorage.Remotes:
---   GetPrimaryCommunity (RemoteFunction) → {groupId, name, rank, role, fallback}
+--   GetPrimaryCommunity (RemoteFunction) → {groupId, name, rank, role, fallback} | false | nil, "retry"
 --   GetCommunityPref    (RemoteFunction) → boolean
 --   SetCommunityPref    (RemoteEvent)    ← boolean
 --
--- GroupService:GetGroupsAsync adalah web-call dan kena rate limit,
--- jadi hasilnya di-cache, request bersamaan di-dedupe, dan tiap
--- player punya cooldown. Preferensi ditulis ke DataStore saat player
--- keluar / server shutdown, bukan setiap kali toggle diklik.
+-- GroupService:GetGroupsAsync adalah web-call dan kena rate limit (kuotanya dipakai juga oleh
+-- UnifiedRankManager), jadi: hanya untuk pemain yang ADA di server ini (kartu pemain), hasil
+-- di-cache, request bersamaan di-dedupe, dan tiap pemain dibatasi token bucket (Config/Social).
+-- Hasil: tabel = punya komunitas · false = tidak punya · nil, "retry" = dibatasi / GroupService
+-- error (error di-cache sebentar saja, FAIL_TTL). Preferensi ditulis ke DataStore saat pemain
+-- keluar / server shutdown; satu GetAsync per pemain (panggilan lain menunggu hasil yang sama).
+-- Ruangan SOCIAL: claude/Rencana_Social.md.
 -- ═══════════════════════════════════════════════════════════
 
 local GroupService = game:GetService("GroupService")
@@ -18,8 +21,10 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local CACHE_TTL = 600
-local PLAYER_COOLDOWN = 0.4
+local Config = require(RS:WaitForChild("Config"):WaitForChild("Social")).COMMUNITY
+local SocialRules = require(RS:WaitForChild("Modules"):WaitForChild("SocialRules"))
+local ToolRules = require(RS:WaitForChild("Modules"):WaitForChild("ToolRules"))
+
 local DEFAULT_PREF = true
 
 -- Kalau user belum mengatur Primary Community di profilnya, pakai
@@ -55,9 +60,23 @@ local getCommunity = ensure(remotes, "RemoteFunction", "GetPrimaryCommunity")
 local getPref = ensure(remotes, "RemoteFunction", "GetCommunityPref")
 local setPref = ensure(remotes, "RemoteEvent", "SetCommunityPref")
 
+-- token bucket per pemain per remote (dibuat saat pertama dipakai, dibuang saat keluar)
+local buckets = { community = {}, getPref = {}, setPref = {} }
+
+local function allow(kind, player, rate, burst)
+	local list = buckets[kind]
+	local b = list[player]
+	if not b then
+		b = ToolRules.bucket(rate, burst)
+		list[player] = b
+	end
+	return ToolRules.take(b, os.clock())
+end
+
 -- ── Community lookup ────────────────────────────────────────
 
-local cache, inflight, cooldown = {}, {}, {}
+-- cache[userId] = { data = tabel | false | nil (error), expires = os.clock() }
+local cache, inflight = {}, {}
 
 local function pack(groupInfo, isFallback)
 	return {
@@ -69,10 +88,11 @@ local function pack(groupInfo, isFallback)
 	}
 end
 
+-- tabel = komunitas · false = tidak punya komunitas · nil = GroupService error
 local function fetch(userId)
 	local hit = cache[userId]
-	if hit and (os.clock() - hit.t) < CACHE_TTL then
-		return hit.data or nil
+	if hit and os.clock() < hit.expires then
+		return hit.data
 	end
 
 	local waiters = inflight[userId]
@@ -88,6 +108,7 @@ local function fetch(userId)
 	end)
 
 	if ok and type(groups) == "table" then
+		data = false
 		for _, groupInfo in ipairs(groups) do
 			if groupInfo.IsPrimary then
 				data = pack(groupInfo, false)
@@ -97,11 +118,13 @@ local function fetch(userId)
 		if not data and USE_FIRST_GROUP_FALLBACK and groups[1] then
 			data = pack(groups[1], true)
 		end
-	elseif not ok then
-		warn("[CommunityInfoService] GetGroupsAsync gagal untuk", userId, "-", groups)
+		cache[userId] = { data = data, expires = os.clock() + Config.CACHE_TTL }
+	else
+		if not ok then
+			warn("[CommunityInfoService] GetGroupsAsync gagal untuk", userId, "-", groups)
+		end
+		cache[userId] = { data = nil, expires = os.clock() + Config.FAIL_TTL }
 	end
-
-	cache[userId] = { data = data or false, t = os.clock() }
 
 	waiters = inflight[userId]
 	inflight[userId] = nil
@@ -113,39 +136,71 @@ local function fetch(userId)
 end
 
 getCommunity.OnServerInvoke = function(player, userId)
-	if type(userId) ~= "number" or userId ~= userId or userId < 1 or userId % 1 ~= 0 then
+	-- Kartu pemain hanya untuk pemain di server ini → userId lain tidak diteruskan ke GroupService.
+	if not SocialRules.validUserId(userId) or not Players:GetPlayerByUserId(userId) then
 		return nil
 	end
 
-	local now = os.clock()
-	local last = cooldown[player]
-	if last and (now - last) < PLAYER_COOLDOWN then
-		local hit = cache[userId]
-		return hit and hit.data or nil
+	local hit = cache[userId]
+	if hit and os.clock() < hit.expires and hit.data ~= nil then
+		return hit.data -- dari cache: tidak memakai kuota pemain
 	end
-	cooldown[player] = now
 
-	return fetch(userId)
+	if not allow("community", player, Config.RATE, Config.BURST) then
+		return nil, "retry"
+	end
+
+	local data = fetch(userId)
+	if data == nil then
+		return nil, "retry"
+	end
+	return data
 end
 
 -- ── Preferensi ──────────────────────────────────────────────
 
-local prefs, dirty = {}, {}
+local prefs, dirty, loading = {}, {}, {}
 
+-- Satu GetAsync per pemain: panggilan yang datang selagi memuat menunggu hasil yang sama.
 local function loadPref(player)
+	if prefs[player] ~= nil then
+		return prefs[player]
+	end
+	local waiters = loading[player]
+	if waiters then
+		table.insert(waiters, coroutine.running())
+		return coroutine.yield()
+	end
+	loading[player] = {}
+
 	local value = DEFAULT_PREF
 	if prefStore then
 		local ok, stored = pcall(function()
 			return prefStore:GetAsync("u_" .. player.UserId)
 		end)
-		if ok and type(stored) == "boolean" then value = stored end
+		if ok and type(stored) == "boolean" then
+			value = stored
+		end
 	end
-	if prefs[player] == nil then prefs[player] = value end
-	return prefs[player]
+
+	waiters = loading[player]
+	loading[player] = nil
+	if player.Parent ~= nil then -- pemain keluar selagi memuat → tidak disimpan di memori
+		if prefs[player] == nil then
+			prefs[player] = value
+		end
+		value = prefs[player]
+	end
+	for _, thread in ipairs(waiters) do
+		task.spawn(thread, value)
+	end
+	return value
 end
 
 local function savePref(player)
-	if not prefStore or not dirty[player] then return end
+	if not prefStore or not dirty[player] then
+		return
+	end
 	local value = prefs[player]
 	dirty[player] = nil
 	pcall(function()
@@ -155,12 +210,25 @@ end
 
 getPref.OnServerInvoke = function(player)
 	local cached = prefs[player]
-	if cached ~= nil then return cached end
+	if cached ~= nil then
+		return cached
+	end
+	if not allow("getPref", player, Config.PREF_RATE, Config.PREF_BURST) then
+		return nil
+	end
 	return loadPref(player)
 end
 
 setPref.OnServerEvent:Connect(function(player, value)
-	if type(value) ~= "boolean" or prefs[player] == value then return end
+	if type(value) ~= "boolean" then
+		return
+	end
+	if not allow("setPref", player, Config.PREF_SET_RATE, Config.PREF_SET_BURST) then
+		return
+	end
+	if prefs[player] == value then
+		return
+	end
 	prefs[player] = value
 	dirty[player] = true
 end)
@@ -173,7 +241,9 @@ for _, player in ipairs(Players:GetPlayers()) do
 end
 
 Players.PlayerRemoving:Connect(function(player)
-	cooldown[player] = nil
+	for _, list in pairs(buckets) do
+		list[player] = nil
+	end
 	savePref(player)
 	prefs[player] = nil
 	dirty[player] = nil
@@ -189,14 +259,12 @@ end)
 
 task.spawn(function()
 	while true do
-		task.wait(300)
+		task.wait(Config.CLEAN_EVERY)
 		local now = os.clock()
 		for userId, entry in pairs(cache) do
-			if (now - entry.t) > CACHE_TTL then
+			if now >= entry.expires then
 				cache[userId] = nil
 			end
 		end
 	end
 end)
-
-print("[CommunityInfoService] Ready")

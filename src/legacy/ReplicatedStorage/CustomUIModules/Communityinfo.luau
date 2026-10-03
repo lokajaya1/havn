@@ -6,21 +6,25 @@
 --
 -- API:
 --   CommunityInfo.ApplyTo(gui, userId)   isi background + label
---   CommunityInfo.Get(userId)            data mentah (yields)
+--   CommunityInfo.Get(userId)            data mentah (yields) → data, perluCobaLagi
 --   CommunityInfo.IsEnabled() / SetEnabled(bool)
 --   CommunityInfo.Changed                event saat preferensi berubah
 --   CommunityInfo.Refresh()              render ulang target terakhir
 --
+-- Server menjawab "retry" (dibatasi / GroupService error) → hasil TIDAK
+-- di-cache dan ApplyTo mencoba lagi (Config/Social COMMUNITY.CLIENT_RETRY).
 -- Set DEBUG = true kalau perlu menelusuri kenapa background kosong.
 -- ═══════════════════════════════════════════════════════════
 
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(RS:WaitForChild("Config"):WaitForChild("Social")).COMMUNITY
+
 local DEBUG = false
 local THUMB_SIZE = 150       -- GroupIcon hanya mendukung 150 atau 420
 local BG_TRANSPARENCY = 0.55 -- makin besar makin samar
-local CACHE_TTL = 300
+local CACHE_TTL = Config.CLIENT_TTL
 
 local CommunityInfo = {}
 
@@ -103,30 +107,39 @@ function CommunityInfo.Get(userId)
 	end
 	inflight[userId] = {}
 
-	local data
+	-- retry = server membatasi / GroupService error / remote gagal → jangan di-cache
+	local data, retry = nil, false
 	local rf = getRemote("GetPrimaryCommunity", 10)
 	if rf then
-		local ok, result = pcall(function() return rf:InvokeServer(userId) end)
+		local ok, result, flag = pcall(function() return rf:InvokeServer(userId) end)
 		if ok then
 			if type(result) == "table" then
 				data = result
+			elseif result == nil and flag == "retry" then
+				retry = true
+				log("server minta coba lagi untuk userId", userId)
 			else
 				log("tidak ada community untuk userId", userId)
 			end
 		else
+			retry = true
 			warn("[CommunityInfo] InvokeServer gagal:", result)
 		end
+	else
+		retry = true
 	end
 
-	cache[userId] = { data = data or false, t = os.clock() }
+	if not retry then
+		cache[userId] = { data = data or false, t = os.clock() }
+	end
 
 	waiters = inflight[userId]
 	inflight[userId] = nil
 	for _, thread in ipairs(waiters) do
-		task.spawn(thread, data)
+		task.spawn(thread, data, retry)
 	end
 
-	return data
+	return data, retry
 end
 
 -- ── Apply ke UI ────────────────────────────────────────────
@@ -157,7 +170,13 @@ function CommunityInfo.ApplyTo(gui, userId)
 	if not enabled or type(userId) ~= "number" then return end
 
 	task.spawn(function()
-		local info = CommunityInfo.Get(userId)
+		local info, retry = CommunityInfo.Get(userId)
+		for _, delay in ipairs(Config.CLIENT_RETRY) do
+			if not retry or myToken ~= token or not enabled then break end
+			task.wait(delay)
+			if myToken ~= token or not enabled then return end
+			info, retry = CommunityInfo.Get(userId)
+		end
 		if myToken ~= token or not enabled then return end
 		if not info or not info.groupId then return end
 
