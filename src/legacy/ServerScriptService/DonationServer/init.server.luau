@@ -23,6 +23,10 @@ local Store = require(script:WaitForChild("Store"))
 local ReceiptHandler = require(SSS:WaitForChild("ReceiptHandler"))
 
 local MSG = Config.message
+-- [SOCIAL] pesan donatur tampil ke semua (semua server) → teks publik 1× per menit per pemain (pedoman resmi Roblox,
+-- Config/Social PUBLIC_TEXT). Yang dihitung = pesan yang benar-benar TAMPIL (atribut Player diisi saat struk).
+local PUBLIC = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Social")).PUBLIC_TEXT
+local SocialRules = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SocialRules"))
 local suffix = RunService:IsStudio() and Config.store.studioSuffix or ""
 local orderedStore = DataStoreService:GetOrderedDataStore(Config.store.ordered .. suffix)
 local store = Store.new(DataStoreService:GetDataStore(Config.store.data .. suffix), orderedStore, Config.store, task.delay)
@@ -141,6 +145,11 @@ setMessage.OnServerInvoke = function(player, text)
 		pending[player] = nil -- donasi tanpa pesan
 		return true
 	end
+	local left = SocialRules.textWait(player:GetAttribute(PUBLIC.ATTR.DONATION), workspace:GetServerTimeNow(), PUBLIC.COOLDOWN)
+	if left > 0 then
+		pending[player] = nil
+		return false, math.ceil(left) -- client: "bisa menulis pesan lagi dalam N dtk"
+	end
 	local cut = cutChars(text, MSG.maxChars)
 	if not cut then
 		return false
@@ -159,6 +168,11 @@ local function takeMessage(player)
 	local p = pending[player]
 	pending[player] = nil
 	if p and os.clock() - p.at <= MSG.ttl then
+		local now = workspace:GetServerTimeNow()
+		if SocialRules.textWait(player:GetAttribute(PUBLIC.ATTR.DONATION), now, PUBLIC.COOLDOWN) > 0 then
+			return "" -- pesan lain baru tampil < 1 menit lalu: donasi tetap tampil, pesannya dibuang
+		end
+		player:SetAttribute(PUBLIC.ATTR.DONATION, now)
 		return p.text
 	end
 	return ""

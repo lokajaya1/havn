@@ -1,6 +1,13 @@
 -- ═══════════════════════════════════════════════════════════
 -- CarrySystemHandler (SERVER)
 -- Path: ServerScriptService.Misc.CarrySystemHandler
+--
+-- Anti-spam ke pemain lain (ruangan SOCIAL, claude/Rencana_Social.md): sesudah
+-- permintaan ditolak / kedaluwarsa / dibatalkan, peminta harus menunggu sebelum
+-- meminta target yang SAMA lagi (jeda naik kalau ditolak berulang), target hanya
+-- menerima 1 permintaan baru per jeda, dan permintaan yang dibuang peminta
+-- (batal / keluar / respawn / mati) dikabarkan ke target ("RequestCancelled")
+-- supaya kartunya hilang. Angka di ReplicatedStorage.Config.Social (CARRY).
 -- ═══════════════════════════════════════════════════════════
 
 local Players    = game:GetService("Players")
@@ -9,6 +16,10 @@ local RS         = game:GetService("ReplicatedStorage")
 local CarryReplic  = RS:WaitForChild("CarryReplic")
 local CarryRemotes = CarryReplic:WaitForChild("CarryRemotes")
 local CarryRemote  = CarryRemotes:WaitForChild("CarryRemote")
+
+local CARRY       = require(RS:WaitForChild("Config"):WaitForChild("Social")).CARRY
+local SocialRules = require(RS:WaitForChild("Modules"):WaitForChild("SocialRules"))
+local ToolRules   = require(RS:WaitForChild("Modules"):WaitForChild("ToolRules"))
 
 local DanceAssets = require(RS.Assets.Animations.Dances.DanceAssets)
 
@@ -33,15 +44,18 @@ end
 
 local carryPairs        = {}
 local pendingRequests   = {}
--- [FIX 2b] modul carry dicatat server saat AskCarry; Carry hanya sah kalau ada permintaan tertunda
+-- modul carry dicatat server saat AskCarry; Carry hanya sah kalau ada permintaan tertunda
 local pendingModules    = {} -- [target] → ModuleScript yang diminta requester
 local lastAsk           = {} -- [player] → os.clock() AskCarry terakhir
-local ASK_COOLDOWN      = 1
--- Batas waktu permintaan (sama dengan REQUEST_TIMEOUT client CarryManager + 2
+local ASK_COOLDOWN      = CARRY.ASK_COOLDOWN
+-- Batas waktu permintaan (sama dengan CLIENT_TIMEOUT CarryManager + 2
 -- dtk jeda jaringan) & jarak maksimal kedua pemain saat minta dan menerima.
-local REQUEST_TIMEOUT   = 17
-local MAX_CARRY_DIST    = 30 -- stud
+local REQUEST_TIMEOUT   = CARRY.REQUEST_TIMEOUT
+local MAX_CARRY_DIST    = CARRY.MAX_DIST -- stud
 local pendingAt         = {} -- [target] → os.clock() saat permintaan dibuat
+-- jeda pasangan & target (SocialRules), batas terima remote per pemain
+local social            = SocialRules.carryState()
+local buckets           = {} -- [player] → token bucket CarryRemote
 local function isCarryModule(mod)
 	if typeof(mod) ~= "Instance" or not mod:IsA("ModuleScript") then return false end
 	local choices = CarryReplic:FindFirstChild("CarryChoices")
@@ -113,6 +127,25 @@ local function clearPendingByRequester(requester)
 			end
 			return target
 		end
+	end
+end
+
+-- Permintaan selesai tanpa diterima (ditolak / kedaluwarsa / dibatalkan) → jeda pasangan;
+-- diterima → catatan pasangan dihapus.
+local function endRequest(requester, target, accepted)
+	if not requester or not target then return end
+	SocialRules.carryEnded(social, requester.UserId, target.UserId, os.clock(), accepted, CARRY)
+end
+
+-- Peminta membuang permintaannya sendiri (batal / keluar / respawn / mati):
+-- target dikabari supaya kartunya hilang (dulu kartu basi 15 dtk, Accept diam).
+local function cancelOutgoing(requester)
+	local target = clearPendingByRequester(requester)
+	if not target then return end
+	pendingModules[target] = nil
+	endRequest(requester, target, false)
+	if target.Parent then
+		CarryRemote:FireClient(target, { cmd = "RequestCancelled", fromPlr = requester })
 	end
 end
 
@@ -288,7 +321,7 @@ end
 
 onCarrierDied = function(plr)
 	if carryPairs[plr] then fullStop(plr) end
-	clearPendingByRequester(plr)
+	cancelOutgoing(plr)
 	if pendingRequests[plr] then clearPending(plr) end
 end
 
@@ -322,6 +355,12 @@ end
 
 CarryRemote.OnServerEvent:Connect(function(plr, args)
 	if type(args) ~= "table" or not args.cmd then return end
+	local bucket = buckets[plr]
+	if not bucket then
+		bucket = ToolRules.bucket(CARRY.RECEIVE.RATE, CARRY.RECEIVE.BURST)
+		buckets[plr] = bucket
+	end
+	if not ToolRules.take(bucket, os.clock()) then return end
 
 	local ok, err = pcall(function()
 		local canAsk   = plr:FindFirstChild("CanAskCarry")
@@ -335,14 +374,22 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 			local target   = args.targetPlr
 			local carryMod = args.carrychoicesss
 			if typeof(target) ~= "Instance" or not target:IsA("Player") or target == plr then return end
-			if not isCarryModule(carryMod) then return end -- [FIX 2b] hanya modul carry resmi
+			if not isCarryModule(carryMod) then return end -- hanya modul carry resmi
 			local now = os.clock()
 			if lastAsk[plr] and now - lastAsk[plr] < ASK_COOLDOWN then return end
 			lastAsk[plr] = now
 
-			-- FIX: set canAsk false di sini (dulu di PromptAction terpisah
+			-- canAsk diset false di sini (dulu di PromptAction terpisah
 			-- yang bisa bikin race condition). Sekarang atomic dalam satu event.
 			if not canAsk.Value then return end
+
+			-- Anti-spam: jeda pasangan (peminta → target yang sama) & jeda target (baru saja dimintai
+			-- orang lain). Peminta diberi tahu sisa waktunya; target tidak menerima apa pun.
+			local allowed, _, waitLeft = SocialRules.carryCheck(social, plr.UserId, target.UserId, now, CARRY)
+			if not allowed then
+				CarryRemote:FireClient(plr, { cmd = "Cooldown", targetPlr = target, wait = math.ceil(waitLeft) })
+				return
+			end
 			canAsk.Value = false
 
 			local tCanAsk   = target:FindFirstChild("CanAskCarry")
@@ -360,15 +407,17 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 				setPending(plr, target)
 				local stamp = pendingAt[target]
 				-- Target tidak menjawab (client macet/keluar tanpa Decline): lepaskan
-				-- supaya peminta bisa minta lagi.
+				-- supaya peminta bisa minta lagi (sesudah jeda pasangan).
 				task.delay(REQUEST_TIMEOUT, function()
 					if pendingRequests[target] == plr and pendingAt[target] == stamp then
 						pendingModules[target] = nil
 						clearPending(target)
+						endRequest(plr, target, false)
 					end
 				end)
-				pendingModules[target] = carryMod -- [FIX 2b]
+				pendingModules[target] = carryMod
 				tCanAsk.Value = false
+				SocialRules.carrySent(social, target.UserId, now)
 				CarryRemote:FireClient(target, {
 					cmd = "GetMessage", messageSentBy = plr, carrychoicesss = carryMod,
 				})
@@ -381,7 +430,7 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 		elseif cmd == "Carry" then
 			local firstPlr = args.firstPlr
 			if typeof(firstPlr) ~= "Instance" or not firstPlr:IsA("Player") or firstPlr == plr then return end
-			-- [FIX 2b] hanya boleh menerima permintaan yang benar-benar ada (dulu: carry paksa tanpa persetujuan)
+			-- hanya boleh menerima permintaan yang benar-benar ada (dulu: carry paksa tanpa persetujuan)
 			if pendingRequests[plr] ~= firstPlr then return end
 			-- Kedaluwarsa atau sudah berjauhan saat diterima → batal.
 			local expired = os.clock() - (pendingAt[plr] or 0) > REQUEST_TIMEOUT
@@ -400,6 +449,7 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 			if not isCarryModule(carryMod) then return end
 
 			pendingRequests[plr] = nil
+			endRequest(firstPlr, plr, true)
 			canAsk.Value = true; carryble.Value = false
 
 			local fCanAsk   = firstPlr:FindFirstChild("CanAskCarry")
@@ -432,10 +482,22 @@ CarryRemote.OnServerEvent:Connect(function(plr, args)
 			-- FIX: hapus cmd "PromptAction" karena sudah digabung ke AskCarry
 
 		elseif cmd == "CancelAll" then
-			canAsk.Value = true; clearPendingByRequester(plr)
+			canAsk.Value = true; cancelOutgoing(plr)
 
 		elseif cmd == "Declinecarry" then
-			clearPending(plr); canAsk.Value = true
+			local requester = clearPending(plr); canAsk.Value = true
+			if requester then
+				pendingModules[plr] = nil
+				endRequest(requester, plr, false)
+				-- Peminta diberi tahu (CarryManager sudah menunggu "Messagesserror" untuk Decline;
+				-- dulu tidak dikirim → peminta tertahan "Masih menunggu" sampai 17 dtk).
+				-- expired = kartu habis waktu di layar target → peminta melihat "No Response", bukan "Declined".
+				if requester.Parent then
+					CarryRemote:FireClient(requester, {
+						cmd = "Messagesserror", targetPlr = plr, expired = args.expired == true,
+					})
+				end
+			end
 			-- Hanya fullStop kalau memang sedang dalam carry pair
 			if carryPairs[plr] then fullStop(plr) end
 
@@ -450,21 +512,22 @@ end)
 -- ═══ AUTO-CLEANUP ═══
 
 Players.PlayerRemoving:Connect(function(plr)
-	clearPendingByRequester(plr)
+	cancelOutgoing(plr)
 	clearPending(plr)
-	-- FIX: fullStop sudah punya guard carryPairs[plr] di dalamnya
+	-- fullStop sudah punya guard carryPairs[plr] di dalamnya
 	fullStop(plr)
 	carryPairs[plr] = nil
 	releaseFuncs[plr] = nil
 	preCarryWalkSpeed[plr] = nil
-	pendingModules[plr] = nil -- [FIX 2b]
+	pendingModules[plr] = nil
 	lastAsk[plr] = nil
 	pendingAt[plr] = nil
+	buckets[plr] = nil
 end)
 
 local function bindRespawn(plr)
 	plr.CharacterRemoving:Connect(function()
-		clearPendingByRequester(plr)
+		cancelOutgoing(plr)
 		clearPending(plr)
 		-- FIX: hanya fullStop kalau player memang sedang dalam carry.
 		-- Sebelumnya fullStop selalu jalan saat respawn, menyebabkan
@@ -478,3 +541,11 @@ end
 
 for _, p in ipairs(Players:GetPlayers()) do bindRespawn(p) end
 Players.PlayerAdded:Connect(function(plr) onPlayerAdded(plr); bindRespawn(plr) end)
+
+-- Catatan jeda yang sudah lewat dibuang berkala (tidak dibuang saat keluar → rejoin tidak me-reset jeda).
+task.spawn(function()
+	while true do
+		task.wait(CARRY.PRUNE_EVERY)
+		SocialRules.carryPrune(social, os.clock(), CARRY)
+	end
+end)

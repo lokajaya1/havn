@@ -441,10 +441,10 @@ local function sendMessage(text)
 		task.wait(waitFor)
 	end
 	lastInvoke = os.clock()
-	local ok, res = pcall(function()
+	local ok, res, waitSec = pcall(function()
 		return setMessage:InvokeServer(text)
 	end)
-	return ok and res == true
+	return ok and res == true, ok and tonumber(waitSec) or nil
 end
 
 payBtn.Activated:Connect(function()
@@ -455,11 +455,16 @@ payBtn.Activated:Connect(function()
 	local tier = chosen
 	payBtn.Text = "…"
 	local text = skipMessage and "" or string.gsub(string.gsub(box.Text, "^%s+", ""), "%s+$", "")
-	local accepted = sendMessage(text)
+	local accepted, waitSec = sendMessage(text)
 	if not accepted and text ~= "" then
 		skipMessage = true
 		busy = false
-		status.Text = "Message could not be used. Press Donate again to donate without a message."
+		if waitSec then
+			-- pesan publik 1× per menit (pedoman resmi Roblox)
+			status.Text = "Message available again in " .. waitSec .. "s. Press Donate again to donate without one."
+		else
+			status.Text = "Message could not be used. Press Donate again to donate without a message."
+		end
 		payBtn.Text = "Donate " .. ROBUX .. " " .. tier.robux
 		return
 	end

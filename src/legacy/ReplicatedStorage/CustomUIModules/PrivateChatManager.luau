@@ -1,25 +1,80 @@
--- PrivateChatManager - Production Version
+-- ═══════════════════════════════════════════════════════════
+-- PrivateChatManager — buka whisper (TextChatService bawaan) ke pemain lain
+-- Path: ReplicatedStorage.CustomUIModules.PrivateChatManager
+--
+-- Perintah "/w @username" (username unik; DisplayName bisa kembar → dulu bisa
+-- terkirim ke orang yang salah). Menu bawaan Roblox (AvatarContextMenu) memakai
+-- cara yang sama. Channel whisper resmi bernama "RBXWhisper:<id1>_<id2>"
+-- (SocialRules.isWhisperChannel). Privasi/blokir diurus Roblox: kalau channel
+-- tidak muncul, pemain diberi petunjuk netral (bukan "Whisper Failed" palsu).
+-- Ruangan SOCIAL: claude/Rencana_Social.md. Angka: Config/Social (WHISPER).
+-- ═══════════════════════════════════════════════════════════
+
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local StarterGui = game:GetService("StarterGui")
+local RS = game:GetService("ReplicatedStorage")
+
+local WHISPER = require(RS:WaitForChild("Config"):WaitForChild("Social")).WHISPER
+local SocialRules = require(RS:WaitForChild("Modules"):WaitForChild("SocialRules"))
 
 local PrivateChatManager = {}
 
--- Helper: Send notification
-local function notify(title, text, duration, icon)
+local function notify(title, text, duration)
 	pcall(function()
 		StarterGui:SetCore("SendNotification", {
 			Title = title or "Private Chat",
 			Text = text or "",
 			Duration = duration or 4,
-			Icon = icon
 		})
 	end)
 end
 
--- Helper: Check if player is valid
+local function openChatWindow()
+	pcall(function()
+		StarterGui:SetCore("ChatActive", true)
+	end)
+end
+
+-- UserId ≤ 0 = pemain uji Studio (whisper hanya jalan di game yang dipublish)
 local function isValid(player)
 	return player and player:IsA("Player") and player.UserId > 0
+end
+
+local function findWhisper(textChannels, a, b)
+	for _, ch in ipairs(textChannels:GetChildren()) do
+		if ch:IsA("TextChannel") and SocialRules.isWhisperChannel(ch.Name, a, b) then
+			return ch
+		end
+	end
+	return nil
+end
+
+-- Tunggu channel whisper muncul (ChildAdded) paling lama `timeout` dtk.
+local function waitWhisper(textChannels, a, b, timeout)
+	local found = findWhisper(textChannels, a, b)
+	if found then return found end
+	local thread = coroutine.running()
+	local done = false
+	local conn
+	local function finish(ch)
+		if done then return end
+		done = true
+		if conn then conn:Disconnect() end
+		task.spawn(thread, ch)
+	end
+	conn = textChannels.ChildAdded:Connect(function(ch)
+		if ch:IsA("TextChannel") and SocialRules.isWhisperChannel(ch.Name, a, b) then
+			finish(ch)
+		end
+	end)
+	task.delay(timeout, finish, nil)
+	return coroutine.yield()
+end
+
+local function hint(targetPlayer)
+	notify("Private Chat", "Type /w @" .. targetPlayer.Name .. " in chat to whisper " .. targetPlayer.DisplayName, 6)
+	openChatWindow()
 end
 
 function PrivateChatManager:OpenPrivateChat(targetPlayer)
@@ -46,80 +101,38 @@ function PrivateChatManager:OpenPrivateChat(targetPlayer)
 	end
 
 	task.spawn(function()
-		local success, errorMsg = pcall(function()
-			local textChannels = TextChatService:FindFirstChild("TextChannels")
-			if not textChannels then
-				error("TextChannels not found")
-			end
+		local textChannels = TextChatService:FindFirstChild("TextChannels")
+		if not textChannels then
+			hint(targetPlayer)
+			return
+		end
 
-			-- Check if whisper channel already exists
-			local whisperChannelName = "RBXWhisper:" .. tostring(targetPlayer.UserId)
-			local whisperChannel = textChannels:FindFirstChild(whisperChannelName)
+		local me, them = localPlayer.UserId, targetPlayer.UserId
+		local channel = findWhisper(textChannels, me, them)
 
-			if whisperChannel then
-				local chatInputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
-				if chatInputBar then
-					chatInputBar.TargetTextChannel = whisperChannel
-					task.wait(0.1)
-					pcall(function()
-						StarterGui:SetCore("ChatActive", true)
-					end)
-					notify("💬 Private Chat", "Now chatting with " .. targetPlayer.DisplayName, 3)
-				end
+		if not channel then
+			local general = textChannels:FindFirstChild("RBXGeneral") or textChannels:FindFirstChildWhichIsA("TextChannel")
+			if not general then
+				hint(targetPlayer)
 				return
 			end
-
-			-- Create new whisper channel
-			local generalChannel = textChannels:FindFirstChild("RBXGeneral")
-			if not generalChannel then
-				error("RBXGeneral channel not found")
-			end
-
-			local whisperCommand = "/w " .. targetPlayer.DisplayName
 			pcall(function()
-				generalChannel:SendAsync(whisperCommand)
+				general:SendAsync("/w @" .. targetPlayer.Name)
 			end)
-
-			-- Wait for channel creation
-			local maxAttempts = 50
-			for i = 1, maxAttempts do
-				task.wait(0.1)
-				whisperChannel = textChannels:FindFirstChild(whisperChannelName)
-				if whisperChannel then
-					break
-				end
-			end
-
-			if not whisperChannel then
-				error("Channel creation timed out")
-			end
-
-			local chatInputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
-			if not chatInputBar then
-				error("ChatInputBar not found")
-			end
-
-			chatInputBar.TargetTextChannel = whisperChannel
-			task.wait(0.2)
-			pcall(function()
-				StarterGui:SetCore("ChatActive", true)
-			end)
-			notify("💬 Private Chat", "Now chatting with " .. targetPlayer.DisplayName, 3)
-		end)
-
-		if not success then
-			if string.find(errorMsg:lower(), "privacy") or string.find(errorMsg:lower(), "blocking") then
-				notify("Whisper Blocked", targetPlayer.DisplayName .. " has privacy settings blocking whispers", 6)
-			elseif string.find(errorMsg:lower(), "timeout") then
-				notify("Whisper Failed", "Could not connect. Try typing: /w " .. targetPlayer.DisplayName, 8)
-			else
-				notify("Whisper Failed", "Could not start chat. Try: /w " .. targetPlayer.DisplayName, 6)
-			end
-
-			pcall(function()
-				StarterGui:SetCore("ChatActive", true)
-			end)
+			channel = waitWhisper(textChannels, me, them, WHISPER.WAIT)
 		end
+
+		if not channel or not targetPlayer.Parent then
+			hint(targetPlayer)
+			return
+		end
+
+		local inputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+		if inputBar then
+			inputBar.TargetTextChannel = channel
+		end
+		openChatWindow()
+		notify("💬 Private Chat", "Now chatting with " .. targetPlayer.DisplayName, 3)
 	end)
 
 	return true

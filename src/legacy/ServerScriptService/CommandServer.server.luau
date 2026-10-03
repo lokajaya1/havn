@@ -515,6 +515,13 @@ H.trail = function(p)
 	tr.Parent = hrp
 end
 
+-- [SOCIAL] /nametag berisi teks = teks publik → 1× per menit per pemain (pedoman resmi Roblox, Config/Social
+-- PUBLIC_TEXT; atribut Player, tahan respawn). /nametag kosong (hapus) & /afk tetap bebas. Teks yang sama dengan
+-- tag terakhir tidak dihitung (dipasang lagi tanpa filter ulang).
+local PUBLIC      = require(RS:WaitForChild("Config"):WaitForChild("Social")).PUBLIC_TEXT
+local SocialRules = require(RS:WaitForChild("Modules"):WaitForChild("SocialRules"))
+local lastNametag = {} -- [player] = { raw, filtered }
+
 H.nametag = function(p, args)
 	local _, char = getHum(p); if not char then return end
 
@@ -523,6 +530,17 @@ H.nametag = function(p, args)
 		setStatus(char, nil, nil) -- /nametag kosong = hapus status
 		return
 	end
+	local last = lastNametag[p]
+	if last and last.raw == txt then
+		setStatus(char, last.filtered, "tag")
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	local previous = p:GetAttribute(PUBLIC.ATTR.NAMETAG)
+	if SocialRules.textWait(previous, now, PUBLIC.COOLDOWN) > 0 then
+		return
+	end
+	p:SetAttribute(PUBLIC.ATTR.NAMETAG, now) -- pesan slot sebelum filter (yield)
 	-- teks terlihat semua pemain → wajib filter Roblox (fail-closed)
 	local okF, filtered = pcall(function()
 		return TextService:FilterStringAsync(txt, p.UserId, Enum.TextFilterContext.PublicChat)
@@ -530,9 +548,14 @@ H.nametag = function(p, args)
 	end)
 	if not okF or type(filtered) ~= "string" or filtered == "" then
 		warn("[CommandServer] nametag: filter gagal, tag tidak dipasang")
+		p:SetAttribute(PUBLIC.ATTR.NAMETAG, previous) -- slot dikembalikan
 		return
 	end
-	if not char.Parent then return end
+	if not char.Parent then
+		p:SetAttribute(PUBLIC.ATTR.NAMETAG, previous)
+		return
+	end
+	lastNametag[p] = { raw = txt, filtered = filtered }
 	setStatus(char, filtered, "tag")
 end
 
@@ -659,6 +682,7 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(function(p)
 	local uid = p.UserId
 	for _, cache in ipairs(PER_USER_CACHES) do cache[uid] = nil end
+	lastNametag[p] = nil
 end)
 
 print("[CommandServer] Ready — Free: /re /normal /rejoin | Gate: Creator | rank "
