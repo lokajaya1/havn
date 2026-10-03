@@ -9,8 +9,12 @@ local player           = Players.LocalPlayer
 -- Warna glowstick (COLORS, slider R/G/B, currentColor) = KONTEN → literal + ThemeColor.skip.
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 local T = ThemeColor.tokens
+-- [TOOLS] kirim warna paling sering 1× per Config.Tools.GLOWSTICK.SEND_EVERY (+ warna terakhir selalu terkirim);
+-- warna awal panel = warna tersimpan di atribut Player (dulu selalu putih tiap respawn).
+local G = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Tools")).GLOWSTICK
+local ToolRules = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ToolRules"))
 
-local TOOL_NAME   = "GlowStick"
+local TOOL_NAME   = G.TOOL_NAME
 local ICON_IMAGE  = "rbxassetid://7345154971"
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
@@ -31,8 +35,19 @@ local COLORS = {
 	{ name = "Purple",  color = Color3.fromRGB(128,   0, 255) },
 }
 
+-- Warna tersimpan (GlowStickServer menulis atribut ini tiap warna diterapkan), atau nil.
+local function storedColor()
+	local r = player:GetAttribute("GlowColor_R")
+	local g = player:GetAttribute("GlowColor_G")
+	local b = player:GetAttribute("GlowColor_B")
+	if type(r) == "number" and type(g) == "number" and type(b) == "number" then
+		return Color3.new(r, g, b)
+	end
+	return nil
+end
+
 local State = {
-	currentColor = Color3.fromRGB(255, 255, 255),
+	currentColor = storedColor() or Color3.fromRGB(255, 255, 255),
 	activeButtons= {},
 	connections  = {},
 	sliders      = {},   -- { R, G, B } → { value, valueLabel, fill }
@@ -42,16 +57,29 @@ local function conn(sig, fn)
 	table.insert(State.connections, sig:Connect(fn))
 end
 
+-- ScrollingFrame panel yang dikunci selama slider digeser → dibuka lagi (lepas / panel dibangun ulang).
+local function releaseScroller()
+	if State.scroller then
+		State.scroller.ScrollingEnabled = true
+		State.scroller = nil
+	end
+end
+
 local function disconnectAll()
+	releaseScroller()
 	for _, c in ipairs(State.connections) do pcall(c.Disconnect, c) end
 	table.clear(State.connections)
 end
 
-local function applyColor(color)
-	State.currentColor = color
+local sendColor = ToolRules.gate(G.SEND_EVERY, function(color)
 	if remoteEvent then
 		remoteEvent:FireServer(color)
 	end
+end, os.clock, task.delay)
+
+local function applyColor(color)
+	State.currentColor = color
+	sendColor(color)
 end
 
 local function syncSliders(color)
@@ -158,6 +186,20 @@ local function makeSlider(ch, defaultVal, order, parent)
 	State.sliders[ch] = { value = defaultVal, valueLabel = valueLabel, fill = fill }
 
 	local dragging = false
+	-- [TOOLS] selama slider digeser, daftar panel (ScrollingFrame) tidak ikut menggulir (layar sentuh)
+	local function setDragging(on)
+		dragging = on
+		if on then
+			releaseScroller()
+			local sf = bg:FindFirstAncestorWhichIsA("ScrollingFrame")
+			if sf then
+				sf.ScrollingEnabled = false
+				State.scroller = sf
+			end
+		else
+			releaseScroller()
+		end
+	end
 
 	local function onMove(input)
 		local rel = math.clamp(input.Position.X - bg.AbsolutePosition.X, 0, bg.AbsoluteSize.X)
@@ -178,13 +220,14 @@ local function makeSlider(ch, defaultVal, order, parent)
 	conn(bg.InputBegan, function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true; onMove(input)
+			setDragging(true); onMove(input)
 		end
 	end)
-	conn(bg.InputEnded, function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
+	-- [TOOLS] lepas di MANA PUN (dulu hanya di atas track → lepas di luar track, slider terus ikut mouse)
+	conn(UserInputService.InputEnded, function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			setDragging(false)
 		end
 	end)
 	conn(UserInputService.InputChanged, function(input)
@@ -289,7 +332,6 @@ task.spawn(function()
 	for _ = 1, MAX_RETRIES do
 		if _G.RegisterDynamicTool then
 			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconImage = ICON_IMAGE })
-			print("[GlowStick UI] Registered")
 			return
 		end
 		task.wait(RETRY_DELAY)

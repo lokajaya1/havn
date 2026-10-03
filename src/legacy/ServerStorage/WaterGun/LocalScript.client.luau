@@ -1,10 +1,9 @@
 -- Water Gun Client | LocalScript → Tool/WaterGun
+-- [TOOLS] Efek semprot diatur server (Serverscript di tool ini) supaya terlihat semua pemain; client hanya mengirim
+-- "start" (+ rate panel) / "stop" / "burst" (+ jumlah panel) lewat RemoteEvent tool — pola sama dengan Money Gun.
 local Players = game:GetService("Players")
 local Tool    = script.Parent
-local Part    = Tool:WaitForChild("Part")
-local water   = Part:WaitForChild("Water")
-local Handle  = Tool:WaitForChild("Handle")
-local sound   = Handle:FindFirstChild("Explosion")
+local Remote  = Tool:WaitForChild("RemoteEvent")
 local mouse   = Players.LocalPlayer:GetMouse()
 
 local AUTO_DURATION = 3
@@ -18,26 +17,18 @@ local autoThread = nil
 local function stopSpray()
 	if not firing then return end
 	firing        = false
-	water.Enabled = false
 	if autoThread then task.cancel(autoThread); autoThread = nil end
-	if sound then sound:Stop() end
+	Remote:FireServer("stop")
 end
 
 local function startSpray()
 	if not equipped or firing then return end
 	firing        = true
-	water.Rate    = cfg().rate
-	water.Enabled = true
-	if sound then sound:Play() end
+	Remote:FireServer("start", cfg().rate)
 end
 
 local function doBurst()
-	water.Rate = cfg().rate
-	task.defer(function() water:Emit(cfg().burst) end)
-	if sound then
-		sound:Play()
-		task.delay(0.4, function() if sound then sound:Stop() end end)
-	end
+	Remote:FireServer("burst", cfg().burst)
 end
 
 -- Hold: pakai Button1Down/Up agar spray aktif selama tombol ditahan

@@ -550,6 +550,10 @@
       "$className": "StarterPack",
       "Sign": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false,
+          "TextureId": "rbxassetid://81550090256492"
+        },
         "LocalScript": {
           "$path": "src/legacy/StarterPack/Sign/SignUI.client.luau",
           "$ignoreUnknownInstances": true,
@@ -575,6 +579,9 @@
       },
       "GlowStick": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "ServerScript": {
           "$path": "src/legacy/StarterPack/GlowStick/ServerScript.server.luau"
         }
@@ -608,6 +615,9 @@
       },
       "Money Gun": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "Serverscript": {
           "$path": "src/legacy/ServerStorage/MoneyGun/Serverscript.server.luau"
         },
@@ -617,12 +627,24 @@
       },
       "WaterGun": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "LocalScript": {
           "$path": "src/legacy/ServerStorage/WaterGun/LocalScript.client.luau"
+        },
+        "Serverscript": {
+          "$path": "src/legacy/ServerStorage/WaterGun/Serverscript.server.luau"
+        },
+        "RemoteEvent": {
+          "$className": "RemoteEvent"
         }
       },
       "Flying Broom": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "LocalScript": {
           "$path": "src/legacy/ServerStorage/FlyingBroom/LocalScript.client.luau"
         }

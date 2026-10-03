@@ -99,9 +99,10 @@ _G.BroomApplyEffect = function()
 		end
 	end
 
-	-- Sync ke server hanya kalau sedang terbang (tool equipped + fly on)
-	if fly and effectEvent and tool.Parent == player.Character then
-		effectEvent:FireServer("effect", true, c.trailColor)
+	-- Sedang terbang → terapkan Trail ON/OFF + warna (lokal + server).
+	-- [TOOLS] dulu selalu mengirim enabled = true → Trail OFF saat terbang tidak mematikan efek.
+	if fly then
+		applyEffect(c.trailOn, c.trailOn and c.trailColor or nil)
 	end
 end
 

@@ -2,6 +2,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+-- [TOOLS] rentang stepper Rate/Burst = Config.Tools.MONEY_GUN (server memakai angka yang sama).
+local M = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Tools")).MONEY_GUN
 
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
@@ -21,7 +23,7 @@ local C = ThemeColor.view({
 })
 
 _G.MoneyGunMode   = _G.MoneyGunMode   or "auto"
-_G.MoneyGunConfig = _G.MoneyGunConfig or { rate = 50, burst = 12 }
+_G.MoneyGunConfig = _G.MoneyGunConfig or { rate = M.RATE.DEFAULT, burst = M.BURST.DEFAULT }
 
 local conns = {}
 local function conn(sig, fn) table.insert(conns, sig:Connect(fn)) end
@@ -155,8 +157,8 @@ local function buildUI()
 		TextColor3=C.gray, TextSize=10, Font=Enum.Font.GothamBold,
 		TextXAlignment=Enum.TextXAlignment.Left }, main)
 
-	mkStepper(main, "Rate /detik", "rate",  10, 100, 10, "/dtk", 5)
-	mkStepper(main, "Burst (pcs)", "burst",  3,  30,  1, " pcs", 6)
+	mkStepper(main, "Rate /detik", "rate",  M.RATE.MIN,  M.RATE.MAX,  M.RATE.STEP,  "/dtk", 5)
+	mkStepper(main, "Burst (pcs)", "burst", M.BURST.MIN, M.BURST.MAX, M.BURST.STEP, " pcs", 6)
 
 	local burstBtn = mkButton({ Size=UDim2.new(1,0,0,50), BackgroundColor3=C.accent,
 		Text="💥  BURST!", TextColor3=C.dark, TextSize=16, LayoutOrder=7 }, main)

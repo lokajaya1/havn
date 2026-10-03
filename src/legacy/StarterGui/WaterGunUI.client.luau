@@ -2,6 +2,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+-- [TOOLS] rentang stepper Rate/Burst = Config.Tools.WATER_GUN (server memakai angka yang sama).
+local W = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Tools")).WATER_GUN
 
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
@@ -21,7 +23,7 @@ local C = ThemeColor.view({
 })
 
 _G.WaterGunMode   = _G.WaterGunMode   or "auto"
-_G.WaterGunConfig = _G.WaterGunConfig or { rate = 20, burst = 15 }
+_G.WaterGunConfig = _G.WaterGunConfig or { rate = W.RATE.DEFAULT, burst = W.BURST.DEFAULT }
 
 local conns = {}
 local function conn(sig, fn) table.insert(conns, sig:Connect(fn)) end
@@ -155,8 +157,8 @@ local function buildUI()
 		TextColor3=C.gray, TextSize=10, Font=Enum.Font.GothamBold,
 		TextXAlignment=Enum.TextXAlignment.Left }, main)
 
-	mkStepper(main, "Rate /detik", "rate",   5, 100, 5, "/dtk", 5)
-	mkStepper(main, "Burst (pcs)", "burst",  3,  50, 1, " pcs", 6)
+	mkStepper(main, "Rate /detik", "rate",  W.RATE.MIN,  W.RATE.MAX,  W.RATE.STEP,  "/dtk", 5)
+	mkStepper(main, "Burst (pcs)", "burst", W.BURST.MIN, W.BURST.MAX, W.BURST.STEP, " pcs", 6)
 
 	local burstBtn = mkButton({ Size=UDim2.new(1,0,0,50), BackgroundColor3=C.accent,
 		Text="💦  BURST!", TextColor3=C.dark, TextSize=16, LayoutOrder=7 }, main)
@@ -164,15 +166,9 @@ local function buildUI()
 	conn(burstBtn.MouseLeave, function() burstBtn.BackgroundColor3 = C.accent end)
 	conn(burstBtn.Activated, function()
 		local t = _G.GetCurrentTool and _G.GetCurrentTool()
-		if not t then return end
-		local part = t:FindFirstChild("Part")
-		local w    = part and part:FindFirstChild("Water")
-		local hnd  = t:FindFirstChild("Handle")
-		local s    = hnd and hnd:FindFirstChild("Explosion")
-		if not w then return end
-		w.Rate = _G.WaterGunConfig.rate
-		task.defer(function() w:Emit(_G.WaterGunConfig.burst) end)
-		if s then s:Play(); task.delay(0.4, function() s:Stop() end) end
+		-- [TOOLS] burst lewat server (Serverscript WaterGun) → terlihat semua pemain
+		local r = t and t:FindFirstChild("RemoteEvent")
+		if r then r:FireServer("burst", _G.WaterGunConfig.burst) end
 	end)
 
 	return main

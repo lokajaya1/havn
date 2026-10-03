@@ -4,9 +4,12 @@
 -- berbaris kiri dari tombol Info), jadi tidak ada offset hardcode dan tidak
 -- ada tombol yang saling menimpa.
 -- Panel Tool Settings bisa di-drag lewat grip, sama seperti panel Dance.
+-- [TOOLS] Hanya grip + baris judul yang menggeser panel. Isi panel (slider, swatch, daftar) TIDAK: dulu seluruh panel
+-- jadi pegangan, jadi menggeser slider ikut memindah panel (InputBegan panel ikut terpicu di atas anak-anaknya).
 
 local Players  = game:GetService("Players")
 local TweenSvc = game:GetService("TweenService")
+local UIS      = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
@@ -332,9 +335,24 @@ local function buildPanel()
 		BackgroundTransparency = 1, BorderSizePixel = 0, Text = "",
 		AutoButtonColor = false, Visible = false, ZIndex = 40, Parent = S.panelGui,
 	})
-	-- Jangan tutup panel kalau ini ekor dari gerakan drag.
+	-- [TOOLS] Tekan yang DIMULAI di atas panel (slider, swatch, area kosong) tidak pernah menutup panel — walau dilepas
+	-- di luar panel atau tembus ke overlay. InputBegan panel terpicu juga di atas anak-anaknya (itu sebab bug geser dulu),
+	-- jadi tekanan di slider pasti tercatat di sini. Dilepas → masih dianggap 0,3 dtk (urutan Activated vs InputEnded).
+	local panelPress, panelReleasedAt = false, -math.huge
+	local function isPointer(io)
+		return io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch
+	end
+	UIS.InputEnded:Connect(function(io)
+		if panelPress and isPointer(io) then
+			panelPress = false
+			panelReleasedAt = os.clock()
+		end
+	end)
+
+	-- Jangan tutup panel kalau ini ekor dari gerakan drag, atau tekanan yang dimulai di panel.
 	S.overlay.Activated:Connect(function()
 		if isDraggingPanel and isDraggingPanel() then return end
+		if panelPress or os.clock() - panelReleasedAt < 0.3 then return end
 		pmClose()
 	end)
 
@@ -342,8 +360,14 @@ local function buildPanel()
 		Name = "Panel", Size = UDim2.new(0, panelW, 0, panelH),
 		Position = UDim2.new(1, 50, 0, P_TOP_MIN), BackgroundColor3 = T.BG,
 		BorderSizePixel = 0, Visible = false, ClipsDescendants = false,
-		ZIndex = 50, Parent = S.panelGui,
+		ZIndex = 50, Active = true, Parent = S.panelGui,
 	})
+	-- [TOOLS] Active = true: klik/tap di isi panel (slider, area kosong) TIDAK tembus ke overlay penutup di belakangnya.
+	-- Dulu ini terjadi diam-diam karena makeDraggable menyetel Active pada panel (panel = pegangan); sekarang pegangan
+	-- hanya grip + judul, jadi panel harus Active sendiri — tanpa ini tap slider menutup panel.
+	S.panel.InputBegan:Connect(function(io)
+		if isPointer(io) then panelPress = true end
+	end)
 	corner(14, S.panel)
 	ThemeColor.glow(stroke(S.panel, 0.88), "panel") -- garis tepi bergerak (themeColor)
 
@@ -360,8 +384,14 @@ local function buildPanel()
 	})
 	corner(2, gripLine)
 
+	-- Pegangan baris judul (tak terlihat, di bawah judul & tombol X) — isi panel bukan pegangan.
+	local headHit = new("Frame", {
+		Name = "DragHead", Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, 0, 0, HEADER_H),
+		BackgroundTransparency = 1, Active = true, Parent = S.panel,
+	})
+
 	if MenuUI and MenuUI.makeDraggable then
-		reclampPanel, isDraggingPanel = MenuUI.makeDraggable(S.panel, { gripHit, S.panel }, function()
+		reclampPanel, isDraggingPanel = MenuUI.makeDraggable(S.panel, { gripHit, headHit }, function()
 			customPos = true
 		end)
 	end
