@@ -2,7 +2,7 @@
 -- ReplicatedStorage/Modules/SocialRules (ModuleScript) — aturan MURNI ruangan SOCIAL (claude/Rencana_Social.md).
 -- Tanpa GetService / Instance / yield: jam dioper oleh pemanggil (os.clock) → bisa dites dengan jam palsu.
 -- Angka di ReplicatedStorage.Config.Social. Batas terima remote memakai ToolRules.bucket/take.
--- Isi: carry (jeda pasangan/target), private chat (nama channel whisper), hide avatar (cara per kelas).
+-- Isi: carry (jeda pasangan/target), teks publik 1× per menit, private chat (nama channel whisper), hide avatar.
 
 local SocialRules = {}
 
@@ -126,6 +126,19 @@ function SocialRules.carryPrune(state: CarryState, now: number, cfg: CarryConfig
 			state.incoming[targetId] = nil
 		end
 	end
+end
+
+-- ── teks publik (aturan 1 menit) ─────────────────────────────────────────────────────────────────────────────────
+-- Sisa detik sebelum pemain boleh memasang teks publik lagi (0 = boleh). lastAt = atribut Player (nil = belum pernah).
+function SocialRules.textWait(lastAt: any, now: number, cooldown: number): number
+	if type(lastAt) ~= "number" or lastAt ~= lastAt then
+		return 0
+	end
+	local left = cooldown - (now - lastAt)
+	if left <= 0 then
+		return 0
+	end
+	return math.min(left, cooldown) -- jam mundur tidak boleh membuat jeda lebih dari cooldown
 end
 
 -- ── private chat ─────────────────────────────────────────────────────────────────────────────────────────────────

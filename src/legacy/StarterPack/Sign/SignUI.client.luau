@@ -7,6 +7,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- Warna sign (BG_COLORS/TEXT_COLORS) = KONTEN → literal + grid swatch di-skip.
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
 local T = ThemeColor.tokens
+-- Teks papan 1× per menit per pemain (pedoman resmi Roblox; server yang menentukan, ini hanya hitung mundur).
+local PUBLIC = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Social")).PUBLIC_TEXT
+local SocialRules = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SocialRules"))
+local player = game:GetService("Players").LocalPlayer
 
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
@@ -218,11 +222,37 @@ local function buildUI()
 
 	local tbc = Instance.new("UICorner"); tbc.CornerRadius = UDim.new(0, 6); tbc.Parent = textBox
 
+	-- Hitung mundur di label "Text" yang sudah ada (ukuran & posisi sama → panel tidak bergeser).
+	local function waitLeft()
+		return SocialRules.textWait(player:GetAttribute(PUBLIC.ATTR.SIGN), workspace:GetServerTimeNow(), PUBLIC.COOLDOWN)
+	end
+	local ticking = false
+	local function countdown()
+		if ticking then return end
+		ticking = true
+		task.spawn(function()
+			while inputLbl.Parent do
+				local left = math.ceil(waitLeft())
+				if left <= 0 then break end
+				inputLbl.Text = "Text · tunggu " .. left .. " dtk"
+				task.wait(1)
+			end
+			inputLbl.Text = "Text"
+			ticking = false
+		end)
+	end
+	conn(player:GetAttributeChangedSignal(PUBLIC.ATTR.SIGN), countdown)
+	countdown()
+
 	conn(textBox.FocusLost, function()
 		local text = textBox.Text
 		if text == "" then return end
 		if isBanned(text) then
 			textBox.Text = ""
+			return
+		end
+		if waitLeft() > 0 then
+			countdown() -- belum boleh: isi kotak tetap, label menunjukkan sisa waktu
 			return
 		end
 		remoteText:FireServer(text)

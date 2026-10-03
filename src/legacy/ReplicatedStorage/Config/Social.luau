@@ -4,7 +4,8 @@
 -- batas terima remote memakai ToolRules.bucket/take (token bucket per pemain, sama dengan ruangan TOOLS).
 -- Dibaca: Communityinfoservice + CustomUIModules/Communityinfo (komunitas di kartu pemain),
 -- CarrySystemHandler + CustomUIModules/CarryManager (permintaan carry), CustomUIModules/PrivateChatManager,
--- CustomUIModules/HideAvatarManager, tes.
+-- CustomUIModules/HideAvatarManager, Sign (SignText, SignUI), CommandServer + CommandPanel (/nametag),
+-- DonationServer + DonationClient (pesan donatur), tes.
 --
 -- Istilah:
 --   batas terima = token bucket: RATE permintaan/dtk rata-rata, boleh beruntun sampai BURST. Di atas batas DIBUANG
@@ -59,6 +60,20 @@ Config.HIDE = {
 	LTM = { "BasePart", "Decal" }, -- Decal mencakup Texture
 	ENABLED = { "BillboardGui", "SurfaceGui" },
 	DETACH = { "ParticleEmitter", "Beam", "Trail", "Fire", "Smoke", "Sparkles", "Light", "Highlight" },
+}
+
+-- ── Teks pemain yang dilihat pemain lain (Sign, /nametag, pesan donasi) ─────────────────────────────────────────
+-- ATURAN RESMI ROBLOX (creator-docs chat/guidelines.md, wajib sejak 3 Jun 2026): teks yang bisa diedit pemain dan
+-- dilihat pemain lain dibatasi paling sering 1× per menit per pemain. COOLDOWN jangan diturunkan di bawah 60.
+-- Waktu terakhir disimpan di atribut Player (waktu server, workspace:GetServerTimeNow()) → tahan respawn & ganti
+-- tool, client bisa menampilkan hitung mundur. Keluar-masuk server me-reset (sama dengan contoh resmi Roblox).
+Config.PUBLIC_TEXT = {
+	COOLDOWN = 60,
+	ATTR = {
+		SIGN = "PublicTextSign",
+		NAMETAG = "PublicTextNametag",
+		DONATION = "PublicTextDonation",
+	},
 }
 
 return Config

@@ -22,6 +22,9 @@ local Marketplace = game:GetService("MarketplaceService")
 local Stats       = game:GetService("Stats")
 
 local ThemeColor = require(RepStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+-- /nametag berisi teks: 1× per menit (pedoman resmi Roblox; server yang menentukan, di sini hanya pemberitahuan).
+local PUBLIC      = require(RepStorage:WaitForChild("Config"):WaitForChild("Social")).PUBLIC_TEXT
+local SocialRules = require(RepStorage:WaitForChild("Modules"):WaitForChild("SocialRules"))
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -399,6 +402,15 @@ local function exec(id, args)
 		toast("Perlu gamepass Commands untuk perintah ini", true)
 		promptCommandsPurchase()
 		return
+	end
+
+	if id == "nametag" and args and table.concat(args, ""):match("%S") then
+		local left = SocialRules.textWait(Players.LocalPlayer:GetAttribute(PUBLIC.ATTR.NAMETAG),
+			workspace:GetServerTimeNow(), PUBLIC.COOLDOWN)
+		if left > 0 then
+			toast("Nametag bisa diganti lagi dalam " .. math.ceil(left) .. " dtk", true)
+			return
+		end
 	end
 
 	if quickEvent then quickEvent:FireServer(id, args or {}) end
