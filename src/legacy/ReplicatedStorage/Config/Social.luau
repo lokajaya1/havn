@@ -50,7 +50,7 @@ Config.WHISPER = {
 	WAIT = 5, -- dtk menunggu channel whisper muncul sesudah perintah "/w @username" (kode lama: 5)
 }
 
--- ── Hide avatar (lokal, hanya di layar pemain yang menyembunyikan) ──────────────────────────────────────────────
+-- ── Hide avatar + Settings "Sembunyikan Player Lain / Efek Pemain / nametag" (lokal, hanya di layar sendiri) ──────
 -- Cara per kelas (dicek berurutan dengan IsA):
 --   LTM     → LocalTransparencyModifier = 1 (khusus client ini, tidak ditimpa Transparency dari server)
 --   ENABLED → Enabled = false (kelas yang tidak pernah dinyalakan-matikan server; nilai asli dipulihkan saat Show)
@@ -59,7 +59,7 @@ Config.WHISPER = {
 Config.HIDE = {
 	LTM = { "BasePart", "Decal" }, -- Decal mencakup Texture
 	ENABLED = { "BillboardGui", "SurfaceGui" },
-	DETACH = { "ParticleEmitter", "Beam", "Trail", "Fire", "Smoke", "Sparkles", "Light", "Highlight" },
+	DETACH = { "ParticleEmitter", "Beam", "Trail", "Fire", "Smoke", "Sparkles", "Light", "Highlight", "SelectionBox" },
 }
 
 -- ── Teks pemain yang dilihat pemain lain (Sign, /nametag, pesan donasi) ─────────────────────────────────────────

@@ -47,14 +47,14 @@ local function waitUntilIdle(seconds)
 end
 
 -- =====================================================
--- GROUP PROMPT
+-- GROUP PROMPT → lalu FAVORITE PROMPT (berurutan)
+-- Dulu dua task terpisah dengan jeda tetap: kalau pemain belum menjawab ajakan komunitas, ajakan favorit
+-- muncul menumpuk di atasnya. Sekarang favorit menunggu ajakan komunitas ditutup (PromptJoinAsync menunggu).
 -- =====================================================
-task.spawn(function()
-	waitForCharacter()
-
+local function promptGroup()
 	-- Early check: skip idle jika udah join
 	if player:IsInGroup(GROUP_ID) then
-		return
+		return false
 	end
 
 	waitUntilIdle(GROUP_IDLE_TIME)
@@ -62,23 +62,16 @@ task.spawn(function()
 
 	-- Final check sebelum prompt
 	if player:IsInGroup(GROUP_ID) then
-		return
+		return false
 	end
 
 	pcall(function()
 		GroupService:PromptJoinAsync(GROUP_ID)
 	end)
-end)
+	return true
+end
 
--- =====================================================
--- FAVORITE PROMPT (SETELAH GROUP)
--- =====================================================
-task.spawn(function()
-	waitForCharacter()
-
-	-- Tunggu dulu sampe group kelar
-	task.wait(GROUP_IDLE_TIME + GROUP_DELAY_AFTER_IDLE + FAVORITE_DELAY_AFTER_GROUP)
-
+local function promptFavorite()
 	-- Check attribute dari server
 	if player:GetAttribute("FavoritePrompted") then
 		return
@@ -104,4 +97,18 @@ task.spawn(function()
 			true
 		)
 	end)
+end
+
+task.spawn(function()
+	waitForCharacter()
+	local started = os.clock()
+	local shown = promptGroup()
+	if shown then
+		task.wait(FAVORITE_DELAY_AFTER_GROUP) -- sesudah ajakan komunitas ditutup
+	else
+		-- tanpa ajakan komunitas: jadwal lama (favorit ±7 dtk sesudah karakter ada)
+		local due = GROUP_IDLE_TIME + GROUP_DELAY_AFTER_IDLE + FAVORITE_DELAY_AFTER_GROUP
+		task.wait(math.max(0, due - (os.clock() - started)))
+	end
+	promptFavorite()
 end)

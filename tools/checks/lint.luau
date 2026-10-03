@@ -84,6 +84,14 @@ local STRICT = {
 	"src/legacy/ReplicatedStorage/CustomUIModules/UIManager.luau",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau",
 	"src/legacy/StarterPlayer/StarterPlayerScripts/InteractPlayer/InteractionLoad.client.luau",
+	-- ruangan SETTINGS
+	"src/legacy/StarterGui/GraphicsClient.client.luau",
+	"src/legacy/StarterGui/SettingsClient.client.luau",
+	"src/legacy/StarterGui/FreeCam.client.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/360.client.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/sprintSystem.client.luau",
+	"src/legacy/StarterPlayer/StarterPlayerScripts/CommunNFav.client.luau",
+	"src/legacy/ServerScriptService/FavoritePrompt.server.luau",
 }
 local REPORT = { "src/legacy" }
 

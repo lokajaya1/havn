@@ -1,14 +1,15 @@
 -- GraphicsClient
 -- StarterPlayer > StarterPlayerScripts
 
-local Players      = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UIS          = game:GetService("UserInputService")
 local Lighting     = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer  = Players.LocalPlayer
 
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+-- "Sembunyikan Efek Pemain" & "Sembunyikan Player Lain" lewat satu sumber dengan "Hide avatar" kartu pemain
+-- (ruangan SETTINGS, claude/Rencana_Settings.md): ikut respawn & bagian baru tanpa jeda, efek server tetap benar.
+local HideAvatarManager = require(ReplicatedStorage:WaitForChild("CustomUIModules"):WaitForChild("HideAvatarManager"))
 
 local function waitDeps()
 	local start = os.clock()
@@ -549,33 +550,10 @@ end
 SepLabel(container, L(), "EFEK PEMAIN")
 
 do
-	local FX_CLASSES = { "ParticleEmitter", "Fire", "Smoke", "Sparkles", "Trail", "SelectionBox", "Highlight" }
-	local fxHidden   = false
-
-	local function setFxVisible(p, visible)
-		if not p.Character then return end
-		for _, d in p.Character:GetDescendants() do
-			for _, cls in ipairs(FX_CLASSES) do
-				if d:IsA(cls) then d.Enabled = visible; break end
-			end
-		end
-	end
-
-	local function applyFxAll(visible)
-		for _, p in Players:GetPlayers() do setFxVisible(p, visible) end
-	end
-
-	Players.PlayerAdded:Connect(function(p)
-		p.CharacterAdded:Connect(function()
-			task.wait(0.5)
-			if fxHidden then setFxVisible(p, false) end
-		end)
-	end)
-
 	local _, fxSet = ToggleRow(container, L(), "Sembunyikan Efek Pemain", false, function(v)
-		fxHidden = v; applyFxAll(not v)
+		HideAvatarManager:SetHideEffects(v)
 	end)
-	table.insert(_resetList, function() fxHidden = false; fxSet(false); applyFxAll(true) end)
+	table.insert(_resetList, function() fxSet(false); HideAvatarManager:SetHideEffects(false) end)
 end
 
 -- ════════════════════════════════════════════════════════════
@@ -585,32 +563,10 @@ end
 SepLabel(container, L(), "PEMAIN")
 
 do
-	local hidden = false
-
-	local function setVis(p, vis)
-		if p == LocalPlayer or not p.Character then return end
-		for _, part in p.Character:GetDescendants() do
-			if part:IsA("BasePart") or part:IsA("Decal") then
-				part.LocalTransparencyModifier = vis and 0 or 1
-			end
-		end
-	end
-
-	Players.PlayerAdded:Connect(function(p)
-		p.CharacterAdded:Connect(function()
-			task.wait(0.5)
-			if hidden then setVis(p, false) end
-		end)
-	end)
-
 	local _, playerSet = ToggleRow(container, L(), "Sembunyikan Player Lain", false, function(v)
-		hidden = v
-		for _, p in Players:GetPlayers() do setVis(p, not v) end
+		HideAvatarManager:SetHideAll(v)
 	end)
-	table.insert(_resetList, function()
-		hidden = false; playerSet(false)
-		for _, p in Players:GetPlayers() do setVis(p, true) end
-	end)
+	table.insert(_resetList, function() playerSet(false); HideAvatarManager:SetHideAll(false) end)
 end
 
 UI.frame({ Size = UDim2.new(1, 0, 0, 6), BackgroundTransparency = 1, LayoutOrder = L(), Parent = container })
@@ -640,5 +596,3 @@ _G.GfxReset = function()
 		end
 	end
 end
-
-print("✨ [GraphicsClient] Ready")

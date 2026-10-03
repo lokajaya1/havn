@@ -172,4 +172,41 @@ function SocialRules.hideAction(isA: (string) -> boolean, cfg: HideConfig): stri
 	return nil
 end
 
+-- Avatar pemain disembunyikan? (bukan diri sendiri; pilihan kartu "hide"/"show" menang atas sakelar "Sembunyikan Player Lain")
+function SocialRules.avatarHidden(isSelf: boolean, override: string?, hideAll: boolean): boolean
+	if isSelf then
+		return false
+	end
+	if override == "hide" then
+		return true
+	end
+	if override == "show" then
+		return false
+	end
+	return hideAll
+end
+
+export type HideSettings = { all: boolean, effects: boolean, nametags: boolean }
+
+-- Satu instance di karakter pemain harus disembunyikan? kind = hasil hideAction; isNametag = BillboardGui.
+-- Avatar tersembunyi → semua; selain itu efek ikut "Sembunyikan Efek Pemain", nametag ikut "Sembunyikan nametag".
+function SocialRules.shouldHide(
+	kind: string,
+	isNametag: boolean,
+	isSelf: boolean,
+	override: string?,
+	s: HideSettings
+): boolean
+	if SocialRules.avatarHidden(isSelf, override, s.all) then
+		return true
+	end
+	if kind == "detach" then
+		return s.effects
+	end
+	if isNametag then
+		return s.nametags
+	end
+	return false
+end
+
 return SocialRules
