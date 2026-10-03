@@ -122,6 +122,12 @@ function Rules.roleIndex(config: any): { [number]: string }
 	return idx
 end
 
+-- Rank grup membuka semua tema? (Config.freeRankMin; setelan kosong / rank bukan angka = tidak)
+function Rules.rankUnlocks(config: any, rank: any): boolean
+	local min = config.freeRankMin
+	return type(min) == "number" and type(rank) == "number" and rank >= min
+end
+
 -- Semua masalah Config (kosong = sah).
 function Rules.validate(config: any): { string }
 	local problems = {}
@@ -131,6 +137,10 @@ function Rules.validate(config: any): { string }
 	if type(config.presets) ~= "table" then
 		add("presets tidak ada")
 		return problems
+	end
+	local min = config.freeRankMin
+	if min ~= nil and (type(min) ~= "number" or min ~= min or min < 1) then
+		add(("freeRankMin %s harus angka ≥ 1 atau nil"):format(tostring(min)))
 	end
 	local def = config.presets[config.default]
 	if not def then

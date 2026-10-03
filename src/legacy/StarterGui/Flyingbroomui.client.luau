@@ -7,6 +7,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ThemeColor = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ThemeColor"))
+local BROOM = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Tools")).BROOM
 
 local MAX_RETRIES = 100
 local RETRY_DELAY = 0.15
@@ -31,9 +32,9 @@ local C = ThemeColor.view({
 })
 
 _G.BroomConfig = _G.BroomConfig or {
-	speed      = 80,
-	trailOn    = true,
-	trailColor = Color3.fromRGB(255, 200, 50),
+	speed      = BROOM.DEFAULT.speed,
+	trailOn    = BROOM.DEFAULT.trailOn,
+	trailColor = BROOM.DEFAULT.trailColor,
 }
 
 -- Preset warna trail
@@ -54,6 +55,14 @@ local function triggerLiveUpdate()
 	if _G.BroomApplyEffect then
 		_G.BroomApplyEffect()
 	end
+end
+
+-- Tombol Reset Tool Settings: kecepatan, trail & warna kembali bawaan Config; saat terbang langsung diterapkan.
+local function resetDefaults()
+	_G.BroomConfig.speed      = BROOM.DEFAULT.speed
+	_G.BroomConfig.trailOn    = BROOM.DEFAULT.trailOn
+	_G.BroomConfig.trailColor = BROOM.DEFAULT.trailColor
+	triggerLiveUpdate()
 end
 
 local conns = {}
@@ -251,7 +260,7 @@ end
 task.spawn(function()
 	for _ = 1, MAX_RETRIES do
 		if _G.RegisterDynamicTool then
-			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconText = "🧹" })
+			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconText = "🧹", reset = resetDefaults })
 			return
 		end
 		task.wait(RETRY_DELAY)

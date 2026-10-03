@@ -47,7 +47,7 @@ local function storedColor()
 end
 
 local State = {
-	currentColor = storedColor() or Color3.fromRGB(255, 255, 255),
+	currentColor = storedColor() or G.DEFAULT_COLOR,
 	activeButtons= {},
 	connections  = {},
 	sliders      = {},   -- { R, G, B } → { value, valueLabel, fill }
@@ -80,6 +80,11 @@ end, os.clock, task.delay)
 local function applyColor(color)
 	State.currentColor = color
 	sendColor(color)
+end
+
+-- Tombol Reset Tool Settings: warna kembali bawaan (dikirim ke server seperti klik warna; panel dibangun ulang DynamicTools).
+local function resetDefaults()
+	applyColor(G.DEFAULT_COLOR)
 end
 
 local function syncSliders(color)
@@ -331,7 +336,7 @@ end
 task.spawn(function()
 	for _ = 1, MAX_RETRIES do
 		if _G.RegisterDynamicTool then
-			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconImage = ICON_IMAGE })
+			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconImage = ICON_IMAGE, reset = resetDefaults })
 			return
 		end
 		task.wait(RETRY_DELAY)

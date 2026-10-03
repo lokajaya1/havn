@@ -416,6 +416,15 @@ local function exec(id, args)
 	if quickEvent then quickEvent:FireServer(id, args or {}) end
 end
 
+-- /fps /cam /fov /time diketik di chat (bukan di panel): pesan tetap terkirim seperti biasa, perintahnya dijalankan
+-- di sini (perintah client tidak sampai ke CommandServer). TextChatService.SendingMessage = hanya pesan pemain ini.
+track(game:GetService("TextChatService").SendingMessage:Connect(function(message)
+	local id, args = CommandShared.chatClient(message.Text)
+	if id then
+		exec(id, args)
+	end
+end))
+
 -- ── Build UI ──────────────────────────────────────────────
 local function build()
 	mainGui = new("ScreenGui", {

@@ -22,8 +22,15 @@ local C = ThemeColor.view({
 	hover  = "TEXT_STRONG", -- hover tombol BURST (latar terang, teks ON_ACCENT)
 })
 
-_G.MoneyGunMode   = _G.MoneyGunMode   or "auto"
+_G.MoneyGunMode   = _G.MoneyGunMode   or M.DEFAULT_MODE
 _G.MoneyGunConfig = _G.MoneyGunConfig or { rate = M.RATE.DEFAULT, burst = M.BURST.DEFAULT }
+
+-- Tombol Reset Tool Settings: mode, Rate & Burst kembali bawaan Config (dipakai saat semprot berikutnya;
+-- panel dibangun ulang DynamicTools).
+local function resetDefaults()
+	_G.MoneyGunMode   = M.DEFAULT_MODE
+	_G.MoneyGunConfig = { rate = M.RATE.DEFAULT, burst = M.BURST.DEFAULT }
+end
 
 local conns = {}
 local function conn(sig, fn) table.insert(conns, sig:Connect(fn)) end
@@ -176,7 +183,7 @@ end
 task.spawn(function()
 	for _ = 1, MAX_RETRIES do
 		if _G.RegisterDynamicTool then
-			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconText = "💵" })
+			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconText = "💵", reset = resetDefaults })
 			return
 		end
 		task.wait(RETRY_DELAY)

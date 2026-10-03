@@ -21,12 +21,15 @@ Config.GLOWSTICK = {
 	APPLY_EVERY = 0.1, -- dtk, jeda terapkan warna ke tool + atribut pemain
 	REAPPLY_DELAY = 0.1, -- dtk, jeda sebelum warna tersimpan dipasang ke GlowStick yang baru di-equip (sama dengan kode lama)
 	SEND_EVERY = 0.1, -- dtk, slider/tombol warna di client mengirim paling sering 1× per jeda (+ nilai terakhir)
+	DEFAULT_COLOR = Color3.fromRGB(255, 255, 255), -- warna awal pemain baru & tombol Reset Tool Settings (= kode lama)
 }
 
 -- ── Flying Broom (ServerScriptService.FlyingbroomServer) ──────────────────────────────────────────────────────
 Config.BROOM = {
 	TOOL_NAME = "Flying Broom",
 	APPLY_EVERY = 0.25, -- dtk, jeda terapkan nyala/warna efek sapu
+	-- setelan panel Flyingbroomui: nilai awal & tombol Reset Tool Settings (= kode lama)
+	DEFAULT = { speed = 80, trailOn = true, trailColor = Color3.fromRGB(255, 200, 50) },
 }
 
 -- ── Sign (StarterPack.Sign › LocalScript › BGColor/TextColor › Script) ──────────────────────────────────────────
@@ -42,6 +45,7 @@ Config.MONEY_GUN = {
 	BURST_COOLDOWN = 0.15, -- dtk antar-burst (sama dengan kode lama)
 	RATE = { MIN = 10, MAX = 100, STEP = 10, DEFAULT = 50 },
 	BURST = { MIN = 3, MAX = 30, STEP = 1, DEFAULT = 12 },
+	DEFAULT_MODE = "auto", -- mode awal panel & tombol Reset Tool Settings (= kode lama)
 }
 Config.WATER_GUN = {
 	STATE_EVERY = 0.25,
@@ -49,6 +53,7 @@ Config.WATER_GUN = {
 	BURST_SOUND = 0.4, -- dtk suara burst (sama dengan kode client lama)
 	RATE = { MIN = 5, MAX = 100, STEP = 5, DEFAULT = 20 },
 	BURST = { MIN = 3, MAX = 50, STEP = 1, DEFAULT = 15 },
+	DEFAULT_MODE = "auto",
 }
 
 -- ── ToolGiver (ServerScriptService.ToolGiver) ─────────────────────────────────────────────────────────────────
