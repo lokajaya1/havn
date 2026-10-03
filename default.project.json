@@ -28,63 +28,243 @@
           "$className": "Folder",
           "Bridal Carry": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/BridalCarry.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "FirstAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "81413783167526"
+              }
+            },
+            "SecondAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "106356666373562"
+              }
+            }
           },
           "Couple Hug": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/CoupleHug.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "FirstAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "84717723300033"
+              }
+            },
+            "SecondAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "82728100090599"
+              }
+            }
           },
           "Dragging Carry": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/DraggingCarry.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carrier": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "81702921496910"
+              }
+            },
+            "Carried": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "121944586991506"
+              }
+            }
           },
           "Fireman's Carry": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/FiremansCarry.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "FirstAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "94818093367698"
+              }
+            },
+            "SecondAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "104879611039043"
+              }
+            }
           },
           "Front Carry": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/FrontCarry.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 73725228687841
+              }
+            },
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 132992810933203
+              }
+            }
           },
           "Gelut": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Gelut.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "FirstAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "83154762096411"
+              }
+            },
+            "SecondAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "129096540309895"
+              }
+            }
           },
           "Hug": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Hug.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 110928608972189
+              }
+            },
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 92829811778305
+              }
+            }
           },
           "Kuli": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Kuli.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 73061821301909
+              }
+            },
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 112915514541145
+              }
+            }
           },
           "Nyeret": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Nyeret.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 88747826158215
+              }
+            },
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 134473414669013
+              }
+            }
           },
           "Piggyback": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Piggyback.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "FirstAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "112735647634021"
+              }
+            },
+            "SecondAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "107355494589711"
+              }
+            }
           },
           "PiggyUpperBack": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/PiggyUpperBack.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "SecondAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "76705909551431"
+              }
+            },
+            "FirstAnim": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "101900378367791"
+              }
+            }
           },
           "Pundak": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Pundak.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 108528944032458
+              }
+            },
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 85331485583208
+              }
+            }
           },
           "Shoulder": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/Shoulder.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 110212812370219
+              }
+            },
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 97584078000909
+              }
+            }
           },
           "Side Carry": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/SideCarry.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carrier": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "125356846281926"
+              }
+            },
+            "Carried": {
+              "$className": "StringValue",
+              "$properties": {
+                "Value": "124106214202700"
+              }
+            }
           },
           "Tangan Satu": {
             "$path": "src/legacy/ReplicatedStorage/CarryReplic/CarryChoices/TanganSatu.luau",
-            "$ignoreUnknownInstances": true
+            "$ignoreUnknownInstances": true,
+            "Carry Perempuan": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 104535498417338
+              }
+            },
+            "Carry Laki": {
+              "$className": "IntValue",
+              "$properties": {
+                "Value": 91738928266095
+              }
+            }
           }
         }
       },
@@ -162,9 +342,6 @@
       },
       "GlowStickServer": {
         "$path": "src/legacy/ServerScriptService/GlowStickServer.server.luau"
-      },
-      "HammerServer": {
-        "$path": "src/legacy/ServerScriptService/HammerServer.server.luau"
       },
       "Likesystem": {
         "$path": "src/legacy/ServerScriptService/Likesystem.server.luau"
@@ -349,9 +526,6 @@
         "MenuSystemInit": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MenuSystemInit.client.luau"
         },
-        "Mirrorscript": {
-          "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/Mirrorscript.client.luau"
-        },
         "MultiScreenController": {
           "$path": "src/legacy/StarterPlayer/StarterPlayerScripts/MultiScreenController.client.luau"
         },
@@ -370,6 +544,10 @@
       "$className": "StarterPack",
       "Sign": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false,
+          "TextureId": "rbxassetid://81550090256492"
+        },
         "LocalScript": {
           "$path": "src/legacy/StarterPack/Sign/SignUI.client.luau",
           "$ignoreUnknownInstances": true,
@@ -395,6 +573,9 @@
       },
       "GlowStick": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "ServerScript": {
           "$path": "src/legacy/StarterPack/GlowStick/ServerScript.server.luau"
         }
@@ -428,6 +609,9 @@
       },
       "Money Gun": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "Serverscript": {
           "$path": "src/legacy/ServerStorage/MoneyGun/Serverscript.server.luau"
         },
@@ -437,12 +621,24 @@
       },
       "WaterGun": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "LocalScript": {
           "$path": "src/legacy/ServerStorage/WaterGun/LocalScript.client.luau"
+        },
+        "Serverscript": {
+          "$path": "src/legacy/ServerStorage/WaterGun/Serverscript.server.luau"
+        },
+        "RemoteEvent": {
+          "$className": "RemoteEvent"
         }
       },
       "Flying Broom": {
         "$className": "Tool",
+        "$properties": {
+          "CanBeDropped": false
+        },
         "LocalScript": {
           "$path": "src/legacy/ServerStorage/FlyingBroom/LocalScript.client.luau"
         }

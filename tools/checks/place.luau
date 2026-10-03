@@ -6,6 +6,9 @@
 --   GAGAL  • node yang pasangannya di place ambigu (>1 instance nama+kelas sama) → risiko salinan/salah tempel
 --          • instance di place yang akan DIHAPUS Rojo (ada di bawah node $path tapi tidak ada di repo;
 --            node "$ignoreUnknownInstances": true dikecualikan — Rojo membiarkan anak yang tidak dikenal)
+--          • ASET WAJIB: aset non-skrip yang dibutuhkan skrip/tool tapi tidak ada di place MAUPUN di repo
+--            (aturan di tools/checks/assets.luau: Tool tanpa Handle/bagian wajib, rujukan script.X / script["X"] /
+--            :WaitForChild("X") yang anaknya tidak ada) → contoh: 30 Value carry + isi 3 tool yang hilang sesudah WORLD
 --   INFO   • BARU   : instance yang akan DITAMBAH Rojo (wajar untuk file baru)
 --          • DIUBAH : skrip yang isinya beda dengan place (harus persis file yang memang kamu ubah)
 -- Aturan Rojo 7.7 yang dipakai: pasangan dicari lewat Nama+ClassName (plugin hydrate.lua), node dengan
@@ -15,6 +18,7 @@ local fs = require("@lune/fs")
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
 local serde = require("@lune/serde")
+local Assets = require("./assets")
 
 local placePath = process.args[1]
 if placePath == nil then
@@ -79,6 +83,7 @@ end
 
 local failures, added, changed = {}, {}, {}
 local scripts = 0
+local pairOf: { [any]: any } = {} -- instance build → pasangannya di place
 
 local function walk(b: any, o: any)
 	for _, bc in b:GetChildren() do
@@ -102,6 +107,7 @@ local function walk(b: any, o: any)
 			continue
 		end
 		local oc = candidates[1]
+		pairOf[bc] = oc
 		if fileBacked and bc.Source ~= oc.Source then
 			table.insert(changed, p)
 		end
@@ -132,6 +138,63 @@ for _, svc in built:GetChildren() do
 	end
 end
 
+-- ── ASET WAJIB ───────────────────────────────────────────────────────────────────────────────────────────────────
+local function findPath(root: any, rel: string): any
+	local cur = root
+	for part in string.gmatch(rel, "[^/]+") do
+		if cur == nil then
+			return nil
+		end
+		if cur == root then
+			cur = cur:FindFirstChildOfClass(part) or cur:FindFirstChild(part)
+		else
+			cur = cur:FindFirstChild(part)
+		end
+	end
+	return cur
+end
+local function findRel(inst: any, rel: string): any
+	local cur = inst
+	for part in string.gmatch(rel, "[^/]+") do
+		cur = cur and cur:FindFirstChild(part)
+	end
+	return cur
+end
+local asetHilang = 0
+local function aset(msg: string)
+	asetHilang += 1
+	table.insert(failures, "ASET WAJIB: " .. msg)
+end
+for _, t in Assets.TOOLS do
+	local p, b = findPath(place, t.path), findPath(built, t.path)
+	if p == nil and b == nil then
+		aset(`{t.path} (Tool) tidak ada`)
+	else
+		for _, need in t.need do
+			if not ((p and findRel(p, need)) or (b and findRel(b, need))) then
+				aset(`{t.path} tidak punya '{need}' → tool tidak bisa dipakai`)
+			end
+		end
+	end
+end
+for _, bc in built:GetDescendants() do
+	if isScript(bc) then
+		local path = pathOf(bc, built)
+		if not Assets.skipped(path) then
+			for _, ref in Assets.refs(bc.Source) do
+				local bBase, pBase = bc, pairOf[bc]
+				for _ = 1, ref.hops do
+					bBase = bBase and bBase.Parent
+					pBase = pBase and pBase.Parent
+				end
+				if not ((bBase and bBase:FindFirstChild(ref.name)) or (pBase and pBase:FindFirstChild(ref.name))) then
+					aset(`{path}{string.rep("/..", ref.hops)} tidak punya '{ref.name}' (dirujuk skrip ini)`)
+				end
+			end
+		end
+	end
+end
+
 for _, m in added do
 	print("BARU   : " .. m)
 end
@@ -141,7 +204,7 @@ end
 for _, m in failures do
 	print("GAGAL  : " .. m)
 end
-print(`Ringkasan: {scripts} skrip dikelola repo · {#changed} diubah · {#added} baru · {#failures} masalah`)
+print(`Ringkasan: {scripts} skrip dikelola repo · {#changed} diubah · {#added} baru · {#failures} masalah ({asetHilang} aset wajib hilang)`)
 if #failures > 0 then
 	process.exit(1)
 end

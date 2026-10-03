@@ -1,8 +1,18 @@
 -- --GlowStickDualWieldHandler
 -- Skrip ini HANYA menangani pembuatan glowstick di tangan kiri.
+-- [TOOLS] Motor6D "LeftGrip" dihapus saat unequip & sebelum dibuat ulang (dulu menumpuk 1 per equip di tangan kiri).
 
 local tool = script.Parent
 local players = game:GetService("Players")
+
+local leftGrip = nil -- Motor6D tangan kiri yang dibuat skrip ini
+
+local function removeLeftGrip()
+	if leftGrip then
+		leftGrip:Destroy()
+		leftGrip = nil
+	end
+end
 
 local function getLeftHand(char)
 	if char:FindFirstChild("LeftHand") then
@@ -31,6 +41,7 @@ tool.Equipped:Connect(function()
 	if tool:FindFirstChild("LeftHandle") then
 		tool.LeftHandle:Destroy()
 	end
+	removeLeftGrip()
 
 	-- Clone handle untuk tangan kiri
 	local leftClone = handle:Clone()
@@ -50,6 +61,7 @@ tool.Equipped:Connect(function()
 	motor.Part1 = leftClone
 	motor.C0 = CFrame.new(0, -0.2, 0) * CFrame.Angles(0, math.rad(90), 0)
 	motor.Parent = leftHand
+	leftGrip = motor
 end)
 
 -- Saat tool dilepas
@@ -57,5 +69,6 @@ tool.Unequipped:Connect(function()
 	if tool:FindFirstChild("LeftHandle") then
 		tool.LeftHandle:Destroy()
 	end
+	removeLeftGrip()
 end)
 

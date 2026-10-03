@@ -54,6 +54,21 @@ local STRICT = {
 	-- ruangan WORLD (panggung DJ)
 	"src/legacy/ReplicatedStorage/Config/DjStage.luau",
 	"src/legacy/ReplicatedStorage/Modules/DjStageRules.luau",
+	-- ruangan TOOLS
+	"src/legacy/ReplicatedStorage/Config/Tools.luau",
+	"src/legacy/ReplicatedStorage/Modules/ToolRules.luau",
+	"src/legacy/ServerScriptService/GlowStickServer.server.luau",
+	"src/legacy/ServerScriptService/FlyingbroomServer.server.luau",
+	"src/legacy/ServerScriptService/ToolGiver.server.luau",
+	"src/legacy/StarterPack/GlowStick",
+	"src/legacy/StarterPack/Sign",
+	"src/legacy/ServerStorage/MoneyGun",
+	"src/legacy/ServerStorage/WaterGun",
+	"src/legacy/ServerStorage/FlyingBroom",
+	"src/legacy/StarterGui/GlowStickUI.client.luau",
+	"src/legacy/StarterGui/MoneyGunUI.client.luau",
+	"src/legacy/StarterGui/WaterGunUI.client.luau",
+	"src/legacy/StarterGui/Flyingbroomui.client.luau",
 }
 local REPORT = { "src/legacy" }
 

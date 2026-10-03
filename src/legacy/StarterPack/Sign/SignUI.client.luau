@@ -1,7 +1,6 @@
 -- Sign UI | LocalScript → Sign Tool (dalam Tool, bukan StarterGui)
 -- RemoteEvent, BGColor, TextColor harus jadi children dari LocalScript ini
 -- Depends on: DynamicTools System
-local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Warna UI panel: ReplicatedStorage.Modules.ThemeColor (themeColor) — T.X dibaca saat buildUI (tiap tool di-equip).
@@ -241,7 +240,6 @@ task.spawn(function()
 	for _ = 1, MAX_RETRIES do
 		if _G.RegisterDynamicTool then
 			_G.RegisterDynamicTool(TOOL_NAME, buildUI, { iconText = "📋" })
-			print("[Sign UI] Registered")
 			return
 		end
 		task.wait(RETRY_DELAY)
